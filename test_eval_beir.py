@@ -73,10 +73,11 @@ class TestHubSignature(unittest.TestCase):
             self.assertIn(word, sig.hubs)
             self.assertEqual(sig.hubs[word].coord, coord)
 
-    def test_hub_lattice_composite_positive(self) -> None:
+    def test_hub_pool_factors_exclude_letters_only(self) -> None:
         sig = build_hub_signature("d0", self.docs[0], self.pipe.registry, top_k=8)
         for entry in sig.hubs.values():
-            self.assertGreater(entry.lattice_composite, 1)
+            for p in entry.pool_factors:
+                self.assertGreaterEqual(p, 107)
 
     def test_encoded_size_positive(self) -> None:
         sig = build_hub_signature("d0", self.docs[0], self.pipe.registry, top_k=4)
@@ -144,9 +145,16 @@ class TestHubScoring(unittest.TestCase):
 
     def test_prime_factor_meet_nonzero(self) -> None:
         profile = self._profile("phone chip")
-        self.assertGreater(len(profile.word_composites), 0)
+        self.assertGreater(len(profile.word_pool_factors), 0)
         s = prime_factor_meet_score(profile, self.sigs["0"])
         self.assertGreaterEqual(s, 0.0)
+
+    def test_letter_only_word_skipped_in_signal5b(self) -> None:
+        from aethos_hub_signature import _pool_factors, pool_factor_jaccard
+
+        ent = _pool_factors(2, ())  # letter prime only — no pool factors
+        self.assertEqual(len(ent), 0)
+        self.assertEqual(pool_factor_jaccard(ent, frozenset({107})), 0.0)
 
     def test_prime_factor_similarity_apple_fixture(self) -> None:
         tech = 101 * 103 * 107

@@ -34,8 +34,6 @@ from operator import mul
 from aethos_composite import morph_meet_score
 from aethos_lattice import LatticeId
 from aethos_promotion import LatticeTier, is_stopword
-from core.phi_lattice import prime_factor_similarity
-
 # Pool-promoted primes only for meet/composite indexing (letter primes are universal).
 MIN_POOL_PRIME = 107
 
@@ -59,16 +57,30 @@ LAMBDA_CLUSTER = 0.4
 # Core data structures
 # ---------------------------------------------------------------------------
 
-def lattice_composite_for_token(prime: int, parent_primes: tuple[int, ...]) -> int:
-    """FTA product of pool primes in the word's lattice chain (scale for Jaccard)."""
-    factors: set[int] = set()
+def _pool_factors(prime: int, parent_primes: tuple[int, ...]) -> frozenset[int]:
+    """Pool-promoted primes only — letter primes (3..101) are excluded."""
+    out: set[int] = set()
     if prime >= MIN_POOL_PRIME:
-        factors.add(prime)
+        out.add(prime)
     for p in parent_primes:
         if p >= MIN_POOL_PRIME:
-            factors.add(p)
+            out.add(p)
+    return frozenset(out)
+
+
+def pool_factor_jaccard(a: frozenset[int], b: frozenset[int]) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
+def lattice_composite_for_token(prime: int, parent_primes: tuple[int, ...]) -> int:
+    """FTA product of pool primes only; 1 if no pool factors (Signal 5b skips)."""
+    factors = _pool_factors(prime, parent_primes)
     if not factors:
-        factors.add(prime)
+        return 1
     if len(factors) == 1:
         return next(iter(factors))
     return reduce(mul, sorted(factors), 1)
@@ -77,6 +89,11 @@ def lattice_composite_for_token(prime: int, parent_primes: tuple[int, ...]) -> i
 def lattice_composite_for_word(registry, word: str) -> int:
     tok = registry.resolve_token(word.lower())
     return lattice_composite_for_token(tok.prime, tok.parent_primes)
+
+
+def pool_factors_for_word(registry, word: str) -> frozenset[int]:
+    tok = registry.resolve_token(word.lower())
+    return _pool_factors(tok.prime, tok.parent_primes)
 
 
 @dataclass(frozen=True)
@@ -89,6 +106,7 @@ class HubEntry:
     lattice_composite: int                                  # product of pool primes in chain
     coord: tuple[float, float, float]                       # formula_coord at n=anchor_n, L01
     neighbors: frozenset[str]                               # L4-L6 correlated words
+    pool_factors: frozenset[int] = frozenset()              # factors for Signal 5b Jaccard
     # Multi-wing coords for consensus scoring: tuple of (lattice_id_int, x, y, z).
     # Stored as a tuple of tuples so HubEntry stays frozen/hashable.
     # Populated for wings in CONSENSUS_WINGS; empty tuple = not computed.
@@ -244,6 +262,10 @@ class RegistryIndex:
         tok = self.registry.resolve_token(word.lower())
         return lattice_composite_for_token(tok.prime, tok.parent_primes)
 
+    def pool_factors(self, word: str) -> frozenset[int]:
+        tok = self.registry.resolve_token(word.lower())
+        return _pool_factors(tok.prime, tok.parent_primes)
+
     def neighbors(self, word: str) -> frozenset[str]:
         return frozenset(self.word_neighbors.get(word, set()))
 
@@ -277,11 +299,13 @@ def build_hub_signature_from_tokens(
         c = idx.coord(word)
         if c is None:
             continue
+        pf = idx.pool_factors(word)
         entry = HubEntry(
             word=word,
             strength=strength,
             prime=idx.prime(word),
             lattice_composite=idx.lattice_composite(word),
+            pool_factors=pf,
             coord=c,
             neighbors=idx.neighbors(word),
             wing_coord_tuples=idx.all_wing_coords(word),
@@ -370,8 +394,8 @@ class QueryProfile:
     # Precomputed from pipe.reader.word_to_cluster at query time.
     # {cluster_id: idf_of_best_query_word_in_that_cluster}
     query_cluster_ids: dict[str, float] = field(default_factory=dict)
-    # Signal 5b: query word → lattice composite (pool prime chain product)
-    word_composites: dict[str, int] = field(default_factory=dict)
+    # Signal 5b: query word → pool prime factors (≥ MIN_POOL_PRIME)
+    word_pool_factors: dict[str, frozenset[int]] = field(default_factory=dict)
 
 
 def build_query_profile(
@@ -395,7 +419,7 @@ def build_query_profile(
     words = tokenize_words(query)
     coords: dict[tuple[float, float, float], str] = {}
     idf: dict[str, float] = {}
-    word_composites: dict[str, int] = {}
+    word_pool_factors: dict[str, frozenset[int]] = {}
     flat_neighbors: dict[str, float] = {}
     neighbor_source: dict[str, str] = {}
     # Per-wing coord maps for 32-wing consensus Signal 2
@@ -411,7 +435,9 @@ def build_query_profile(
         idf[w] = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
 
         if len(w) >= 3 and not is_stopword(w):
-            word_composites[w] = lattice_composite_for_word(registry, w)
+            pf = pool_factors_for_word(registry, w)
+            if pf:
+                word_pool_factors[w] = pf
 
         if is_stopword(w) or len(w) < 3:
             continue  # stopwords contribute to IDF scoring but not coord/neighbor signals
@@ -450,7 +476,7 @@ def build_query_profile(
         neighbor_source=neighbor_source,
         max_neighbor_weight=max_nb,
         wing_coords=wing_coords,
-        word_composites=word_composites,
+        word_pool_factors=word_pool_factors,
     )
 
 
@@ -463,20 +489,22 @@ def prime_factor_meet_score(
     sig: LatticeHubSignature,
 ) -> float:
     """
-    Best prime_factor_similarity between each query word composite and hub composites.
+    Jaccard on pool prime factors only (≥ MIN_POOL_PRIME).
 
-    Scale-invariant Jaccard on prime factors — correct metric when composite
-    magnitudes differ (3-prime doc vs 2-prime query).
+    Skips query/hub pairs where either side has no promoted pool primes,
+    so letter-prime leakage cannot match every document.
     """
-    if not profile.word_composites or not sig.hubs:
+    if not profile.word_pool_factors or not sig.hubs:
         return 0.0
     score = 0.0
-    for qw, q_comp in profile.word_composites.items():
-        if qw not in profile.word_set or q_comp <= 1:
+    for qw, q_factors in profile.word_pool_factors.items():
+        if qw not in profile.word_set:
             continue
         best = 0.0
         for entry in sig.hubs.values():
-            sim = prime_factor_similarity(q_comp, entry.lattice_composite)
+            if not entry.pool_factors:
+                continue
+            sim = pool_factor_jaccard(q_factors, entry.pool_factors)
             if sim > best:
                 best = sim
         if best > 0:
@@ -585,8 +613,8 @@ def score_document(
             composite_cache,
         )
 
-    # Signal 5b — prime_factor_similarity on lattice composites  O(Q × K)
-    if profile.word_composites and sig is not None:
+    # Signal 5b — pool-prime factor Jaccard (≥ MIN_POOL_PRIME)  O(Q × K)
+    if profile.word_pool_factors and sig is not None:
         score += prime_factor_meet_score(profile, sig)
 
     # Signal 7 — L7-L9 cluster routing bonus  O(K)

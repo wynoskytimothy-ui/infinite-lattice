@@ -20,11 +20,12 @@ Micro-step stack: **L1 characters → L2 subwords → bridge → production regi
 - `phi_lattice.py` — VA1–VA4, 32 wings, Z plateau, `swap_meet`, `prime_factor_similarity`
 - `bridge_registry.py` — sync L2 into `PromotionRegistry`
 - `bridge_library.py` — adapter for `aethos_library.PrimeAssigner` (when pasted)
+- `learning_engine.py` — bad-correlation queue, factor analogy, distilled registry brain, BEIR FP hooks
 
 ## Tests
 
 ```bash
-python -m pytest tests/test_step1_primes.py tests/test_step2_l1.py tests/test_step3_l2.py tests/test_phi_lattice.py tests/test_bridge_registry.py -q
+python -m pytest tests/ -q
 ```
 
 ## BEIR / retrieval

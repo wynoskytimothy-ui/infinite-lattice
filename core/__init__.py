@@ -21,6 +21,11 @@ from core.phi_lattice import (
     swap_meet,
     should_promote_intersection,
 )
+from core.learning_engine import (
+    BadCorrelationStore,
+    factor_analogy,
+    record_retrieval_false_positives,
+)
 from core.primes import (
     LETTER_PRIMES,
     PROMOTION_POOL,
@@ -52,4 +57,7 @@ __all__ = [
     "prime_factor_similarity",
     "swap_meet",
     "should_promote_intersection",
+    "BadCorrelationStore",
+    "factor_analogy",
+    "record_retrieval_false_positives",
 ]

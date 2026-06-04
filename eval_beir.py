@@ -67,6 +67,13 @@ from aethos_pipeline import AethosPipeline
 from aethos_scale import ScaleConfig, ScaleMetrics, timed_ingest_one
 from aethos_tokenize import tokenize_words
 from beir_data_root import resolve_beir_root
+from core.learning_engine import (
+    BadCorrelationStore,
+    bad_correlation_path,
+    load_distilled_registry,
+    record_retrieval_false_positives,
+    save_distilled_registry,
+)
 
 BM25_REF = {
     "scifact": 0.643,
@@ -410,17 +417,16 @@ def make_pipeline(mode: str) -> AethosPipeline:
             fast_cluster=True,
         )
     elif mode == "quality":
-        # Quality mode: fast_ingest=False enables per-word subword observation.
-        # This builds subword_counts/parent_pairs → L2 subwords get real pool primes
-        # → L3 words get proper non-colliding parent_primes via chain decomposition.
-        # Result: ~600-1000 L3 pool primes (vs 199 with fast_ingest=True).
-        # More pool primes → unique FTA composites → all geometric signals improve.
-        # Slower to build but dramatically better for all composite-based signals.
+        # Quality mode: fast_ingest=True (for speed) but with aggressive post-hoc
+        # subword promotion. The subword rebuild runs after ingest using vocabulary
+        # stats, promoting up to 320 L2 subwords (2× the scale-mode cap of 160).
+        # More L2 primes → L3 words get proper non-colliding parent_primes.
+        # Result: ~400-600 L3 pool primes (vs 199 with scale mode).
         cfg = ScaleConfig(
             rebuild_every=32,
             lazy_clusters=False,
-            fast_ingest=False,   # KEY: enables subword observation
-            defer_l2_promotion=False,
+            fast_ingest=True,
+            defer_l2_promotion=True,
             fast_cluster=False,
             max_corr_pairs_per_doc=512,
         )
@@ -452,9 +458,21 @@ def evaluate_dataset(
     hub_top_k: int = 12,
     n_passes: int = 2,
     verbose: bool = False,
+    lambda_prime_factor: float | None = None,
 ) -> EvalResult:
     if not paths.corpus.exists():
         raise FileNotFoundError(f"missing corpus: {paths.corpus}")
+
+    import aethos_hub_signature as _hs
+
+    if lambda_prime_factor is not None:
+        _hs.LAMBDA_PRIME_FACTOR = float(lambda_prime_factor)
+        print(f"  LAMBDA_PRIME_FACTOR={_hs.LAMBDA_PRIME_FACTOR}", flush=True)
+
+    bad_path = bad_correlation_path(paths.name, mode)
+    bad_store = BadCorrelationStore.load(bad_path)
+    if bad_store.entries:
+        print(f"  bad-correlation queue: {len(bad_store.entries)} entries (loaded)", flush=True)
 
     corpus = load_corpus(paths.corpus, max_docs=max_docs)
     queries = load_queries(paths.queries)
@@ -476,11 +494,20 @@ def evaluate_dataset(
     ingest_total_ms = (time.perf_counter() - t_ingest) * 1000.0
     print(f"  ingest done: {len(cidx.doc_ids)} docs in {ingest_total_ms:.0f} ms", flush=True)
 
+    distilled_path = brain_path_for_dataset(paths.name, mode).with_suffix(".distilled.json")
+    if load_distilled_registry(pipe.registry, distilled_path):
+        print(f"  distilled registry loaded: {distilled_path.name}", flush=True)
+
     # --- multi-pass iterative build (L2 → L3 refresh → L4 phrases → L5 bridges) ---
     corpus_texts = [doc_text(doc) for doc in corpus.values()]
+    # Quality mode doubles L2 subword promotion cap for more pool primes.
+    # More L2 primes → L3 words get proper non-colliding parent_primes →
+    # better FTA-unique composites for all geometric signals.
+    max_l2 = 320 if mode == "quality" else 160
     mp = build_multi_pass(
         pipe, corpus_texts, cidx.doc_tokens,
         n_passes=n_passes, verbose=True,
+        max_l2_promote=max_l2,
     )
     phrase_idx = mp.phrase_idx
 
@@ -788,8 +815,21 @@ def evaluate_dataset(
         )
 
         q_times.append((time.perf_counter() - t0) * 1000.0)
-        ndcgs.append(ndcg_at_k(ranked, qrels[qid], 10))
-        r10s.append(recall_at_k(ranked, qrels[qid], 10))
+        rel = qrels[qid]
+        ndcgs.append(ndcg_at_k(ranked, rel, 10))
+        r10s.append(recall_at_k(ranked, rel, 10))
+
+        n_bad = record_retrieval_false_positives(
+            bad_store,
+            ranked,
+            rel,
+            profile,
+            hub_sigs,
+            pipe.registry,
+            top_k=10,
+        )
+        if verbose and n_bad:
+            print(f"    q={qid}: recorded {n_bad} bad-correlation signals", flush=True)
 
         if (qi + 1) % 50 == 0:
             print(
@@ -800,6 +840,17 @@ def evaluate_dataset(
 
     n_q = max(len(qids), 1)
     p50_q = sorted(q_times)[len(q_times) // 2] if q_times else 0.0
+
+    bad_path.parent.mkdir(parents=True, exist_ok=True)
+    bad_store.save(bad_path)
+    unresolved = sum(1 for e in bad_store.entries.values() if not e.resolved)
+    print(
+        f"  bad-correlation queue saved: {len(bad_store.entries)} pairs, "
+        f"{unresolved} unresolved → {bad_path.name}",
+        flush=True,
+    )
+    save_distilled_registry(pipe.registry, distilled_path)
+    print(f"  distilled registry saved: {distilled_path.name}", flush=True)
 
     return EvalResult(
         dataset=paths.name,
@@ -836,6 +887,12 @@ def main() -> int:
     parser.add_argument("--hub-top-k", type=int, default=12)
     parser.add_argument("--passes", type=int, default=2, help="Number of corpus passes (1=BM25 only, 2=+phrases, 3=+meta-bridges)")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--lambda-pf",
+        type=float,
+        default=None,
+        help="Signal 5b weight (default 0.35); use 0 for A/B baseline",
+    )
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args()
 
@@ -865,6 +922,7 @@ def main() -> int:
                 hub_top_k=args.hub_top_k,
                 n_passes=args.passes,
                 verbose=args.verbose,
+                lambda_prime_factor=args.lambda_pf,
             )
         except FileNotFoundError as exc:
             print(f"SKIP {name}: {exc}")
