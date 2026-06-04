@@ -28,9 +28,16 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from functools import reduce
+from operator import mul
+
 from aethos_composite import morph_meet_score
 from aethos_lattice import LatticeId
 from aethos_promotion import LatticeTier, is_stopword
+from core.phi_lattice import prime_factor_similarity
+
+# Pool-promoted primes only for meet/composite indexing (letter primes are universal).
+MIN_POOL_PRIME = 107
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +59,26 @@ LAMBDA_CLUSTER = 0.4
 # Core data structures
 # ---------------------------------------------------------------------------
 
+def lattice_composite_for_token(prime: int, parent_primes: tuple[int, ...]) -> int:
+    """FTA product of pool primes in the word's lattice chain (scale for Jaccard)."""
+    factors: set[int] = set()
+    if prime >= MIN_POOL_PRIME:
+        factors.add(prime)
+    for p in parent_primes:
+        if p >= MIN_POOL_PRIME:
+            factors.add(p)
+    if not factors:
+        factors.add(prime)
+    if len(factors) == 1:
+        return next(iter(factors))
+    return reduce(mul, sorted(factors), 1)
+
+
+def lattice_composite_for_word(registry, word: str) -> int:
+    tok = registry.resolve_token(word.lower())
+    return lattice_composite_for_token(tok.prime, tok.parent_primes)
+
+
 @dataclass(frozen=True)
 class HubEntry:
     """Single hub word pinned to the lattice."""
@@ -59,6 +86,7 @@ class HubEntry:
     word: str
     strength: float
     prime: int
+    lattice_composite: int                                  # product of pool primes in chain
     coord: tuple[float, float, float]                       # formula_coord at n=anchor_n, L01
     neighbors: frozenset[str]                               # L4-L6 correlated words
     # Multi-wing coords for consensus scoring: tuple of (lattice_id_int, x, y, z).
@@ -212,6 +240,10 @@ class RegistryIndex:
         self._prime_cache[word] = tok.prime
         return tok.prime
 
+    def lattice_composite(self, word: str) -> int:
+        tok = self.registry.resolve_token(word.lower())
+        return lattice_composite_for_token(tok.prime, tok.parent_primes)
+
     def neighbors(self, word: str) -> frozenset[str]:
         return frozenset(self.word_neighbors.get(word, set()))
 
@@ -249,6 +281,7 @@ def build_hub_signature_from_tokens(
             word=word,
             strength=strength,
             prime=idx.prime(word),
+            lattice_composite=idx.lattice_composite(word),
             coord=c,
             neighbors=idx.neighbors(word),
             wing_coord_tuples=idx.all_wing_coords(word),
@@ -305,6 +338,7 @@ def build_all_hub_signatures(
 
 LAMBDA_COORD = 0.5      # Signal 2: coord meet bonus ∝ IDF of the matching word
 LAMBDA_NEIGHBOR = 0.3   # Signal 3: neighbor expansion (softer signal; conservative)
+LAMBDA_PRIME_FACTOR = 0.35  # Signal 5b: Jaccard on lattice prime-factor composites
 
 
 @dataclass
@@ -336,6 +370,8 @@ class QueryProfile:
     # Precomputed from pipe.reader.word_to_cluster at query time.
     # {cluster_id: idf_of_best_query_word_in_that_cluster}
     query_cluster_ids: dict[str, float] = field(default_factory=dict)
+    # Signal 5b: query word → lattice composite (pool prime chain product)
+    word_composites: dict[str, int] = field(default_factory=dict)
 
 
 def build_query_profile(
@@ -359,6 +395,7 @@ def build_query_profile(
     words = tokenize_words(query)
     coords: dict[tuple[float, float, float], str] = {}
     idf: dict[str, float] = {}
+    word_composites: dict[str, int] = {}
     flat_neighbors: dict[str, float] = {}
     neighbor_source: dict[str, str] = {}
     # Per-wing coord maps for 32-wing consensus Signal 2
@@ -372,6 +409,9 @@ def build_query_profile(
         # BM25-style IDF: log((N - df + 0.5) / (df + 0.5) + 1)
         df = max(doc_freq.get(w, 0), 0)
         idf[w] = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
+
+        if len(w) >= 3 and not is_stopword(w):
+            word_composites[w] = lattice_composite_for_word(registry, w)
 
         if is_stopword(w) or len(w) < 3:
             continue  # stopwords contribute to IDF scoring but not coord/neighbor signals
@@ -410,12 +450,39 @@ def build_query_profile(
         neighbor_source=neighbor_source,
         max_neighbor_weight=max_nb,
         wing_coords=wing_coords,
+        word_composites=word_composites,
     )
 
 
 # ---------------------------------------------------------------------------
 # Scoring — O(Q × K) instead of O(Q × D_tokens)
 # ---------------------------------------------------------------------------
+
+def prime_factor_meet_score(
+    profile: QueryProfile,
+    sig: LatticeHubSignature,
+) -> float:
+    """
+    Best prime_factor_similarity between each query word composite and hub composites.
+
+    Scale-invariant Jaccard on prime factors — correct metric when composite
+    magnitudes differ (3-prime doc vs 2-prime query).
+    """
+    if not profile.word_composites or not sig.hubs:
+        return 0.0
+    score = 0.0
+    for qw, q_comp in profile.word_composites.items():
+        if qw not in profile.word_set or q_comp <= 1:
+            continue
+        best = 0.0
+        for entry in sig.hubs.values():
+            sim = prime_factor_similarity(q_comp, entry.lattice_composite)
+            if sim > best:
+                best = sim
+        if best > 0:
+            score += profile.idf.get(qw, 1.0) * best * LAMBDA_PRIME_FACTOR
+    return score
+
 
 def score_document(
     profile: QueryProfile,
@@ -437,6 +504,7 @@ def score_document(
     2. Coord meet          — query coord == hub coord (geometric, novel)
     3. Neighbor expansion  — log-norm L4-L6 neighbors ∩ hub words
     4. Morphological meet  — letter prime GCD ratio ≥ threshold (composite anchors)
+    5b. Prime-factor Jaccard — scale-invariant overlap on lattice composite products
 
     Signal 4 connects morphological variants ("autophagy"↔"autophagic") via
     shared letter prime factors — geometric stemming without heuristic suffix rules.
@@ -516,6 +584,10 @@ def score_document(
             doc_composites,
             composite_cache,
         )
+
+    # Signal 5b — prime_factor_similarity on lattice composites  O(Q × K)
+    if profile.word_composites and sig is not None:
+        score += prime_factor_meet_score(profile, sig)
 
     # Signal 7 — L7-L9 cluster routing bonus  O(K)
     # ``query_cluster_ids`` maps hub words that share an L7-L9 cluster with any

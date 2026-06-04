@@ -7,14 +7,15 @@ import unittest
 from pathlib import Path
 
 from aethos_hub_signature import (
-    HubEntry,
     LatticeHubSignature,
     QueryProfile,
     build_hub_signature,
+    prime_factor_meet_score,
     rank_with_hub_signatures,
     score_hub_signature,
     signature_report,
 )
+from core.phi_lattice import prime_factor_similarity
 from aethos_pipeline import AethosPipeline
 from aethos_tokenize import tokenize_words
 from eval_beir import (
@@ -71,6 +72,11 @@ class TestHubSignature(unittest.TestCase):
         for coord, word in sig.hub_coords.items():
             self.assertIn(word, sig.hubs)
             self.assertEqual(sig.hubs[word].coord, coord)
+
+    def test_hub_lattice_composite_positive(self) -> None:
+        sig = build_hub_signature("d0", self.docs[0], self.pipe.registry, top_k=8)
+        for entry in sig.hubs.values():
+            self.assertGreater(entry.lattice_composite, 1)
 
     def test_encoded_size_positive(self) -> None:
         sig = build_hub_signature("d0", self.docs[0], self.pipe.registry, top_k=4)
@@ -135,6 +141,19 @@ class TestHubScoring(unittest.TestCase):
             profile, list(self.sigs.keys()), self.sigs, list(self.sigs.keys()), top_k=2
         )
         self.assertEqual(ranked[0], "0")
+
+    def test_prime_factor_meet_nonzero(self) -> None:
+        profile = self._profile("phone chip")
+        self.assertGreater(len(profile.word_composites), 0)
+        s = prime_factor_meet_score(profile, self.sigs["0"])
+        self.assertGreaterEqual(s, 0.0)
+
+    def test_prime_factor_similarity_apple_fixture(self) -> None:
+        tech = 101 * 103 * 107
+        food = 101 * 109 * 113
+        q_phone = 101 * 103
+        self.assertGreater(prime_factor_similarity(q_phone, tech), 0.6)
+        self.assertLess(prime_factor_similarity(q_phone, food), 0.35)
 
 
 class TestBeirLoaders(unittest.TestCase):

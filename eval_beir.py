@@ -694,7 +694,8 @@ def evaluate_dataset(
         )
         print(
             f"  brain saved: {trained_count} trained anchors → {b_path.name}  "
-            f"(λ_coord={_hs.LAMBDA_COORD}, λ_neighbor={_hs.LAMBDA_NEIGHBOR})",
+            f"(λ_coord={_hs.LAMBDA_COORD}, λ_neighbor={_hs.LAMBDA_NEIGHBOR}, "
+            f"λ_pf={_hs.LAMBDA_PRIME_FACTOR})",
             flush=True,
         )
 
