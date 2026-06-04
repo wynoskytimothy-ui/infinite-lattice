@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Test / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Secrets / local config
+.env
+.env.*
+*.pem
+
+# Large or machine-local data (not part of source)
+beir_datasets/
+benchmark_data/
+*.brain.json
+brains/
+
+# Optional heavy outputs
+ocean_trace_demo.csv

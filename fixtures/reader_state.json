@@ -1,0 +1,1898 @@
+{
+  "version": 1,
+  "registry": {
+    "version": 1,
+    "symbol_counts": {
+      "p": 13,
+      "h": 13,
+      "o": 14,
+      "n": 16,
+      "e": 21,
+      "t": 7,
+      "c": 12,
+      "i": 10,
+      "a": 16,
+      "l": 7,
+      "s": 2,
+      "f": 3,
+      "w": 4,
+      "r": 13,
+      "d": 3,
+      "k": 1,
+      "u": 5,
+      "x": 1,
+      "y": 1,
+      "b": 3,
+      "z": 1,
+      "q": 1,
+      "m": 1
+    },
+    "subword_counts": {
+      "ph": 6,
+      "ho": 6,
+      "on": 8,
+      "ne": 7,
+      "pho": 6,
+      "hon": 6,
+      "one": 6,
+      "phon": 6,
+      "hone": 6,
+      "te": 3,
+      "ec": 3,
+      "ch": 6,
+      "hn": 3,
+      "ni": 5,
+      "ic": 3,
+      "ca": 3,
+      "al": 4,
+      "tec": 3,
+      "ech": 3,
+      "chn": 3,
+      "hni": 3,
+      "nic": 3,
+      "ica": 3,
+      "cal": 3,
+      "tech": 3,
+      "echn": 3,
+      "chni": 3,
+      "hnic": 3,
+      "nica": 3,
+      "ical": 3,
+      "hi": 2,
+      "ip": 2,
+      "chi": 2,
+      "hip": 2,
+      "chip": 2,
+      "so": 1,
+      "of": 1,
+      "ft": 1,
+      "tw": 2,
+      "wa": 2,
+      "ar": 5,
+      "re": 4,
+      "sof": 1,
+      "oft": 1,
+      "ftw": 1,
+      "twa": 1,
+      "war": 2,
+      "are": 3,
+      "soft": 1,
+      "oftw": 1,
+      "ftwa": 1,
+      "twar": 1,
+      "ware": 2,
+      "ha": 2,
+      "rd": 3,
+      "dw": 1,
+      "har": 2,
+      "ard": 2,
+      "rdw": 1,
+      "dwa": 1,
+      "hard": 2,
+      "ardw": 1,
+      "rdwa": 1,
+      "dwar": 1,
+      "et": 1,
+      "wo": 2,
+      "or": 3,
+      "rk": 1,
+      "net": 1,
+      "etw": 1,
+      "two": 1,
+      "wor": 2,
+      "ork": 1,
+      "netw": 1,
+      "etwo": 1,
+      "twor": 1,
+      "work": 1,
+      "ap": 2,
+      "pp": 2,
+      "pl": 2,
+      "le": 2,
+      "app": 2,
+      "ppl": 2,
+      "ple": 2,
+      "appl": 2,
+      "pple": 2,
+      "fr": 2,
+      "ru": 2,
+      "ui": 2,
+      "it": 2,
+      "fru": 2,
+      "rui": 2,
+      "uit": 2,
+      "frui": 2,
+      "ruit": 2,
+      "pi": 1,
+      "ie": 1,
+      "pie": 1,
+      "rc": 1,
+      "orc": 1,
+      "rch": 1,
+      "cha": 1,
+      "orch": 1,
+      "rcha": 1,
+      "char": 1,
+      "xy": 1,
+      "yl": 1,
+      "lo": 1,
+      "op": 1,
+      "xyl": 1,
+      "ylo": 1,
+      "lop": 1,
+      "oph": 1,
+      "xylo": 1,
+      "ylop": 1,
+      "loph": 1,
+      "opho": 1,
+      "ob": 1,
+      "bs": 1,
+      "sc": 1,
+      "cu": 1,
+      "ur": 1,
+      "obs": 1,
+      "bsc": 1,
+      "scu": 1,
+      "cur": 1,
+      "ure": 1,
+      "obsc": 1,
+      "bscu": 1,
+      "scur": 1,
+      "cure": 1,
+      "ra": 2,
+      "ew": 1,
+      "rar": 1,
+      "rew": 1,
+      "ewo": 1,
+      "ord": 1,
+      "rare": 1,
+      "arew": 1,
+      "rewo": 1,
+      "ewor": 1,
+      "word": 1,
+      "nc": 2,
+      "ce": 2,
+      "onc": 2,
+      "nce": 2,
+      "once": 2,
+      "ba": 1,
+      "an": 3,
+      "na": 2,
+      "ban": 1,
+      "ana": 2,
+      "nan": 1,
+      "bana": 1,
+      "anan": 1,
+      "nana": 1,
+      "ze": 1,
+      "eb": 1,
+      "br": 1,
+      "zeb": 1,
+      "ebr": 1,
+      "bra": 1,
+      "zebr": 1,
+      "ebra": 1,
+      "un": 1,
+      "iq": 1,
+      "qu": 1,
+      "ue": 1,
+      "uni": 1,
+      "niq": 1,
+      "iqu": 1,
+      "que": 1,
+      "uniq": 1,
+      "niqu": 1,
+      "ique": 1,
+      "im": 1,
+      "ma": 1,
+      "ani": 1,
+      "nim": 1,
+      "ima": 1,
+      "mal": 1,
+      "anim": 1,
+      "nima": 1,
+      "imal": 1
+    },
+    "word_counts": {
+      "phone": 5,
+      "technical": 3,
+      "chip": 2,
+      "software": 1,
+      "hardware": 1,
+      "network": 1,
+      "apple": 2,
+      "fruit": 2,
+      "pie": 1,
+      "orchard": 1,
+      "xylophone": 1,
+      "obscure": 1,
+      "rareword": 1,
+      "once": 2,
+      "banana": 1,
+      "zebra": 1,
+      "unique": 1,
+      "animal": 1
+    },
+    "word_contexts": {
+      "phone": [
+        [
+          "chip",
+          "software",
+          "technical"
+        ],
+        [
+          "chip",
+          "software",
+          "technical"
+        ],
+        [
+          "chip",
+          "software",
+          "technical"
+        ],
+        [
+          "hardware",
+          "network",
+          "technical"
+        ],
+        [
+          "apple",
+          "chip",
+          "technical"
+        ]
+      ],
+      "technical": [
+        [
+          "chip",
+          "phone",
+          "software"
+        ],
+        [
+          "hardware",
+          "network",
+          "phone"
+        ],
+        [
+          "apple",
+          "chip",
+          "phone"
+        ]
+      ],
+      "chip": [
+        [
+          "phone",
+          "software",
+          "technical"
+        ],
+        [
+          "apple",
+          "phone",
+          "technical"
+        ]
+      ],
+      "software": [
+        [
+          "chip",
+          "phone",
+          "technical"
+        ]
+      ],
+      "hardware": [
+        [
+          "network",
+          "phone",
+          "technical"
+        ]
+      ],
+      "network": [
+        [
+          "hardware",
+          "phone",
+          "technical"
+        ]
+      ],
+      "apple": [
+        [
+          "chip",
+          "phone",
+          "technical"
+        ],
+        [
+          "fruit",
+          "orchard",
+          "pie"
+        ]
+      ],
+      "fruit": [
+        [
+          "apple",
+          "orchard",
+          "pie"
+        ],
+        [
+          "banana",
+          "once"
+        ]
+      ],
+      "pie": [
+        [
+          "apple",
+          "fruit",
+          "orchard"
+        ]
+      ],
+      "orchard": [
+        [
+          "apple",
+          "fruit",
+          "pie"
+        ]
+      ],
+      "xylophone": [
+        [
+          "obscure",
+          "once",
+          "rareword"
+        ]
+      ],
+      "obscure": [
+        [
+          "once",
+          "rareword",
+          "xylophone"
+        ]
+      ],
+      "rareword": [
+        [
+          "obscure",
+          "once",
+          "xylophone"
+        ]
+      ],
+      "once": [
+        [
+          "obscure",
+          "rareword",
+          "xylophone"
+        ],
+        [
+          "banana",
+          "fruit"
+        ]
+      ],
+      "banana": [
+        [
+          "fruit",
+          "once"
+        ]
+      ],
+      "zebra": [
+        [
+          "animal",
+          "unique"
+        ]
+      ],
+      "unique": [
+        [
+          "animal",
+          "zebra"
+        ]
+      ],
+      "animal": [
+        [
+          "unique",
+          "zebra"
+        ]
+      ]
+    },
+    "promoted": {
+      "2:ph": {
+        "text": "ph",
+        "tier": 2,
+        "prime": 107,
+        "parent_primes": [
+          59,
+          23
+        ],
+        "intersection_only": false
+      },
+      "2:ho": {
+        "text": "ho",
+        "tier": 2,
+        "prime": 109,
+        "parent_primes": [
+          23,
+          53
+        ],
+        "intersection_only": false
+      },
+      "2:on": {
+        "text": "on",
+        "tier": 2,
+        "prime": 113,
+        "parent_primes": [
+          53,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:ne": {
+        "text": "ne",
+        "tier": 2,
+        "prime": 127,
+        "parent_primes": [
+          47,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:pho": {
+        "text": "pho",
+        "tier": 2,
+        "prime": 131,
+        "parent_primes": [
+          59,
+          23,
+          53
+        ],
+        "intersection_only": false
+      },
+      "2:hon": {
+        "text": "hon",
+        "tier": 2,
+        "prime": 137,
+        "parent_primes": [
+          23,
+          53,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:one": {
+        "text": "one",
+        "tier": 2,
+        "prime": 139,
+        "parent_primes": [
+          53,
+          47,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:phon": {
+        "text": "phon",
+        "tier": 2,
+        "prime": 149,
+        "parent_primes": [
+          59,
+          23,
+          53,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:hone": {
+        "text": "hone",
+        "tier": 2,
+        "prime": 151,
+        "parent_primes": [
+          23,
+          53,
+          47,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:ch": {
+        "text": "ch",
+        "tier": 2,
+        "prime": 157,
+        "parent_primes": [
+          7,
+          23
+        ],
+        "intersection_only": false
+      },
+      "3:phone": {
+        "text": "phone",
+        "tier": 3,
+        "prime": 163,
+        "parent_primes": [
+          149
+        ],
+        "intersection_only": false
+      },
+      "2:te": {
+        "text": "te",
+        "tier": 2,
+        "prime": 167,
+        "parent_primes": [
+          73,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:ec": {
+        "text": "ec",
+        "tier": 2,
+        "prime": 173,
+        "parent_primes": [
+          13,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:hn": {
+        "text": "hn",
+        "tier": 2,
+        "prime": 179,
+        "parent_primes": [
+          23,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:ni": {
+        "text": "ni",
+        "tier": 2,
+        "prime": 181,
+        "parent_primes": [
+          47,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:ic": {
+        "text": "ic",
+        "tier": 2,
+        "prime": 191,
+        "parent_primes": [
+          29,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:ca": {
+        "text": "ca",
+        "tier": 2,
+        "prime": 193,
+        "parent_primes": [
+          7,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:al": {
+        "text": "al",
+        "tier": 2,
+        "prime": 197,
+        "parent_primes": [
+          3,
+          41
+        ],
+        "intersection_only": false
+      },
+      "2:tec": {
+        "text": "tec",
+        "tier": 2,
+        "prime": 199,
+        "parent_primes": [
+          73,
+          13,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:ech": {
+        "text": "ech",
+        "tier": 2,
+        "prime": 211,
+        "parent_primes": [
+          13,
+          7,
+          23
+        ],
+        "intersection_only": false
+      },
+      "2:chn": {
+        "text": "chn",
+        "tier": 2,
+        "prime": 223,
+        "parent_primes": [
+          7,
+          23,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:hni": {
+        "text": "hni",
+        "tier": 2,
+        "prime": 227,
+        "parent_primes": [
+          23,
+          47,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:nic": {
+        "text": "nic",
+        "tier": 2,
+        "prime": 229,
+        "parent_primes": [
+          47,
+          29,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:ica": {
+        "text": "ica",
+        "tier": 2,
+        "prime": 233,
+        "parent_primes": [
+          29,
+          7,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:cal": {
+        "text": "cal",
+        "tier": 2,
+        "prime": 239,
+        "parent_primes": [
+          7,
+          3,
+          41
+        ],
+        "intersection_only": false
+      },
+      "2:tech": {
+        "text": "tech",
+        "tier": 2,
+        "prime": 241,
+        "parent_primes": [
+          73,
+          13,
+          7,
+          23
+        ],
+        "intersection_only": false
+      },
+      "2:echn": {
+        "text": "echn",
+        "tier": 2,
+        "prime": 251,
+        "parent_primes": [
+          13,
+          7,
+          23,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:chni": {
+        "text": "chni",
+        "tier": 2,
+        "prime": 257,
+        "parent_primes": [
+          7,
+          23,
+          47,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:hnic": {
+        "text": "hnic",
+        "tier": 2,
+        "prime": 263,
+        "parent_primes": [
+          23,
+          47,
+          29,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:nica": {
+        "text": "nica",
+        "tier": 2,
+        "prime": 269,
+        "parent_primes": [
+          47,
+          29,
+          7,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:ical": {
+        "text": "ical",
+        "tier": 2,
+        "prime": 271,
+        "parent_primes": [
+          29,
+          7,
+          3,
+          41
+        ],
+        "intersection_only": false
+      },
+      "3:technical": {
+        "text": "technical",
+        "tier": 3,
+        "prime": 277,
+        "parent_primes": [
+          241,
+          269
+        ],
+        "intersection_only": false
+      },
+      "2:ar": {
+        "text": "ar",
+        "tier": 2,
+        "prime": 281,
+        "parent_primes": [
+          3,
+          67
+        ],
+        "intersection_only": false
+      },
+      "2:wa": {
+        "text": "wa",
+        "tier": 2,
+        "prime": 283,
+        "parent_primes": [
+          89,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:re": {
+        "text": "re",
+        "tier": 2,
+        "prime": 293,
+        "parent_primes": [
+          67,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:war": {
+        "text": "war",
+        "tier": 2,
+        "prime": 307,
+        "parent_primes": [
+          89,
+          3,
+          67
+        ],
+        "intersection_only": false
+      },
+      "2:are": {
+        "text": "are",
+        "tier": 2,
+        "prime": 311,
+        "parent_primes": [
+          3,
+          67,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:ware": {
+        "text": "ware",
+        "tier": 2,
+        "prime": 313,
+        "parent_primes": [
+          89,
+          3,
+          67,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:tw": {
+        "text": "tw",
+        "tier": 2,
+        "prime": 317,
+        "parent_primes": [
+          73,
+          89
+        ],
+        "intersection_only": false
+      },
+      "2:hi": {
+        "text": "hi",
+        "tier": 2,
+        "prime": 331,
+        "parent_primes": [
+          23,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:ip": {
+        "text": "ip",
+        "tier": 2,
+        "prime": 337,
+        "parent_primes": [
+          29,
+          59
+        ],
+        "intersection_only": false
+      },
+      "2:chi": {
+        "text": "chi",
+        "tier": 2,
+        "prime": 347,
+        "parent_primes": [
+          7,
+          23,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:hip": {
+        "text": "hip",
+        "tier": 2,
+        "prime": 349,
+        "parent_primes": [
+          23,
+          29,
+          59
+        ],
+        "intersection_only": false
+      },
+      "2:chip": {
+        "text": "chip",
+        "tier": 2,
+        "prime": 353,
+        "parent_primes": [
+          7,
+          23,
+          29,
+          59
+        ],
+        "intersection_only": false
+      },
+      "2:ap": {
+        "text": "ap",
+        "tier": 2,
+        "prime": 359,
+        "parent_primes": [
+          3,
+          59
+        ],
+        "intersection_only": false
+      },
+      "2:pp": {
+        "text": "pp",
+        "tier": 2,
+        "prime": 367,
+        "parent_primes": [
+          59,
+          59
+        ],
+        "intersection_only": false
+      },
+      "2:pl": {
+        "text": "pl",
+        "tier": 2,
+        "prime": 373,
+        "parent_primes": [
+          59,
+          41
+        ],
+        "intersection_only": false
+      },
+      "2:le": {
+        "text": "le",
+        "tier": 2,
+        "prime": 379,
+        "parent_primes": [
+          41,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:app": {
+        "text": "app",
+        "tier": 2,
+        "prime": 383,
+        "parent_primes": [
+          3,
+          59,
+          59
+        ],
+        "intersection_only": false
+      },
+      "2:ppl": {
+        "text": "ppl",
+        "tier": 2,
+        "prime": 389,
+        "parent_primes": [
+          59,
+          59,
+          41
+        ],
+        "intersection_only": false
+      },
+      "2:ple": {
+        "text": "ple",
+        "tier": 2,
+        "prime": 397,
+        "parent_primes": [
+          59,
+          41,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:appl": {
+        "text": "appl",
+        "tier": 2,
+        "prime": 401,
+        "parent_primes": [
+          3,
+          59,
+          59,
+          41
+        ],
+        "intersection_only": false
+      },
+      "2:pple": {
+        "text": "pple",
+        "tier": 2,
+        "prime": 409,
+        "parent_primes": [
+          59,
+          59,
+          41,
+          13
+        ],
+        "intersection_only": false
+      },
+      "3:apple": {
+        "text": "apple",
+        "tier": 3,
+        "prime": 419,
+        "parent_primes": [
+          401
+        ],
+        "intersection_only": false
+      },
+      "2:or": {
+        "text": "or",
+        "tier": 2,
+        "prime": 421,
+        "parent_primes": [
+          53,
+          67
+        ],
+        "intersection_only": false
+      },
+      "2:ha": {
+        "text": "ha",
+        "tier": 2,
+        "prime": 431,
+        "parent_primes": [
+          23,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:rd": {
+        "text": "rd",
+        "tier": 2,
+        "prime": 433,
+        "parent_primes": [
+          67,
+          11
+        ],
+        "intersection_only": false
+      },
+      "2:har": {
+        "text": "har",
+        "tier": 2,
+        "prime": 439,
+        "parent_primes": [
+          23,
+          3,
+          67
+        ],
+        "intersection_only": false
+      },
+      "2:ard": {
+        "text": "ard",
+        "tier": 2,
+        "prime": 443,
+        "parent_primes": [
+          3,
+          67,
+          11
+        ],
+        "intersection_only": false
+      },
+      "2:hard": {
+        "text": "hard",
+        "tier": 2,
+        "prime": 449,
+        "parent_primes": [
+          23,
+          3,
+          67,
+          11
+        ],
+        "intersection_only": false
+      },
+      "2:wo": {
+        "text": "wo",
+        "tier": 2,
+        "prime": 457,
+        "parent_primes": [
+          89,
+          53
+        ],
+        "intersection_only": false
+      },
+      "2:wor": {
+        "text": "wor",
+        "tier": 2,
+        "prime": 461,
+        "parent_primes": [
+          89,
+          53,
+          67
+        ],
+        "intersection_only": false
+      },
+      "2:an": {
+        "text": "an",
+        "tier": 2,
+        "prime": 463,
+        "parent_primes": [
+          3,
+          47
+        ],
+        "intersection_only": false
+      },
+      "2:na": {
+        "text": "na",
+        "tier": 2,
+        "prime": 467,
+        "parent_primes": [
+          47,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:ana": {
+        "text": "ana",
+        "tier": 2,
+        "prime": 479,
+        "parent_primes": [
+          3,
+          47,
+          3
+        ],
+        "intersection_only": false
+      },
+      "2:fr": {
+        "text": "fr",
+        "tier": 2,
+        "prime": 487,
+        "parent_primes": [
+          17,
+          67
+        ],
+        "intersection_only": false
+      },
+      "2:ru": {
+        "text": "ru",
+        "tier": 2,
+        "prime": 491,
+        "parent_primes": [
+          67,
+          79
+        ],
+        "intersection_only": false
+      },
+      "2:ui": {
+        "text": "ui",
+        "tier": 2,
+        "prime": 499,
+        "parent_primes": [
+          79,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:it": {
+        "text": "it",
+        "tier": 2,
+        "prime": 503,
+        "parent_primes": [
+          29,
+          73
+        ],
+        "intersection_only": false
+      },
+      "2:fru": {
+        "text": "fru",
+        "tier": 2,
+        "prime": 509,
+        "parent_primes": [
+          17,
+          67,
+          79
+        ],
+        "intersection_only": false
+      },
+      "2:rui": {
+        "text": "rui",
+        "tier": 2,
+        "prime": 521,
+        "parent_primes": [
+          67,
+          79,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:uit": {
+        "text": "uit",
+        "tier": 2,
+        "prime": 523,
+        "parent_primes": [
+          79,
+          29,
+          73
+        ],
+        "intersection_only": false
+      },
+      "2:frui": {
+        "text": "frui",
+        "tier": 2,
+        "prime": 541,
+        "parent_primes": [
+          17,
+          67,
+          79,
+          29
+        ],
+        "intersection_only": false
+      },
+      "2:ruit": {
+        "text": "ruit",
+        "tier": 2,
+        "prime": 547,
+        "parent_primes": [
+          67,
+          79,
+          29,
+          73
+        ],
+        "intersection_only": false
+      },
+      "3:fruit": {
+        "text": "fruit",
+        "tier": 3,
+        "prime": 557,
+        "parent_primes": [
+          541
+        ],
+        "intersection_only": false
+      },
+      "2:nc": {
+        "text": "nc",
+        "tier": 2,
+        "prime": 563,
+        "parent_primes": [
+          47,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:ce": {
+        "text": "ce",
+        "tier": 2,
+        "prime": 569,
+        "parent_primes": [
+          7,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:onc": {
+        "text": "onc",
+        "tier": 2,
+        "prime": 571,
+        "parent_primes": [
+          53,
+          47,
+          7
+        ],
+        "intersection_only": false
+      },
+      "2:nce": {
+        "text": "nce",
+        "tier": 2,
+        "prime": 577,
+        "parent_primes": [
+          47,
+          7,
+          13
+        ],
+        "intersection_only": false
+      },
+      "2:once": {
+        "text": "once",
+        "tier": 2,
+        "prime": 587,
+        "parent_primes": [
+          53,
+          47,
+          7,
+          13
+        ],
+        "intersection_only": false
+      },
+      "3:once": {
+        "text": "once",
+        "tier": 3,
+        "prime": 593,
+        "parent_primes": [
+          587
+        ],
+        "intersection_only": false
+      },
+      "2:ra": {
+        "text": "ra",
+        "tier": 2,
+        "prime": 599,
+        "parent_primes": [
+          67,
+          3
+        ],
+        "intersection_only": false
+      }
+    },
+    "intersections": {
+      "chip": {
+        "text": "chip",
+        "tier": 3,
+        "prime": 118,
+        "parent_primes": [
+          7,
+          23,
+          29,
+          59
+        ],
+        "intersection_only": true
+      },
+      "software": {
+        "text": "software",
+        "tier": 3,
+        "prime": 386,
+        "parent_primes": [
+          71,
+          53,
+          17,
+          73,
+          89,
+          3,
+          67,
+          13
+        ],
+        "intersection_only": true
+      },
+      "hardware": {
+        "text": "hardware",
+        "tier": 3,
+        "prime": 276,
+        "parent_primes": [
+          23,
+          3,
+          67,
+          11,
+          89,
+          3,
+          67,
+          13
+        ],
+        "intersection_only": true
+      },
+      "network": {
+        "text": "network",
+        "tier": 3,
+        "prime": 379,
+        "parent_primes": [
+          47,
+          13,
+          73,
+          89,
+          53,
+          67,
+          37
+        ],
+        "intersection_only": true
+      },
+      "pie": {
+        "text": "pie",
+        "tier": 3,
+        "prime": 101,
+        "parent_primes": [
+          59,
+          29,
+          13
+        ],
+        "intersection_only": true
+      },
+      "orchard": {
+        "text": "orchard",
+        "tier": 3,
+        "prime": 231,
+        "parent_primes": [
+          53,
+          67,
+          7,
+          23,
+          3,
+          67,
+          11
+        ],
+        "intersection_only": true
+      },
+      "xylophone": {
+        "text": "xylophone",
+        "tier": 3,
+        "prime": 487,
+        "parent_primes": [
+          97,
+          101,
+          41,
+          53,
+          59,
+          23,
+          53,
+          47,
+          13
+        ],
+        "intersection_only": true
+      },
+      "obscure": {
+        "text": "obscure",
+        "tier": 3,
+        "prime": 295,
+        "parent_primes": [
+          53,
+          5,
+          71,
+          7,
+          79,
+          67,
+          13
+        ],
+        "intersection_only": true
+      },
+      "rareword": {
+        "text": "rareword",
+        "tier": 3,
+        "prime": 370,
+        "parent_primes": [
+          67,
+          3,
+          67,
+          13,
+          89,
+          53,
+          67,
+          11
+        ],
+        "intersection_only": true
+      },
+      "banana": {
+        "text": "banana",
+        "tier": 3,
+        "prime": 108,
+        "parent_primes": [
+          5,
+          3,
+          47,
+          3,
+          47,
+          3
+        ],
+        "intersection_only": true
+      },
+      "zebra": {
+        "text": "zebra",
+        "tier": 3,
+        "prime": 191,
+        "parent_primes": [
+          103,
+          13,
+          5,
+          67,
+          3
+        ],
+        "intersection_only": true
+      },
+      "unique": {
+        "text": "unique",
+        "tier": 3,
+        "prime": 308,
+        "parent_primes": [
+          79,
+          47,
+          29,
+          61,
+          79,
+          13
+        ],
+        "intersection_only": true
+      },
+      "animal": {
+        "text": "animal",
+        "tier": 3,
+        "prime": 166,
+        "parent_primes": [
+          3,
+          47,
+          29,
+          43,
+          3,
+          41
+        ],
+        "intersection_only": true
+      }
+    },
+    "correlations": {
+      "phone|phone": {
+        "source": "phone",
+        "target": "phone",
+        "strength": 6,
+        "dim4": 0.0,
+        "dim5": 8.062,
+        "dim6": 0.0
+      },
+      "phone|technical": {
+        "source": "phone",
+        "target": "technical",
+        "strength": 10,
+        "dim4": 2.064,
+        "dim5": 4.43,
+        "dim6": 6.368
+      },
+      "chip|phone": {
+        "source": "phone",
+        "target": "chip",
+        "strength": 8,
+        "dim4": 1.512,
+        "dim5": 5.558,
+        "dim6": 7.496
+      },
+      "phone|software": {
+        "source": "phone",
+        "target": "software",
+        "strength": 6,
+        "dim4": 4.96,
+        "dim5": 9.502,
+        "dim6": 8.56
+      },
+      "chip|technical": {
+        "source": "technical",
+        "target": "chip",
+        "strength": 4,
+        "dim4": 6.664,
+        "dim5": 1.926,
+        "dim6": 8.872
+      },
+      "software|technical": {
+        "source": "technical",
+        "target": "software",
+        "strength": 2,
+        "dim4": 7.6,
+        "dim5": 5.87,
+        "dim6": 4.928
+      },
+      "chip|software": {
+        "source": "chip",
+        "target": "software",
+        "strength": 2,
+        "dim4": 7.208,
+        "dim5": 6.998,
+        "dim6": 6.056
+      },
+      "hardware|phone": {
+        "source": "phone",
+        "target": "hardware",
+        "strength": 2,
+        "dim4": 6.085,
+        "dim5": 0.965,
+        "dim6": 5.325
+      },
+      "network|phone": {
+        "source": "phone",
+        "target": "network",
+        "strength": 2,
+        "dim4": 2.727,
+        "dim5": 4.119,
+        "dim6": 7.829
+      },
+      "hardware|technical": {
+        "source": "technical",
+        "target": "hardware",
+        "strength": 2,
+        "dim4": 3.691,
+        "dim5": 4.339,
+        "dim6": 8.699
+      },
+      "network|technical": {
+        "source": "technical",
+        "target": "network",
+        "strength": 2,
+        "dim4": 7.945,
+        "dim5": 7.493,
+        "dim6": 4.455
+      },
+      "hardware|network": {
+        "source": "hardware",
+        "target": "network",
+        "strength": 2,
+        "dim4": 5.058,
+        "dim5": 8.794,
+        "dim6": 3.154
+      },
+      "apple|phone": {
+        "source": "apple",
+        "target": "phone",
+        "strength": 2,
+        "dim4": 6.829,
+        "dim5": 2.605,
+        "dim6": 6.315
+      },
+      "apple|chip": {
+        "source": "apple",
+        "target": "chip",
+        "strength": 2,
+        "dim4": 4.251,
+        "dim5": 5.987,
+        "dim6": 2.933
+      },
+      "apple|technical": {
+        "source": "apple",
+        "target": "technical",
+        "strength": 2,
+        "dim4": 6.339,
+        "dim5": 5.979,
+        "dim6": 2.941
+      },
+      "apple|fruit": {
+        "source": "apple",
+        "target": "fruit",
+        "strength": 2,
+        "dim4": 6.989,
+        "dim5": 5.505,
+        "dim6": 4.067
+      },
+      "apple|pie": {
+        "source": "apple",
+        "target": "pie",
+        "strength": 2,
+        "dim4": 1.462,
+        "dim5": 8.232,
+        "dim6": 3.206
+      },
+      "apple|orchard": {
+        "source": "apple",
+        "target": "orchard",
+        "strength": 2,
+        "dim4": 5.611,
+        "dim5": 9.763,
+        "dim6": 8.325
+      },
+      "fruit|pie": {
+        "source": "fruit",
+        "target": "pie",
+        "strength": 2,
+        "dim4": 4.875,
+        "dim5": 2.299,
+        "dim6": 7.273
+      },
+      "fruit|orchard": {
+        "source": "fruit",
+        "target": "orchard",
+        "strength": 2,
+        "dim4": 1.446,
+        "dim5": 3.83,
+        "dim6": 4.258
+      },
+      "orchard|pie": {
+        "source": "pie",
+        "target": "orchard",
+        "strength": 2,
+        "dim4": 6.269,
+        "dim5": 6.557,
+        "dim6": 1.531
+      },
+      "obscure|xylophone": {
+        "source": "xylophone",
+        "target": "obscure",
+        "strength": 2,
+        "dim4": 2.572,
+        "dim5": 5.536,
+        "dim6": 9.484
+      },
+      "rareword|xylophone": {
+        "source": "xylophone",
+        "target": "rareword",
+        "strength": 2,
+        "dim4": 1.535,
+        "dim5": 1.999,
+        "dim6": 3.021
+      },
+      "once|xylophone": {
+        "source": "xylophone",
+        "target": "once",
+        "strength": 2,
+        "dim4": 3.955,
+        "dim5": 6.843,
+        "dim6": 8.177
+      },
+      "obscure|rareword": {
+        "source": "obscure",
+        "target": "rareword",
+        "strength": 2,
+        "dim4": 0.451,
+        "dim5": 2.515,
+        "dim6": 3.537
+      },
+      "obscure|once": {
+        "source": "obscure",
+        "target": "once",
+        "strength": 2,
+        "dim4": 4.655,
+        "dim5": 7.359,
+        "dim6": 8.693
+      },
+      "once|rareword": {
+        "source": "rareword",
+        "target": "once",
+        "strength": 2,
+        "dim4": 0.7,
+        "dim5": 3.822,
+        "dim6": 4.844
+      },
+      "banana|fruit": {
+        "source": "banana",
+        "target": "fruit",
+        "strength": 2,
+        "dim4": 4.503,
+        "dim5": 6.791,
+        "dim6": 5.427
+      },
+      "banana|once": {
+        "source": "banana",
+        "target": "once",
+        "strength": 2,
+        "dim4": 8.779,
+        "dim5": 2.947,
+        "dim6": 0.729
+      },
+      "fruit|once": {
+        "source": "fruit",
+        "target": "once",
+        "strength": 2,
+        "dim4": 6.06,
+        "dim5": 7.52,
+        "dim6": 6.156
+      },
+      "unique|zebra": {
+        "source": "zebra",
+        "target": "unique",
+        "strength": 2,
+        "dim4": 9.671,
+        "dim5": 2.055,
+        "dim6": 3.771
+      },
+      "animal|zebra": {
+        "source": "zebra",
+        "target": "animal",
+        "strength": 2,
+        "dim4": 2.563,
+        "dim5": 8.019,
+        "dim6": 7.807
+      },
+      "animal|unique": {
+        "source": "unique",
+        "target": "animal",
+        "strength": 2,
+        "dim4": 4.26,
+        "dim5": 4.248,
+        "dim6": 5.964
+      }
+    },
+    "next_promotion_idx": 82
+  },
+  "graph": {
+    "pair_count": {
+      "phone|technical": 3,
+      "chip|phone": 2,
+      "phone|software": 1,
+      "chip|technical": 2,
+      "software|technical": 1,
+      "chip|software": 1,
+      "hardware|phone": 1,
+      "network|phone": 1,
+      "hardware|technical": 1,
+      "network|technical": 1,
+      "hardware|network": 1,
+      "apple|phone": 1,
+      "apple|chip": 1,
+      "apple|technical": 1,
+      "apple|fruit": 1,
+      "apple|pie": 1,
+      "apple|orchard": 1,
+      "fruit|pie": 1,
+      "fruit|orchard": 1,
+      "orchard|pie": 1,
+      "obscure|xylophone": 1,
+      "rareword|xylophone": 1,
+      "once|xylophone": 1,
+      "obscure|rareword": 1,
+      "obscure|once": 1,
+      "once|rareword": 1,
+      "banana|fruit": 1,
+      "banana|once": 1,
+      "fruit|once": 1,
+      "unique|zebra": 1,
+      "animal|zebra": 1,
+      "animal|unique": 1
+    },
+    "word_count": {
+      "phone": 3,
+      "technical": 3,
+      "chip": 2,
+      "software": 1,
+      "hardware": 1,
+      "network": 1,
+      "apple": 2,
+      "fruit": 2,
+      "pie": 1,
+      "orchard": 1,
+      "xylophone": 1,
+      "obscure": 1,
+      "rareword": 1,
+      "once": 2,
+      "banana": 1,
+      "zebra": 1,
+      "unique": 1,
+      "animal": 1
+    },
+    "window_count": 7
+  },
+  "word_to_cluster": {
+    "phone": "theme_phone",
+    "technical": "theme_phone",
+    "chip": "theme_phone"
+  },
+  "cluster_hubs": {
+    "theme_phone": "phone"
+  },
+  "documents_read": 7,
+  "categories": {
+    "theme_phone": {
+      "name": "theme_phone",
+      "dim7": 3.9659999999999997,
+      "dim8": 2.037,
+      "dim9": 0.08,
+      "prime_weights": {
+        "195": 3.0,
+        "243": 1.0,
+        "118": 5.0,
+        "386": 1.0,
+        "163": 7.0,
+        "277": 7.0,
+        "276": 1.0,
+        "379": 1.0
+      },
+      "word_weights": {
+        "phone": 10.0,
+        "technical": 8.0,
+        "chip": 5.0,
+        "software": 1.0,
+        "hardware": 1.0,
+        "network": 1.0
+      }
+    },
+    "theme_apple": {
+      "name": "theme_apple",
+      "dim7": 7.501,
+      "dim8": 1.749,
+      "dim9": 0.08,
+      "prime_weights": {
+        "175": 1.0,
+        "163": 1.0,
+        "118": 1.0,
+        "277": 1.0,
+        "419": 1.0,
+        "265": 1.0,
+        "101": 1.0,
+        "231": 1.0
+      },
+      "word_weights": {
+        "apple": 2.0,
+        "phone": 1.0,
+        "chip": 1.0,
+        "technical": 1.0,
+        "fruit": 1.0,
+        "pie": 1.0,
+        "orchard": 1.0
+      }
+    },
+    "theme_xylophone": {
+      "name": "theme_xylophone",
+      "dim7": 9.084999999999999,
+      "dim8": 2.53,
+      "dim9": 0.07,
+      "prime_weights": {
+        "487": 1.0,
+        "295": 1.0,
+        "370": 1.0,
+        "120": 1.0,
+        "108": 1.0,
+        "557": 1.0,
+        "593": 1.0
+      },
+      "word_weights": {
+        "xylophone": 1.0,
+        "obscure": 1.0,
+        "rareword": 1.0,
+        "once": 2.0,
+        "banana": 1.0,
+        "fruit": 1.0
+      }
+    },
+    "theme_zebra": {
+      "name": "theme_zebra",
+      "dim7": 7.2090000000000005,
+      "dim8": 0.665,
+      "dim9": 0.03,
+      "prime_weights": {
+        "191": 1.0,
+        "308": 1.0,
+        "166": 1.0
+      },
+      "word_weights": {
+        "zebra": 1.0,
+        "unique": 1.0,
+        "animal": 1.0
+      }
+    }
+  }
+}
