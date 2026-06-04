@@ -74,6 +74,12 @@ from core.learning_engine import (
     record_retrieval_false_positives,
     save_distilled_registry,
 )
+from eval_checkpoint import (
+    EvalBundle,
+    checkpoint_path,
+    load_checkpoint,
+    save_checkpoint as persist_eval_checkpoint,
+)
 
 BM25_REF = {
     "scifact": 0.643,
@@ -446,6 +452,145 @@ def make_pipeline(mode: str) -> AethosPipeline:
 
 
 # ---------------------------------------------------------------------------
+# Query scoring (from checkpoint — fast A/B)
+# ---------------------------------------------------------------------------
+
+def score_from_bundle(
+    bundle: EvalBundle,
+    *,
+    lambda_prime_factor: float | None = None,
+    bad_store: BadCorrelationStore | None = None,
+    verbose: bool = False,
+) -> EvalResult:
+    """Run the query loop only — reuse a saved EvalBundle from stage 1."""
+    import aethos_hub_signature as _hs
+
+    if lambda_prime_factor is not None:
+        _hs.LAMBDA_PRIME_FACTOR = float(lambda_prime_factor)
+    print(f"  LAMBDA_PRIME_FACTOR={_hs.LAMBDA_PRIME_FACTOR}", flush=True)
+
+    pipe = bundle.pipe
+    cidx = bundle.cidx
+    hub_sigs = bundle.hub_sigs
+    neighbor_map = bundle.neighbor_map
+    meet_index = bundle.meet_index
+    sub_comp_idx = bundle.sub_comp_idx
+    comp_idx = bundle.comp_idx
+    phrase_idx = bundle.phrase_idx
+    anchor_idx = bundle.anchor_idx
+    queries = bundle.queries
+    qrels = bundle.qrels
+    qids = bundle.qids
+
+    if bad_store is None:
+        bad_store = BadCorrelationStore.load(bad_correlation_path(bundle.dataset, bundle.mode))
+
+    ndcgs: list[float] = []
+    r10s: list[float] = []
+    q_times: list[float] = []
+    n_docs = len(cidx.doc_ids)
+
+    print(f"  scoring {len(qids)} queries (from checkpoint)...", flush=True)
+    for qi, qid in enumerate(qids):
+        t0 = time.perf_counter()
+
+        profile = build_query_profile(
+            queries[qid],
+            pipe.registry,
+            neighbor_map=neighbor_map,
+            doc_freq=cidx.doc_freq,
+            n_docs=n_docs,
+        )
+        cands = candidate_ids(
+            profile.words, cidx.inv, neighbor_map, cidx.doc_ids,
+            meet_index=meet_index, registry=pipe.registry,
+        )
+
+        q_anchor_comps = None
+        if anchor_idx is not None and anchor_idx.n_anchors > 0:
+            q_anchor_comps = query_anchor_composites(
+                list(profile.word_set),
+                anchor_idx,
+                pipe.registry,
+                idf=profile.idf,
+            )
+
+        if pipe.reader.word_to_cluster:
+            query_clusters: dict[str, float] = {}
+            for w in profile.word_set:
+                cid = pipe.reader.word_to_cluster.get(w)
+                if cid:
+                    query_clusters[cid] = max(
+                        query_clusters.get(cid, 0.0), profile.idf.get(w, 0.0)
+                    )
+            if query_clusters:
+                qc_ids: dict[str, float] = {}
+                for w2, cid2 in pipe.reader.word_to_cluster.items():
+                    if cid2 in query_clusters and w2 not in profile.word_set:
+                        if qc_ids.get(w2, 0.0) < query_clusters[cid2]:
+                            qc_ids[w2] = query_clusters[cid2]
+                profile.query_cluster_ids = qc_ids
+
+        q_phrase_comps = None
+        if phrase_idx is not None:
+            q_phrase_comps = _query_phrase_composites(
+                profile.words, phrase_idx, pipe.registry, profile.idf,
+            )
+
+        ranked = rank_with_hub_signatures(
+            profile, cands, hub_sigs, cidx.doc_ids,
+            doc_tokens=cidx.doc_tokens,
+            doc_tf=cidx.doc_tf,
+            doc_len=cidx.doc_len,
+            avg_dl=cidx.avg_dl,
+            composite_index=comp_idx,
+            sub_comp_idx=sub_comp_idx,
+            registry=pipe.registry,
+            phrase_idx=phrase_idx,
+            anchor_idx=anchor_idx,
+            query_anchor_comps=q_anchor_comps,
+            query_phrase_comps=q_phrase_comps,
+            top_k=100,
+        )
+
+        q_times.append((time.perf_counter() - t0) * 1000.0)
+        rel = qrels[qid]
+        ndcgs.append(ndcg_at_k(ranked, rel, 10))
+        r10s.append(recall_at_k(ranked, rel, 10))
+
+        record_retrieval_false_positives(
+            bad_store, ranked, rel, profile, hub_sigs, pipe.registry, top_k=10,
+        )
+        if verbose and (qi + 1) % 50 == 0:
+            print(
+                f"  query {qi+1}/{len(qids)}  NDCG@10 avg: {sum(ndcgs)/len(ndcgs):.4f}",
+                flush=True,
+            )
+
+    n_q = max(len(qids), 1)
+    p50_q = sorted(q_times)[len(q_times) // 2] if q_times else 0.0
+
+    bad_path = bad_correlation_path(bundle.dataset, bundle.mode)
+    bad_path.parent.mkdir(parents=True, exist_ok=True)
+    bad_store.save(bad_path)
+
+    return EvalResult(
+        dataset=bundle.dataset,
+        mode=bundle.mode,
+        n_docs=bundle.n_docs,
+        n_queries=len(qids),
+        ndcg10=sum(ndcgs) / n_q,
+        r10=sum(r10s) / n_q,
+        p50_ingest_ms=bundle.p50_ingest_ms,
+        p99_ingest_ms=bundle.p99_ingest_ms,
+        bytes_per_doc=bundle.bytes_per_doc,
+        hub_bytes_per_doc=bundle.hub_bytes_per_doc,
+        p50_query_ms=p50_q,
+        bm25_ref=BM25_REF.get(bundle.dataset),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Evaluate one dataset
 # ---------------------------------------------------------------------------
 
@@ -459,9 +604,30 @@ def evaluate_dataset(
     n_passes: int = 2,
     verbose: bool = False,
     lambda_prime_factor: float | None = None,
+    from_checkpoint: str | Path | None = None,
+    save_checkpoint: bool | str | Path | None = None,
+    build_only: bool = False,
+    skip_training: bool = False,
+    max_convergence_rounds: int = 8,
 ) -> EvalResult:
     if not paths.corpus.exists():
         raise FileNotFoundError(f"missing corpus: {paths.corpus}")
+
+    bad_path = bad_correlation_path(paths.name, mode)
+    bad_store = BadCorrelationStore.load(bad_path)
+
+    if from_checkpoint is not None:
+        ckpt = Path(from_checkpoint)
+        print(f"  loading checkpoint: {ckpt.name}", flush=True)
+        bundle = load_checkpoint(ckpt)
+        result = score_from_bundle(
+            bundle,
+            lambda_prime_factor=lambda_prime_factor,
+            bad_store=bad_store,
+            verbose=verbose,
+        )
+        print(result.summary())
+        return result
 
     import aethos_hub_signature as _hs
 
@@ -469,8 +635,6 @@ def evaluate_dataset(
         _hs.LAMBDA_PRIME_FACTOR = float(lambda_prime_factor)
         print(f"  LAMBDA_PRIME_FACTOR={_hs.LAMBDA_PRIME_FACTOR}", flush=True)
 
-    bad_path = bad_correlation_path(paths.name, mode)
-    bad_store = BadCorrelationStore.load(bad_path)
     if bad_store.entries:
         print(f"  bad-correlation queue: {len(bad_store.entries)} entries (loaded)", flush=True)
 
@@ -484,6 +648,10 @@ def evaluate_dataset(
 
     # --- multi-pass build ---
     pipe = make_pipeline(mode)
+    distilled_path = brain_path_for_dataset(paths.name, mode).with_suffix(".distilled.json")
+    if load_distilled_registry(pipe.registry, distilled_path):
+        print(f"  distilled registry loaded (pre-ingest): {distilled_path.name}", flush=True)
+
     t_ingest = time.perf_counter()
     metrics, cidx = ingest_corpus(pipe, corpus, mode=mode)
     # Pass 1 flush (cluster discovery)
@@ -493,10 +661,6 @@ def evaluate_dataset(
         print(f"  cluster flush skipped ({exc})", flush=True)
     ingest_total_ms = (time.perf_counter() - t_ingest) * 1000.0
     print(f"  ingest done: {len(cidx.doc_ids)} docs in {ingest_total_ms:.0f} ms", flush=True)
-
-    distilled_path = brain_path_for_dataset(paths.name, mode).with_suffix(".distilled.json")
-    if load_distilled_registry(pipe.registry, distilled_path):
-        print(f"  distilled registry loaded: {distilled_path.name}", flush=True)
 
     # --- multi-pass iterative build (L2 → L3 refresh → L4 phrases → L5 bridges) ---
     corpus_texts = [doc_text(doc) for doc in corpus.values()]
@@ -569,15 +733,20 @@ def evaluate_dataset(
 
     # --- load saved brain (compound learning across runs) ---
     b_path = brain_path_for_dataset(paths.name, mode)
+    brain_exists = b_path.exists()
+    qrels_train_data = load_qrels(paths.qrels_train)
     init_lc, init_ln = load_brain(b_path, anchor_idx, verbose=True)
-    # Apply saved λ values as starting point (will be refined by calibration below)
     import aethos_hub_signature as _hs
     _hs.LAMBDA_COORD = init_lc
     _hs.LAMBDA_NEIGHBOR = init_ln
 
+    do_train = qrels_train_data and anchor_idx.n_anchors > 0
+    if skip_training and brain_exists:
+        do_train = False
+        print("  skip_training: using saved brain (no convergence/calibration)", flush=True)
+
     # --- train anchors on train qrels if available ---
-    qrels_train_data = load_qrels(paths.qrels_train)
-    if qrels_train_data and anchor_idx.n_anchors > 0:
+    if do_train:
         t_train = time.perf_counter()
         n_trained = train_heavy_anchors(
             anchor_idx,
@@ -614,7 +783,7 @@ def evaluate_dataset(
     # Finds words unique to gold docs (not in query, not in wrong docs) and builds
     # new composites that anchor gold docs against vocabulary-mismatched queries.
     neighbor_map = build_neighbor_weights(pipe.registry)
-    if qrels_train_data and anchor_idx.n_anchors > 0:
+    if do_train:
         discover_discriminating_intersections(
             anchor_idx,
             pipe.registry,
@@ -659,7 +828,7 @@ def evaluate_dataset(
         print(f"  anchor re-training: {n_retrain} queries (post-discovery)", flush=True)
 
     # --- multi-round convergence training ---
-    if qrels_train_data and anchor_idx.n_anchors > 0:
+    if do_train:
         qrels_test_data = load_qrels(paths.qrels_test)
         if qrels_test_data:
             print("  running convergence loop...", flush=True)
@@ -679,7 +848,7 @@ def evaluate_dataset(
                 hub_sigs,
                 neighbor_map,
                 sub_comp_idx,
-                max_rounds=8,
+                max_rounds=max_convergence_rounds,
                 convergence_threshold=0.002,
                 verbose=True,
             )
@@ -690,7 +859,7 @@ def evaluate_dataset(
 
     # --- λ calibration (grid-search LAMBDA_COORD × LAMBDA_NEIGHBOR on train qrels) ---
     import aethos_hub_signature as _hs
-    if qrels_train_data and anchor_idx is not None and anchor_idx.n_anchors > 0:
+    if do_train and anchor_idx is not None:
         print("  calibrating signal weights on train qrels...", flush=True)
         calibrate_signal_weights(
             hub_sigs,
@@ -712,7 +881,7 @@ def evaluate_dataset(
         )
 
     # --- save brain (compound learning for next run) ---
-    if qrels_train_data and anchor_idx is not None and anchor_idx.n_anchors > 0:
+    if do_train and anchor_idx is not None:
         b_path.parent.mkdir(parents=True, exist_ok=True)
         save_brain(anchor_idx, _hs.LAMBDA_COORD, _hs.LAMBDA_NEIGHBOR, b_path)
         trained_count = sum(
@@ -724,6 +893,56 @@ def evaluate_dataset(
             f"(λ_coord={_hs.LAMBDA_COORD}, λ_neighbor={_hs.LAMBDA_NEIGHBOR}, "
             f"λ_pf={_hs.LAMBDA_PRIME_FACTOR})",
             flush=True,
+        )
+
+    save_distilled_registry(pipe.registry, distilled_path)
+    print(f"  distilled registry saved: {distilled_path.name}", flush=True)
+
+    bundle = EvalBundle(
+        dataset=paths.name,
+        mode=mode,
+        qids=qids,
+        queries=queries,
+        qrels=qrels,
+        cidx=cidx,
+        hub_sigs=hub_sigs,
+        neighbor_map=neighbor_map,
+        meet_index=meet_index,
+        sub_comp_idx=sub_comp_idx,
+        comp_idx=comp_idx,
+        phrase_idx=phrase_idx,
+        anchor_idx=anchor_idx,
+        pipe=pipe,
+        hub_bytes_per_doc=hub_bytes,
+        p50_ingest_ms=metrics.p50_ms,
+        p99_ingest_ms=metrics.p99_ms,
+        bytes_per_doc=metrics.mean_bytes_per_doc,
+        n_docs=len(cidx.doc_ids),
+    )
+    if save_checkpoint:
+        ckpt_out = (
+            Path(save_checkpoint)
+            if isinstance(save_checkpoint, (str, Path))
+            else checkpoint_path(paths.name, mode)
+        )
+        persist_eval_checkpoint(bundle, ckpt_out)
+        print(f"  eval checkpoint saved: {ckpt_out.name}", flush=True)
+
+    if build_only:
+        print("  build_only: skipping query loop (use run_ab.py --stage ab)", flush=True)
+        return EvalResult(
+            dataset=paths.name,
+            mode=mode,
+            n_docs=len(cidx.doc_ids),
+            n_queries=len(qids),
+            ndcg10=0.0,
+            r10=0.0,
+            p50_ingest_ms=metrics.p50_ms,
+            p99_ingest_ms=metrics.p99_ms,
+            bytes_per_doc=metrics.mean_bytes_per_doc,
+            hub_bytes_per_doc=hub_bytes,
+            p50_query_ms=0.0,
+            bm25_ref=BM25_REF.get(paths.name),
         )
 
     # --- query loop ---
@@ -849,9 +1068,6 @@ def evaluate_dataset(
         f"{unresolved} unresolved → {bad_path.name}",
         flush=True,
     )
-    save_distilled_registry(pipe.registry, distilled_path)
-    print(f"  distilled registry saved: {distilled_path.name}", flush=True)
-
     return EvalResult(
         dataset=paths.name,
         mode=mode,
@@ -894,6 +1110,32 @@ def main() -> int:
         help="Signal 5b weight (default 0.35); use 0 for A/B baseline",
     )
     parser.add_argument("--list", action="store_true")
+    parser.add_argument(
+        "--build-only",
+        action="store_true",
+        help="Build indices and checkpoint; skip query scoring",
+    )
+    parser.add_argument(
+        "--save-checkpoint",
+        action="store_true",
+        help="Write brains/{dataset}_{mode}.eval.pkl after build",
+    )
+    parser.add_argument(
+        "--from-checkpoint",
+        type=str,
+        default=None,
+        help="Load eval pickle and run query loop only",
+    )
+    parser.add_argument(
+        "--skip-training",
+        action="store_true",
+        help="Skip anchor train/convergence if brain file exists",
+    )
+    parser.add_argument(
+        "--max-convergence-rounds",
+        type=int,
+        default=8,
+    )
     args = parser.parse_args()
 
     root = Path(resolve_beir_root())
@@ -923,6 +1165,11 @@ def main() -> int:
                 n_passes=args.passes,
                 verbose=args.verbose,
                 lambda_prime_factor=args.lambda_pf,
+                from_checkpoint=args.from_checkpoint,
+                save_checkpoint=args.save_checkpoint or None,
+                build_only=args.build_only,
+                skip_training=args.skip_training,
+                max_convergence_rounds=args.max_convergence_rounds,
             )
         except FileNotFoundError as exc:
             print(f"SKIP {name}: {exc}")

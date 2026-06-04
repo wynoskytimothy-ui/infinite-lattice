@@ -39,4 +39,6 @@ Use `fast_ingest=False` or multi-pass Pass 1 so subword stats populate before L2
 | `promote_l2_subwords` (legacy) | 38 |
 | `run_core_l2_pass` (core bridge) | 38 |
 
-Core eligibility matches production on the smoke corpus. SciFact NDCG A/B: run `eval_beir.py` with `build_multi_pass(..., use_core_l2=True)` when ready (full eval is slow).
+Core eligibility matches production on the smoke corpus.
+
+**SciFact A/B (fast):** `python run_ab.py --stage all` — stage 1 builds once and saves `brains/scifact_quality.eval.pkl`; stage 2 scores λ=0 vs λ=0.35 from the checkpoint in minutes.
