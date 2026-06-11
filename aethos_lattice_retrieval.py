@@ -240,6 +240,18 @@ class LatticeRetriever:
     MORPH_MIN_JACCARD: float = 0.7
     LAMBDA_PAIR: float = 0.0
     PI_DEPTH_ALPHA: float = 0.0
+    # PRF / 3-way meet expansion: take rare-IDF terms recurring in top-K
+    # candidates and let them bring related docs (incl gold) to the top.
+    # 3-way meet expansion: for each pair of query composites, find docs
+    # containing both, then take the rarest recurring third composite as
+    # the "meet branch" -- a query expansion term that's not in the query
+    # but geometrically lives at the same lattice node as the query pair.
+    PRF_TOP_K: int = 0          # disabled: classical PRF blind to relevance
+    TRIPLE_MAX_PAIRS: int = 6   # cap pairs of query terms to consider
+    TRIPLE_PER_PAIR: int = 3    # expansion terms per pair (rarest recurring)
+    TRIPLE_LAMBDA: float = 0.0  # disabled: top-K precision too low for branches
+    TRIPLE_MIN_PAIR_DOCS: int = 2
+    TRIPLE_MIN_RECUR: int = 2
 
     def query(self, text: str, k: int = 10, wing: int = 1) -> list[tuple[str, float]]:
         """Hybrid BM25 + lattice pair-meet score on lattice-routed candidates.
@@ -342,6 +354,132 @@ class LatticeRetriever:
             scored.append((doc_id, score))
 
         scored.sort(key=lambda x: -x[1])
+
+        # ============================================================
+        # 3-way meet expansion (lattice-native, not PRF):
+        # For each pair of query word composites (q_i, q_j), walk_up
+        # both and intersect -- those are docs containing BOTH terms.
+        # Among those docs, the rarest recurring THIRD term is the
+        # 3-way meet branch -- a word that geometrically lives at the
+        # same lattice node as the query pair.
+        # ============================================================
+        n_docs_total = max(len(self.doc_id_to_prime), 1)
+        if (self.TRIPLE_LAMBDA > 0 and n_q >= 2
+                and len(query_primes) <= 12):  # limit pair combinations
+            # Cache walk_up sets per query prime (intersection-friendly)
+            qp_parents: dict[int, set[int]] = {}
+            for qp in query_primes:
+                qp_parents[qp] = set(self.lattice.walk_up(qp))
+
+            # Score each pair: their co-occurring docs' rare term recurrence
+            pair_count = 0
+            branch_score: dict[int, float] = {}
+            for i, p1 in enumerate(query_primes):
+                if pair_count >= self.TRIPLE_MAX_PAIRS: break
+                for p2 in query_primes[i + 1:]:
+                    if pair_count >= self.TRIPLE_MAX_PAIRS: break
+                    pair_co_docs = qp_parents[p1] & qp_parents[p2]
+                    pair_co_doc_ids = [
+                        self.prime_to_doc_id[p] for p in pair_co_docs
+                        if p in self.prime_to_doc_id
+                    ]
+                    if len(pair_co_doc_ids) < self.TRIPLE_MIN_PAIR_DOCS:
+                        continue
+                    pair_count += 1
+                    # Tally third terms across the pair's co-occurring docs
+                    third_counts: Counter = Counter()
+                    for d_id in pair_co_doc_ids:
+                        d_prime = self.doc_id_to_prime[d_id]
+                        d_chain = self.lattice.resolve(d_prime).sub_chain or ()
+                        for t in d_chain:
+                            if t in query_primes_set: continue
+                            third_counts[t] += 1
+                    # Keep rare ones (high IDF, recur >= TRIPLE_MIN_RECUR)
+                    candidates = []
+                    for t, cnt in third_counts.items():
+                        if cnt < self.TRIPLE_MIN_RECUR: continue
+                        df = max(len(self.lattice.resolve(t).parents), 1)
+                        if df > n_docs_total * 0.05:  # too common
+                            continue
+                        idf = math.log((n_docs_total + 1.0) / (df + 1.0)) + 1.0
+                        candidates.append((t, idf * math.sqrt(cnt)))
+                    candidates.sort(key=lambda x: -x[1])
+                    for t, s in candidates[:self.TRIPLE_PER_PAIR]:
+                        branch_score[t] = branch_score.get(t, 0.0) + s
+
+            # Apply branch boost only to docs we already scored
+            if branch_score:
+                rescored: list[tuple[str, float]] = []
+                for d_id, s in scored:
+                    d_prime = self.doc_id_to_prime[d_id]
+                    d_chain_set = set(self.lattice.resolve(d_prime).sub_chain or ())
+                    overlap_score = sum(
+                        v for t, v in branch_score.items() if t in d_chain_set
+                    )
+                    rescored.append((d_id, s + self.TRIPLE_LAMBDA * overlap_score))
+                rescored.sort(key=lambda x: -x[1])
+                return rescored[:k]
+
+        # ============================================================
+        # Classical PRF fallback (disabled by default; PRF_TOP_K=0)
+        # ============================================================
+        if self.PRF_TOP_K > 0 and self.PRF_LAMBDA > 0 and len(scored) >= self.PRF_TOP_K:
+            top_docs = scored[:self.PRF_TOP_K]
+            # Tally rare-IDF terms across top-K (terms not in query)
+            n_docs_total = max(len(self.doc_id_to_prime), 1)
+            expansion_score: dict[int, float] = {}
+            expansion_recur: dict[int, int] = {}
+            for top_doc_id, _ in top_docs:
+                top_doc_prime = self.doc_id_to_prime[top_doc_id]
+                top_chain = self.lattice.resolve(top_doc_prime).sub_chain
+                if not top_chain:
+                    continue
+                top_doc_counts = self.doc_token_counts.get(top_doc_id)
+                for term_comp in top_chain:
+                    if term_comp in query_primes_set:
+                        continue
+                    df = max(len(self.lattice.resolve(term_comp).parents), 1)
+                    # Skip terms that occur in too many docs (low IDF, noise)
+                    if df > n_docs_total * 0.1:
+                        continue
+                    idf = math.log((n_docs_total + 1.0) / (df + 1.0)) + 1.0
+                    tf = 1
+                    if top_doc_counts is not None:
+                        tf = top_doc_counts.get(self.prime_to_token.get(term_comp, ""), 1)
+                    expansion_score[term_comp] = expansion_score.get(term_comp, 0.0) + idf * math.sqrt(tf)
+                    expansion_recur[term_comp] = expansion_recur.get(term_comp, 0) + 1
+
+            # Keep only terms that recur in PRF_MIN_RECUR+ docs
+            expansion_candidates = [
+                (t, s) for t, s in expansion_score.items()
+                if expansion_recur.get(t, 0) >= self.PRF_MIN_RECUR
+            ]
+            expansion_candidates.sort(key=lambda x: -x[1])
+            expansion_terms = expansion_candidates[:self.PRF_EXPANSION_N]
+
+            if expansion_terms:
+                # Only boost docs that are ALREADY candidates we scored
+                # (not every doc in the corpus containing some expansion term).
+                # Boost = count of expansion terms doc contains, IDF-weighted.
+                exp_set = {t for t, _ in expansion_terms}
+                exp_idf: dict[int, float] = {}
+                for term, _ in expansion_terms:
+                    df = max(len(self.lattice.resolve(term).parents), 1)
+                    exp_idf[term] = math.log((n_docs_total + 1.0) / (df + 1.0)) + 1.0
+
+                rescored: list[tuple[str, float]] = []
+                for d_id, s in scored:
+                    doc_prime = self.doc_id_to_prime[d_id]
+                    doc_chain_set = set(self.lattice.resolve(doc_prime).sub_chain or ())
+                    overlap = doc_chain_set & exp_set
+                    if not overlap:
+                        rescored.append((d_id, s))
+                        continue
+                    boost = sum(exp_idf[t] for t in overlap)
+                    rescored.append((d_id, s + self.PRF_LAMBDA * boost))
+                rescored.sort(key=lambda x: -x[1])
+                return rescored[:k]
+
         return scored[:k]
 
     def estimated_footprint(self) -> dict:
