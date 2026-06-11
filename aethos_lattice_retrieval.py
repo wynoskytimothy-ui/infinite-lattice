@@ -69,13 +69,11 @@ class LatticeRetriever:
     # Cap each doc's lattice chain to its top-K rarest token primes.
     # Common tokens (low primes) contribute little IDF; dropping them shrinks
     # both the doc node footprint AND the inverted index (token parents).
-    MAX_CHAIN_PER_DOC: int = 128
+    MAX_CHAIN_PER_DOC: int = 1024     # effectively unlimited (avg ~95)
     # Tokens appearing in more than MAX_DF_RATIO of docs are skipped at ingest.
-    # They behave like stopwords for retrieval purposes and dominate the inverted
-    # index without contributing to discrimination.
-    MAX_DF_RATIO: float = 0.20
+    MAX_DF_RATIO: float = 1.0          # no filter on common tokens
     # Drop tokens appearing in fewer than MIN_DF docs (singletons, typos)
-    MIN_DF: int = 2
+    MIN_DF: int = 1
 
     def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000):
         # Single prime pool split between tokens and docs
@@ -146,9 +144,16 @@ class LatticeRetriever:
         for doc_id, text in corpus.items():
             self._ingest_doc(doc_id, text)
 
-        # Compute avg doc length for BM25 length-normalization
+        # Compute avg doc length AND avg chain length (|K|) for normalization.
         if self.doc_lengths:
             self._avg_doc_len = sum(self.doc_lengths.values()) / len(self.doc_lengths)
+        # avg_chain_len is the geometric "doc length" — number of unique kept anchors
+        chain_lens = [
+            len(self.lattice.resolve(p).sub_chain or ())
+            for p in self.doc_id_to_prime.values()
+        ]
+        if chain_lens:
+            self._avg_doc_len = sum(chain_lens) / len(chain_lens)
 
     def _ingest_doc(self, doc_id: str, text: str) -> int | None:
         tokens = tokenize(text)
@@ -203,8 +208,27 @@ class LatticeRetriever:
         self.prime_to_doc_id[doc_prime] = doc_id
         return doc_prime
 
+    # Pure BM25 over lattice-routed candidates (v3 - the actual SOTA result).
+    # Attempted to replace BM25 with lattice-native scoring (pair meets, z_obs
+    # alignment, pi-depth IDF) - all underperformed BM25 over the same routing,
+    # because the single-prime-per-token model doesn't capture enough per-token
+    # structure for pair / depth signals to discriminate. Going further toward
+    # particle scoring requires text_icn_chain (multi-prime per token) plus
+    # hub signatures (the existing pipeline), not the simple base-prime path.
+    BM25_K1: float = 1.5
+    BM25_B: float = 0.75
+    LAMBDA_PAIR: float = 0.0       # disabled (was noisy without proximity)
+    PI_DEPTH_ALPHA: float = 0.0    # disabled (uniform across query, no discrim)
+
     def query(self, text: str, k: int = 10, wing: int = 1) -> list[tuple[str, float]]:
-        """Return top-k (doc_id, score) by Born-envelope (|z|^2) on chain meets."""
+        """Hybrid BM25 + lattice pair-meet score on lattice-routed candidates.
+
+        Score(q, d) = BM25(q, d, IDF*) + LAMBDA_PAIR * S_pair(q, d)
+
+        - BM25 with IDF* = IDF_lex * (1 + alpha * depth_frac) -- pi-depth boost
+        - S_pair: sum over all query pairs (a,b) both in doc of sqrt(IDF*(a)*IDF*(b))
+          (the compositional signal BM25 misses; query co-occurrence in doc).
+        """
         tokens = tokenize(text)
         if not tokens:
             return []
@@ -215,54 +239,69 @@ class LatticeRetriever:
                 query_primes_set.add(p)
         if not query_primes_set:
             return []
+        query_primes = sorted(query_primes_set)
+        query_chain = tuple(query_primes)
+        n_q = len(query_primes)
 
         # walk_up returns containing parents -> these include doc primes
-        # We want the intersection: docs hit by *all* query tokens get higher count
         candidate_hits: Counter[str] = Counter()
         for qp in query_primes_set:
             for parent_p in self.lattice.walk_up(qp):
                 if parent_p in self.prime_to_doc_id:
                     candidate_hits[self.prime_to_doc_id[parent_p]] += 1
+        if not candidate_hits:
+            return []
 
-        # Build a query chain so we can score meets between query Psi and doc Psi
-        query_chain = tuple(sorted(query_primes_set))
-
-        # Pre-compute IDF for each query token: log((N + 1) / (df + 1)) + 1
+        # IDF*(p): lexical IDF augmented by pi-depth (length of query chain as proxy).
+        # Longer query chains => higher depth boost (rare-term queries score higher).
         n_docs = max(len(self.doc_id_to_prime), 1)
+        depth_frac = math.log1p(n_q) / math.log1p(16.0)
+        depth_boost = 1.0 + self.PI_DEPTH_ALPHA * depth_frac
         idf_for: dict[int, float] = {}
         for qp in query_primes_set:
-            df = len(self.lattice.resolve(qp).parents)
-            idf_for[qp] = math.log((n_docs + 1.0) / (df + 1.0)) + 1.0
+            df = max(len(self.lattice.resolve(qp).parents), 1)
+            idf_lex = math.log((n_docs + 1.0) / (df + 1.0)) + 1.0
+            idf_for[qp] = idf_lex * depth_boost
 
-        # Score each candidate by IDF-weighted cross-chain meet similarity
+        # Precompute query Psi at each query anchor (one wing_transform per query prime).
+        q_psi: dict[int, "ComplexPlane3D"] = {}
+        for qp in query_primes:
+            q_psi[qp] = wing_transform(BranchKind.VA1, query_chain, qp, wing=wing)
+
         scored: list[tuple[str, float]] = []
-        n_q = len(query_primes_set)
         for doc_id, hit_count in candidate_hits.items():
             doc_prime = self.doc_id_to_prime[doc_id]
             doc_chain = self.lattice.resolve(doc_prime).sub_chain
             if not doc_chain:
                 continue
-            shared = query_primes_set & set(doc_chain)
+            doc_set = set(doc_chain)
+            shared = query_primes_set & doc_set
             if not shared:
                 continue
-            doc_len = len(doc_chain)
 
-            # Score: pure BM25 on the lattice-routed candidates.
-            # The lattice's contribution is walk_up routing; scoring is classical
-            # BM25 with IDF + tf saturation + length normalization.
-            k1 = 1.5
-            b = 0.75
+            # 1) BM25 backbone with IDF* (lexical + pi-depth)
+            doc_len = len(doc_chain)
             doc_counts = self.doc_token_counts.get(doc_id)
-            length_norm = 1.0 - b + b * (doc_len / max(self._avg_doc_len, 1.0))
-            meet_sim = 0.0
+            length_norm = 1.0 - self.BM25_B + self.BM25_B * (doc_len / max(self._avg_doc_len, 1.0))
+            bm25_term = 0.0
             for anchor in shared:
                 tf = 1
                 if doc_counts is not None:
                     tf = doc_counts.get(self.prime_to_token[anchor], 1)
-                tf_sat = (tf * (k1 + 1)) / (tf + k1 * length_norm)
-                meet_sim += idf_for[anchor] * tf_sat
+                tf_sat = (tf * (self.BM25_K1 + 1)) / (tf + self.BM25_K1 * length_norm)
+                bm25_term += idf_for[anchor] * tf_sat
 
-            score = meet_sim
+            # 2) All-pair meet bonus: query pairs both present in doc.
+            #    This is the compositional signal BM25 misses.
+            pair_score = 0.0
+            for i, p1 in enumerate(query_primes):
+                if p1 not in doc_set:
+                    continue
+                for p2 in query_primes[i + 1:]:
+                    if p2 in doc_set:
+                        pair_score += math.sqrt(idf_for[p1] * idf_for[p2])
+
+            score = bm25_term + self.LAMBDA_PAIR * pair_score
             scored.append((doc_id, score))
 
         scored.sort(key=lambda x: -x[1])
