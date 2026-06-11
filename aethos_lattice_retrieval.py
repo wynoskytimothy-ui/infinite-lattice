@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from aethos_complex_plane import wing_transform
 from aethos_lattice import BranchKind, LatticeId, lattice_id_parts
 from aethos_recursive_lattice import RecursiveLattice, RecursiveNode
+from aethos_words import letter_to_prime, LETTER_PRIMES
 from core.primes import chain_primes
 
 
@@ -76,17 +77,20 @@ class LatticeRetriever:
     MIN_DF: int = 1
 
     def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000):
-        # Single prime pool split between tokens and docs
-        total = token_pool_size + doc_pool_size + 1000
-        all_primes = chain_primes(total)
-        self._token_primes = all_primes[:token_pool_size]
-        self._doc_primes = all_primes[token_pool_size:token_pool_size + doc_pool_size]
+        # Doc primes still come from chain_primes; word "primes" are composites of
+        # letter primes (text_icn semantics), so no separate token pool needed.
+        all_primes = chain_primes(doc_pool_size + 1000)
+        self._doc_primes = all_primes[:doc_pool_size]
 
         self.lattice = RecursiveLattice()
 
+        # word -> ICN composite (unique anagram-class address; encodes morphology
+        # via shared letter prime factors).
         self.token_to_prime: dict[str, int] = {}
         self.prime_to_token: dict[int, str] = {}
-        self.token_doc_count: Counter = Counter()  # for stats only
+        # Cache of letter-prime factor sets per word for morph bonus scoring
+        self._word_factors: dict[int, frozenset[int]] = {}
+        self.token_doc_count: Counter = Counter()
 
         self.doc_id_to_prime: dict[str, int] = {}
         self.prime_to_doc_id: dict[int, str] = {}
@@ -95,20 +99,36 @@ class LatticeRetriever:
         self.doc_lengths: dict[str, int] = {}
         self._avg_doc_len: float = 1.0
 
-        self._next_token_idx = 0
         self._next_doc_idx = 0
 
     def _allocate_token_prime(self, token: str) -> int:
+        """Word -> ICN composite (product of unique letter primes).
+
+        Anagram-invariant by construction: "tab" and "bat" share the same
+        composite. Morphological neighbors share most letter primes:
+            retrieval -> 3*13*29*41*61*73*83 (7 letter primes)
+            retrieve  -> 13*29*61*73*83      (5 letter primes)
+        prime_factor_similarity(retrieval, retrieve) = 5/7 = 0.71 for free.
+        """
         if token in self.token_to_prime:
             return self.token_to_prime[token]
-        if self._next_token_idx >= len(self._token_primes):
-            raise RuntimeError("token prime pool exhausted")
-        p = self._token_primes[self._next_token_idx]
-        self._next_token_idx += 1
-        self.token_to_prime[token] = p
-        self.prime_to_token[p] = token
-        self.lattice.register_base(p, label=token)
-        return p
+        # Build the letter-prime factor set
+        seen: set[int] = set()
+        for ch in token.lower():
+            if "a" <= ch <= "z":
+                seen.add(letter_to_prime(ch))
+        if not seen:
+            return 0
+        composite = 1
+        for lp in sorted(seen):
+            composite *= lp
+        self.token_to_prime[token] = composite
+        self.prime_to_token[composite] = token
+        self._word_factors[composite] = frozenset(seen)
+        # Register as a base node in the lattice (it's a unique address even
+        # though numerically composite; the lattice doesn't care).
+        self.lattice.register_base(composite, label=token)
+        return composite
 
     def _allocate_doc_prime(self, doc_id: str) -> int:
         if self._next_doc_idx >= len(self._doc_primes):
@@ -208,17 +228,18 @@ class LatticeRetriever:
         self.prime_to_doc_id[doc_prime] = doc_id
         return doc_prime
 
-    # Pure BM25 over lattice-routed candidates (v3 - the actual SOTA result).
-    # Attempted to replace BM25 with lattice-native scoring (pair meets, z_obs
-    # alignment, pi-depth IDF) - all underperformed BM25 over the same routing,
-    # because the single-prime-per-token model doesn't capture enough per-token
-    # structure for pair / depth signals to discriminate. Going further toward
-    # particle scoring requires text_icn_chain (multi-prime per token) plus
-    # hub signatures (the existing pipeline), not the simple base-prime path.
+    # BM25 backbone + lattice morphology bonus.
+    # Tokens are now letter-prime composites (text_icn semantics) so
+    # morphologically related words share most of their letter prime factors.
+    # We score factor-Jaccard between query word and doc word as a "soft match",
+    # giving free stemming-like behavior without any stemmer.
     BM25_K1: float = 1.5
     BM25_B: float = 0.75
-    LAMBDA_PAIR: float = 0.0       # disabled (was noisy without proximity)
-    PI_DEPTH_ALPHA: float = 0.0    # disabled (uniform across query, no discrim)
+    LAMBDA_MORPH: float = 0.0       # disabled: raw 26-letter morph is noisy
+    MORPH_MIN_SHARED: int = 4
+    MORPH_MIN_JACCARD: float = 0.7
+    LAMBDA_PAIR: float = 0.0
+    PI_DEPTH_ALPHA: float = 0.0
 
     def query(self, text: str, k: int = 10, wing: int = 1) -> list[tuple[str, float]]:
         """Hybrid BM25 + lattice pair-meet score on lattice-routed candidates.
@@ -279,7 +300,7 @@ class LatticeRetriever:
             if not shared:
                 continue
 
-            # 1) BM25 backbone with IDF* (lexical + pi-depth)
+            # 1) BM25 backbone with IDF on shared word composites
             doc_len = len(doc_chain)
             doc_counts = self.doc_token_counts.get(doc_id)
             length_norm = 1.0 - self.BM25_B + self.BM25_B * (doc_len / max(self._avg_doc_len, 1.0))
@@ -291,17 +312,33 @@ class LatticeRetriever:
                 tf_sat = (tf * (self.BM25_K1 + 1)) / (tf + self.BM25_K1 * length_norm)
                 bm25_term += idf_for[anchor] * tf_sat
 
-            # 2) All-pair meet bonus: query pairs both present in doc.
-            #    This is the compositional signal BM25 misses.
-            pair_score = 0.0
-            for i, p1 in enumerate(query_primes):
-                if p1 not in doc_set:
-                    continue
-                for p2 in query_primes[i + 1:]:
-                    if p2 in doc_set:
-                        pair_score += math.sqrt(idf_for[p1] * idf_for[p2])
+            # 2) Lattice morphology bonus: words that DON'T exact-match but
+            #    share enough letter prime factors with a query word are scored
+            #    as soft matches. This is stemming-free morphology.
+            morph_score = 0.0
+            if self.LAMBDA_MORPH > 0:
+                unmatched_doc = doc_set - query_primes_set
+                for q_comp in query_primes:
+                    q_factors = self._word_factors.get(q_comp)
+                    if q_factors is None:
+                        continue
+                    best_jaccard = 0.0
+                    for d_comp in unmatched_doc:
+                        d_factors = self._word_factors.get(d_comp)
+                        if d_factors is None:
+                            continue
+                        inter = q_factors & d_factors
+                        if len(inter) < self.MORPH_MIN_SHARED:
+                            continue
+                        union = q_factors | d_factors
+                        j = len(inter) / len(union)
+                        if j >= self.MORPH_MIN_JACCARD and j > best_jaccard:
+                            best_jaccard = j
+                    if best_jaccard > 0:
+                        # Only credit each query word once at its best morph kin
+                        morph_score += best_jaccard * idf_for[q_comp]
 
-            score = bm25_term + self.LAMBDA_PAIR * pair_score
+            score = bm25_term + self.LAMBDA_MORPH * morph_score
             scored.append((doc_id, score))
 
         scored.sort(key=lambda x: -x[1])
