@@ -102,31 +102,33 @@ class LatticeRetriever:
         self._next_doc_idx = 0
 
     def _allocate_token_prime(self, token: str) -> int:
-        """Word -> ICN composite (product of unique letter primes).
+        """Word -> letter-prime composite WITH MULTIPLICITY (proper text_icn).
 
-        Anagram-invariant by construction: "tab" and "bat" share the same
-        composite. Morphological neighbors share most letter primes:
-            retrieval -> 3*13*29*41*61*73*83 (7 letter primes)
-            retrieve  -> 13*29*61*73*83      (5 letter primes)
-        prime_factor_similarity(retrieval, retrieve) = 5/7 = 0.71 for free.
+        Audit of failing SciFact queries showed unique-set composite collapses
+        anagrams catastrophically:
+            properties = prosite    (same unique letter set)
+            mortality  = immortality (same unique letter set)
+            perinatal  = intraparietal
+            pge        = gep
+        Multiplying with multiplicity (m^1, t^2, etc) gives distinct composites
+        per FTA. Morphological factor set (for future morph scoring) still uses
+        the unique-prime set, kept in _word_factors.
         """
         if token in self.token_to_prime:
             return self.token_to_prime[token]
-        # Build the letter-prime factor set
-        seen: set[int] = set()
+        # FTA composite: multiply once PER occurrence (not per unique letter)
+        composite = 1
+        unique: set[int] = set()
         for ch in token.lower():
             if "a" <= ch <= "z":
-                seen.add(letter_to_prime(ch))
-        if not seen:
+                lp = letter_to_prime(ch)
+                composite *= lp
+                unique.add(lp)
+        if composite == 1:
             return 0
-        composite = 1
-        for lp in sorted(seen):
-            composite *= lp
         self.token_to_prime[token] = composite
         self.prime_to_token[composite] = token
-        self._word_factors[composite] = frozenset(seen)
-        # Register as a base node in the lattice (it's a unique address even
-        # though numerically composite; the lattice doesn't care).
+        self._word_factors[composite] = frozenset(unique)
         self.lattice.register_base(composite, label=token)
         return composite
 
