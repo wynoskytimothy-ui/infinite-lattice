@@ -237,9 +237,13 @@ class LatticeRetriever:
     # giving free stemming-like behavior without any stemmer.
     BM25_K1: float = 1.5
     BM25_B: float = 0.75
-    LAMBDA_MORPH: float = 0.0       # disabled: raw 26-letter morph is noisy
-    MORPH_MIN_SHARED: int = 4
-    MORPH_MIN_JACCARD: float = 0.7
+    # Containment-based morphology (no Jaccard noise).
+    # Tried set-subset: weight ⊂ underweight works, but "act" ⊂ "fact" is
+    # a false positive (letter set match without true morph root). Disabled
+    # until we have L2 PMI subwords (genuine morph units, not raw letters).
+    LAMBDA_MORPH: float = 0.0
+    MORPH_MIN_Q_LETTERS: int = 4
+    MORPH_MAX_DOC_OVER_Q: float = 2.0
     LAMBDA_PAIR: float = 0.0
     PI_DEPTH_ALPHA: float = 0.0
     # PRF / 3-way meet expansion: take rare-IDF terms recurring in top-K
@@ -326,31 +330,34 @@ class LatticeRetriever:
                 tf_sat = (tf * (self.BM25_K1 + 1)) / (tf + self.BM25_K1 * length_norm)
                 bm25_term += idf_for[anchor] * tf_sat
 
-            # 2) Lattice morphology bonus: words that DON'T exact-match but
-            #    share enough letter prime factors with a query word are scored
-            #    as soft matches. This is stemming-free morphology.
+            # 2) Containment morphology: q_letters subset of d_letters.
+            #    Only fires when the doc word strictly EXTENDS the query word's
+            #    letter set (weight -> underweight; rate -> rates). Cheap O(1)
+            #    set comparison; no jaccard noise.
             morph_score = 0.0
             if self.LAMBDA_MORPH > 0:
                 unmatched_doc = doc_set - query_primes_set
                 for q_comp in query_primes:
                     q_factors = self._word_factors.get(q_comp)
-                    if q_factors is None:
+                    if q_factors is None or len(q_factors) < self.MORPH_MIN_Q_LETTERS:
                         continue
-                    best_jaccard = 0.0
+                    q_size = len(q_factors)
+                    max_d_size = int(q_size * self.MORPH_MAX_DOC_OVER_Q)
+                    best_credit = 0.0
                     for d_comp in unmatched_doc:
                         d_factors = self._word_factors.get(d_comp)
-                        if d_factors is None:
-                            continue
-                        inter = q_factors & d_factors
-                        if len(inter) < self.MORPH_MIN_SHARED:
-                            continue
-                        union = q_factors | d_factors
-                        j = len(inter) / len(union)
-                        if j >= self.MORPH_MIN_JACCARD and j > best_jaccard:
-                            best_jaccard = j
-                    if best_jaccard > 0:
-                        # Only credit each query word once at its best morph kin
-                        morph_score += best_jaccard * idf_for[q_comp]
+                        if d_factors is None: continue
+                        d_size = len(d_factors)
+                        if d_size > max_d_size: continue
+                        if d_size < q_size: continue  # must be at least as big
+                        if not q_factors.issubset(d_factors): continue
+                        # Credit by how tightly the doc word matches:
+                        # exact set equality = 1.0, length 1.5x = 0.67
+                        credit = q_size / d_size
+                        if credit > best_credit:
+                            best_credit = credit
+                    if best_credit > 0:
+                        morph_score += best_credit * idf_for[q_comp]
 
             score = bm25_term + self.LAMBDA_MORPH * morph_score
             scored.append((doc_id, score))
