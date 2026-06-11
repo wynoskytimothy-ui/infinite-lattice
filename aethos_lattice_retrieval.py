@@ -32,9 +32,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from aethos_complex_plane import wing_transform
-from aethos_lattice import BranchKind
+from aethos_lattice import BranchKind, LatticeId, lattice_id_parts
 from aethos_recursive_lattice import RecursiveLattice, RecursiveNode
 from core.primes import chain_primes
+
+
+# 4-wing consensus: one wing per VA branch (matches aethos_hub_signature.CONSENSUS_WINGS).
+# A genuine meet fires on ALL chambers; coincidental single-wing matches fire on fewer.
+CONSENSUS_LATTICE_IDS: tuple[int, ...] = (1, 9, 17, 25)
 
 
 _TOKEN_RE = re.compile(r"[a-z]+")
@@ -61,6 +66,17 @@ def tokenize(text: str) -> list[str]:
 class LatticeRetriever:
     """RAG retrieval keyed entirely on the RecursiveLattice."""
 
+    # Cap each doc's lattice chain to its top-K rarest token primes.
+    # Common tokens (low primes) contribute little IDF; dropping them shrinks
+    # both the doc node footprint AND the inverted index (token parents).
+    MAX_CHAIN_PER_DOC: int = 128
+    # Tokens appearing in more than MAX_DF_RATIO of docs are skipped at ingest.
+    # They behave like stopwords for retrieval purposes and dominate the inverted
+    # index without contributing to discrimination.
+    MAX_DF_RATIO: float = 0.20
+    # Drop tokens appearing in fewer than MIN_DF docs (singletons, typos)
+    MIN_DF: int = 2
+
     def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000):
         # Single prime pool split between tokens and docs
         total = token_pool_size + doc_pool_size + 1000
@@ -76,6 +92,10 @@ class LatticeRetriever:
 
         self.doc_id_to_prime: dict[str, int] = {}
         self.prime_to_doc_id: dict[int, str] = {}
+        # Per-doc token counts for BM25-style tf saturation in scoring
+        self.doc_token_counts: dict[str, Counter] = {}
+        self.doc_lengths: dict[str, int] = {}
+        self._avg_doc_len: float = 1.0
 
         self._next_token_idx = 0
         self._next_doc_idx = 0
@@ -100,33 +120,68 @@ class LatticeRetriever:
         return p
 
     def build_from_corpus(self, corpus: dict[str, str]):
-        """Two-pass: assign rarer tokens higher primes (=> higher |z|^2 weight = IDF)."""
-        # Pass 1: token frequencies
-        counts: Counter = Counter()
+        """Two-pass: filter by document frequency, then assign primes by rarity."""
+        # Pass 1: document frequency (how many docs each token appears in)
+        df_counts: Counter = Counter()
         for text in corpus.values():
-            counts.update(tokenize(text))
+            df_counts.update(set(tokenize(text)))
 
-        # Assign primes: common first (low primes), rare last (high primes)
-        for token in sorted(counts.keys(), key=lambda t: -counts[t]):
+        n_docs = max(len(corpus), 1)
+        max_df = max(int(n_docs * self.MAX_DF_RATIO), 2)
+        # Build the kept-vocabulary set: not too common, not too rare
+        self._kept_tokens: set[str] = {
+            t for t, df in df_counts.items()
+            if self.MIN_DF <= df <= max_df
+        }
+
+        # Assign primes to kept tokens only - common-but-kept first, rare last
+        kept_sorted = sorted(
+            (t for t in self._kept_tokens),
+            key=lambda t: -df_counts[t],
+        )
+        for token in kept_sorted:
             self._allocate_token_prime(token)
 
         # Pass 2: ingest docs in given order
         for doc_id, text in corpus.items():
             self._ingest_doc(doc_id, text)
 
+        # Compute avg doc length for BM25 length-normalization
+        if self.doc_lengths:
+            self._avg_doc_len = sum(self.doc_lengths.values()) / len(self.doc_lengths)
+
     def _ingest_doc(self, doc_id: str, text: str) -> int | None:
         tokens = tokenize(text)
         if not tokens:
             return None
 
-        # Build chain of unique token primes (lattice chains are sets)
-        chain_primes_set: set[int] = set()
-        for t in tokens:
-            chain_primes_set.add(self._allocate_token_prime(t))
+        kept_vocab = getattr(self, "_kept_tokens", None)
+        # Per-doc term frequencies (only for tokens in our kept vocabulary)
+        tf_counts: Counter = Counter(tokens)
+        self.doc_lengths[doc_id] = len(tokens)
+
+        # Build (prime, tf) pairs for unique tokens in the kept vocabulary.
+        prime_tf_pairs: list[tuple[int, int]] = []
+        for t, c in tf_counts.items():
+            if kept_vocab is not None and t not in kept_vocab:
+                continue
+            p = self.token_to_prime.get(t)
+            if p is None:
+                continue
+            prime_tf_pairs.append((p, c))
             self.token_doc_count[t] += 1
-        chain = tuple(sorted(chain_primes_set))
+        # Cap to top-K rarest if needed
+        if len(prime_tf_pairs) > self.MAX_CHAIN_PER_DOC:
+            prime_tf_pairs.sort(key=lambda pt: -pt[0])
+            prime_tf_pairs = prime_tf_pairs[:self.MAX_CHAIN_PER_DOC]
+        prime_tf_pairs.sort(key=lambda pt: pt[0])
+        chain = tuple(p for p, _ in prime_tf_pairs)
         if not chain:
             return None
+        # Store tf only for kept primes
+        self.doc_token_counts[doc_id] = Counter({
+            self.prime_to_token[p]: tf for p, tf in prime_tf_pairs
+        })
 
         # Allocate the doc's prime and create the lattice node directly
         doc_prime = self._allocate_doc_prime(doc_id)
@@ -172,7 +227,14 @@ class LatticeRetriever:
         # Build a query chain so we can score meets between query Psi and doc Psi
         query_chain = tuple(sorted(query_primes_set))
 
-        # Score each candidate by cross-chain meet similarity at each shared anchor
+        # Pre-compute IDF for each query token: log((N + 1) / (df + 1)) + 1
+        n_docs = max(len(self.doc_id_to_prime), 1)
+        idf_for: dict[int, float] = {}
+        for qp in query_primes_set:
+            df = len(self.lattice.resolve(qp).parents)
+            idf_for[qp] = math.log((n_docs + 1.0) / (df + 1.0)) + 1.0
+
+        # Score each candidate by IDF-weighted cross-chain meet similarity
         scored: list[tuple[str, float]] = []
         n_q = len(query_primes_set)
         for doc_id, hit_count in candidate_hits.items():
@@ -183,22 +245,24 @@ class LatticeRetriever:
             shared = query_primes_set & set(doc_chain)
             if not shared:
                 continue
-            # At each shared anchor a, compute Psi for both chains at n=a.
-            # The cross-chain meet is the inner product of the two Psi vectors --
-            # an overlap integral on the spring plane plus the depth axis.
-            # We DON'T normalize: rarer anchors have larger Y components, and
-            # that magnitude IS the IDF signal we want to keep.
+            doc_len = len(doc_chain)
+
+            # Score: pure BM25 on the lattice-routed candidates.
+            # The lattice's contribution is walk_up routing; scoring is classical
+            # BM25 with IDF + tf saturation + length normalization.
+            k1 = 1.5
+            b = 0.75
+            doc_counts = self.doc_token_counts.get(doc_id)
+            length_norm = 1.0 - b + b * (doc_len / max(self._avg_doc_len, 1.0))
             meet_sim = 0.0
             for anchor in shared:
-                psi_q = wing_transform(BranchKind.VA1, query_chain, anchor, wing=wing)
-                psi_d = wing_transform(BranchKind.VA1, doc_chain,   anchor, wing=wing)
-                xq, yq, zq = psi_q.z.real, psi_q.z.imag, psi_q.zeta
-                xd, yd, zd = psi_d.z.real, psi_d.z.imag, psi_d.zeta
-                dot = xq * xd + yq * yd + zq * zd
-                if dot > 0:
-                    meet_sim += math.log1p(dot)
-            # Coverage^2 keeps query-match dominance over chain-rarity.
-            score = meet_sim * (hit_count ** 2) / (n_q ** 2)
+                tf = 1
+                if doc_counts is not None:
+                    tf = doc_counts.get(self.prime_to_token[anchor], 1)
+                tf_sat = (tf * (k1 + 1)) / (tf + k1 * length_norm)
+                meet_sim += idf_for[anchor] * tf_sat
+
+            score = meet_sim
             scored.append((doc_id, score))
 
         scored.sort(key=lambda x: -x[1])
