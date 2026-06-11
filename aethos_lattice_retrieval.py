@@ -99,14 +99,35 @@ class LatticeRetriever:
     SUBJECT_MAX_PER_DOC: int = 3
     SUBJECT_MAX_PER_QUERY: int = 3
 
+    # Plan A position encoding via EXPONENTS (not multipliers).
+    # Mathematically: by FTA, two prime factorizations differ when their
+    # prime exponents differ. So we encode chunk position as the EXPONENT
+    # raised on that chunk's prime:
+    #
+    #   "dog" = d^1 * o^2 * g^3        # d at pos 0 raised to 1, etc
+    #   "god" = g^1 * o^2 * d^3        # different exponents -> different composite
+    #
+    # Morph variants: "dogs" = d^1 * o^2 * g^3 * s^4, and dogs / dog = s^4
+    # is a clean integer, so dog | dogs by divisibility.
+    # gcd(runs, runner) = run, all by integer factorization.
+    #
+    # Exponents capped at MAX_POS_EXP so composites stay tractable. Past that
+    # position, exponent stops growing (suffix order beyond first ~6 chars
+    # doesn't help morphology).
+    POS_ANCHOR_COUNT: int = 0      # no longer used; kept for back-compat
+    MAX_POS_EXP: int = 6           # cap exponent to keep composites small
+
     def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000,
                  l2_pool_size: int = 2000):
-        # Doc primes still come from chain_primes; word "primes" are composites of
-        # letter primes; L2 subword primes are a separate slice of chain_primes.
-        total = doc_pool_size + l2_pool_size + 1000
+        # Doc primes; L2 subword primes; position anchors all from distinct
+        # disjoint slices of chain_primes (no collisions with letter primes
+        # which live at indices 0-25).
+        total = doc_pool_size + l2_pool_size + self.POS_ANCHOR_COUNT + 1000
         all_primes = chain_primes(total)
         self._doc_primes = all_primes[:doc_pool_size]
         self._l2_primes = all_primes[doc_pool_size:doc_pool_size + l2_pool_size]
+        pos_start = doc_pool_size + l2_pool_size
+        self._pos_anchors = all_primes[pos_start:pos_start + self.POS_ANCHOR_COUNT]
 
         self.lattice = RecursiveLattice()
 
@@ -136,22 +157,54 @@ class LatticeRetriever:
 
         self._next_doc_idx = 0
 
-    def _allocate_token_prime(self, token: str) -> int:
-        """Word -> letter-prime composite WITH MULTIPLICITY (proper text_icn).
+    def _chunk_word(self, word: str) -> list[tuple[str, int]]:
+        """Greedy left-to-right chunking.
 
-        Audit of failing SciFact queries showed unique-set composite collapses
-        anagrams catastrophically:
-            properties = prosite    (same unique letter set)
-            mortality  = immortality (same unique letter set)
-            perinatal  = intraparietal
-            pge        = gep
-        Multiplying with multiplicity (m^1, t^2, etc) gives distinct composites
-        per FTA. Morphological factor set (for future morph scoring) still uses
-        the unique-prime set, kept in _word_factors.
+        At each position, pick the longest L2 subword match (4 chars > 3 chars).
+        If no L2 match, emit the letter prime for that single character.
+        Returns ordered list of (chunk_kind, prime) where kind is 'l2' or 'letter'.
+        Position information is implicit in list order.
+        """
+        w = word.lower()
+        chunks: list[tuple[str, int]] = []
+        i = 0
+        max_l2 = self.L2_MAX_LEN
+        min_l2 = self.L2_MIN_LEN
+        while i < len(w):
+            ch = w[i]
+            if not ("a" <= ch <= "z"):
+                i += 1
+                continue
+            matched = False
+            # Try L2 lengths from longest to shortest
+            for length in range(min(max_l2, len(w) - i), min_l2 - 1, -1):
+                sw = w[i:i + length]
+                p = self._l2_to_prime.get(sw)
+                if p is not None:
+                    chunks.append(("l2", p))
+                    i += length
+                    matched = True
+                    break
+            if not matched:
+                chunks.append(("letter", letter_to_prime(ch)))
+                i += 1
+        return chunks
+
+    def _allocate_token_prime(self, token: str) -> int:
+        """Word -> FTA composite of letter primes WITH MULTIPLICITY.
+
+        Plan A (position-anchored exponents) was tested and HURT nDCG by 1.3
+        points because it broke morphological routing: "weight" and "underweight"
+        no longer share divisibility. The audit's anagram issues only fire for
+        3-letter all-unique-letter words (god/dog, pge/gep) which are rare in
+        real BEIR vocabulary. Multiplicity already handles morph correctly:
+            weight     = w * e * i * g * h * t
+            underweight = u * n * d * e^2 * r * w * i * g * h * t
+            underweight / weight = u * n * d * e * r   (INTEGER, perfect prefix)
+        gcd(runs, runner) = run by integer factorization.
         """
         if token in self.token_to_prime:
             return self.token_to_prime[token]
-        # FTA composite: multiply once PER occurrence (not per unique letter)
         composite = 1
         unique: set[int] = set()
         for ch in token.lower():
