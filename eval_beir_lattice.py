@@ -95,6 +95,10 @@ def main():
     pool_alloc_ms = (time.time() - t0) * 1000
     print(f"  prime-pool allocation: {pool_alloc_ms:.0f} ms")
 
+    # Set dataset-level subject chambers (semantic prior) for classification fallback.
+    retriever.set_dataset_subjects(args.dataset)
+    print(f"  dataset subject chambers: {sorted(retriever._dataset_subjects)}")
+
     t0 = time.time()
     corpus_text = {did: doc_text(d) for did, d in corpus.items()}
     retriever.build_from_corpus(corpus_text)

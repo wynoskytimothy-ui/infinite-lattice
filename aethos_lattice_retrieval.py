@@ -34,6 +34,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from aethos_complex_plane import wing_transform
 from aethos_lattice import BranchKind, LatticeId, lattice_id_parts
 from aethos_recursive_lattice import RecursiveLattice, RecursiveNode
+from aethos_symbol_subjects import (
+    MASTER_CHAMBER,
+    DATASET_SUBJECTS,
+    infer_doc_subjects,
+    vote_query_chambers,
+    subjects_for_dataset,
+)
 from aethos_words import letter_to_prime, LETTER_PRIMES
 from core.primes import chain_primes
 
@@ -82,6 +89,16 @@ class LatticeRetriever:
     L2_TOP_K: int = 800        # number of L2 subwords to promote per corpus
     L2_MIN_PARENT_WORDS: int = 5  # subword must appear in >= N distinct words
 
+    # Subject chamber semantic boost (the 32-chamber parallel classifier system).
+    # Each doc and query gets routed to 1-3 of 31 semantic subjects via
+    # aethos_symbol_subjects (physics, biology, medicine, linguistics, etc.).
+    # Docs whose subjects overlap with the query's subjects get a multiplicative
+    # boost. This is the lattice's chamber structure functioning as a parallel
+    # semantic feature space, not just an indexing structure.
+    LAMBDA_SUBJECT: float = 0.15   # multiplier per matched chamber
+    SUBJECT_MAX_PER_DOC: int = 3
+    SUBJECT_MAX_PER_QUERY: int = 3
+
     def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000,
                  l2_pool_size: int = 2000):
         # Doc primes still come from chain_primes; word "primes" are composites of
@@ -113,6 +130,9 @@ class LatticeRetriever:
         self.doc_token_counts: dict[str, Counter] = {}
         self.doc_lengths: dict[str, int] = {}
         self._avg_doc_len: float = 1.0
+        # 32-chamber subject classification per doc (semantic dim)
+        self.doc_subjects: dict[str, frozenset[int]] = {}
+        self._dataset_subjects: frozenset[int] = frozenset()
 
         self._next_doc_idx = 0
 
@@ -153,6 +173,11 @@ class LatticeRetriever:
         p = self._doc_primes[self._next_doc_idx]
         self._next_doc_idx += 1
         return p
+
+    def set_dataset_subjects(self, dataset: str):
+        """Set the dataset-level subject prior (used as fallback when a doc's
+        keywords don't match any subject chamber). E.g. 'scifact' -> {1,9,10}."""
+        self._dataset_subjects = subjects_for_dataset(dataset)
 
     def build_from_corpus(self, corpus: dict[str, str]):
         """Multi-pass:
@@ -283,6 +308,13 @@ class LatticeRetriever:
         # Per-doc term frequencies (only for tokens in our kept vocabulary)
         tf_counts: Counter = Counter(tokens)
         self.doc_lengths[doc_id] = len(tokens)
+        # Classify doc into subject chambers (parallel semantic dim).
+        # Each chamber acts as a specialized classifier; doc routes to top-K subjects.
+        self.doc_subjects[doc_id] = infer_doc_subjects(
+            text,
+            fallback=self._dataset_subjects,
+            max_subjects=self.SUBJECT_MAX_PER_DOC,
+        )
 
         # Build (prime, tf) pairs for unique tokens in the kept vocabulary.
         prime_tf_pairs: list[tuple[int, int]] = []
@@ -390,6 +422,12 @@ class LatticeRetriever:
         # Include L2 subword primes in the set we look up via walk_up so
         # the candidate set expands to morph-related docs.
         query_primes_set = query_primes_set | query_l2_primes
+
+        # Classify the QUERY into subject chambers (the parallel semantic
+        # classifier system; same machinery as doc classification).
+        query_subjects: frozenset[int] = vote_query_chambers(
+            tokens, max_chambers=self.SUBJECT_MAX_PER_QUERY,
+        )
         query_primes = sorted(query_primes_set)
         query_chain = tuple(query_primes)
         n_q = len(query_primes)
@@ -478,6 +516,17 @@ class LatticeRetriever:
                         morph_score += best_credit * idf_for[q_comp]
 
             score = bm25_term + self.LAMBDA_MORPH * morph_score
+
+            # Subject chamber boost: docs in the same semantic chamber(s) as
+            # the query get a multiplicative boost. This is the 32-chamber
+            # structure acting as parallel semantic classifiers.
+            if query_subjects and self.LAMBDA_SUBJECT > 0:
+                d_subjects = self.doc_subjects.get(doc_id, frozenset())
+                if d_subjects:
+                    overlap = len(query_subjects & d_subjects)
+                    if overlap > 0:
+                        score *= (1.0 + self.LAMBDA_SUBJECT * overlap)
+
             scored.append((doc_id, score))
 
         scored.sort(key=lambda x: -x[1])
