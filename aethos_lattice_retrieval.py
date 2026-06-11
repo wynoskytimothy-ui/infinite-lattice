@@ -129,6 +129,18 @@ class LatticeRetriever:
     SUBJECT_MAX_PER_DOC: int = 3
     SUBJECT_MAX_PER_QUERY: int = 3
 
+    # Learned per-chamber CategoryVector (Plan A from earlier menu).
+    # For each of the 31 subjects, learn from corpus which word primes
+    # have high log P(word|chamber) / P(word). At query time, both query
+    # and doc get a "soft chamber distribution" via dot product against
+    # the learned vocabularies. Cosine similarity of the two distributions
+    # adds a multiplicative boost. This captures within-subject topic
+    # structure that the hand-picked keyword vote alone misses.
+    LAMBDA_CHAMBER_SOFT: float = 0.0   # disabled: chamber dist sim was redundant with existing signals on SciFact
+    CHAMBER_VOCAB_MIN_AFFINITY: float = 0.5   # only keep word -> chamber affinities above this
+    CHAMBER_VOCAB_MIN_DF: int = 3             # word must be in >= N docs to learn
+    CHAMBER_VOCAB_TOP_PER_CHAMBER: int = 400  # keep top-K most diagnostic words per chamber
+
     # Plan A position encoding via EXPONENTS (not multipliers).
     # Mathematically: by FTA, two prime factorizations differ when their
     # prime exponents differ. So we encode chunk position as the EXPONENT
@@ -167,6 +179,11 @@ class LatticeRetriever:
         # Plan C: per-token top-K PMI partners (semantic bridge graph)
         # word_prime -> tuple of (partner_prime, pmi_weight)
         self._pmi_partners: dict[int, tuple[tuple[int, float], ...]] = {}
+        # Learned chamber vocabularies (Plan A from menu).
+        # chamber_id -> dict[word_prime, affinity_log_ratio]
+        self._chamber_vocab: dict[int, dict[int, float]] = {}
+        # Per-doc soft chamber vector (sparse: only nonzero chambers stored)
+        self.doc_chamber_dist: dict[str, dict[int, float]] = {}
 
         self.lattice = RecursiveLattice()
 
@@ -387,6 +404,108 @@ class LatticeRetriever:
         # At query time these become bridge candidates when triangulated.
         if self.BRIDGE_LAMBDA > 0:
             self._build_pmi_graph(corpus)
+
+        # Pass 6: learn per-chamber vocabularies from corpus (Plan A from menu).
+        # Each of the 31 chambers gets a learned dict of word_prime -> affinity.
+        # Then each doc gets a soft chamber distribution stored in
+        # doc_chamber_dist for query-time cosine similarity.
+        if self.LAMBDA_CHAMBER_SOFT > 0:
+            self._learn_chamber_vocabularies(corpus)
+
+    def _learn_chamber_vocabularies(self, corpus: dict[str, str]) -> None:
+        """Learn per-chamber word affinities from corpus co-occurrence.
+
+        For each chamber k with seed keywords S_k, the words that fire
+        for chamber k get an affinity = log( P(word | chamber=k) / P(word) ).
+        Words much more common in chamber k's docs than overall have high
+        affinity and become part of chamber k's learned vocabulary.
+
+        Then each doc's chamber distribution is computed as a sum over its
+        words of (affinity per chamber), normalized.
+        """
+        from aethos_symbol_subjects import _SUBJECT_KEYWORDS
+
+        n_total = max(len(corpus), 1)
+
+        # Step 1: which docs fire for which chamber (binary, seed-based)
+        chamber_docs: dict[int, list[str]] = {}
+        for doc_id, text in corpus.items():
+            tokens = set(tokenize(text))
+            for k, seeds in _SUBJECT_KEYWORDS.items():
+                if tokens & seeds:
+                    chamber_docs.setdefault(k, []).append(doc_id)
+
+        # Step 2: per-chamber word affinity via log probability ratio
+        for k, docs_in_k in chamber_docs.items():
+            n_k = len(docs_in_k)
+            if n_k < 5:
+                continue
+            word_count_in_chamber: Counter = Counter()
+            for doc_id in docs_in_k:
+                text = corpus.get(doc_id, "")
+                for t in set(tokenize(text)):
+                    if t in self._kept_tokens:
+                        word_count_in_chamber[t] += 1
+
+            vocab: dict[int, float] = {}
+            for word, count_k in word_count_in_chamber.items():
+                p_word = self.token_doc_count.get(word, count_k)
+                if p_word < self.CHAMBER_VOCAB_MIN_DF:
+                    continue
+                # log ratio: P(w | k) / P(w) = (count_k / n_k) / (df / N)
+                ratio = (count_k / n_k) / (p_word / n_total)
+                if ratio <= 1.0:
+                    continue
+                log_ratio = math.log(ratio)
+                if log_ratio < self.CHAMBER_VOCAB_MIN_AFFINITY:
+                    continue
+                word_prime = self.token_to_prime.get(word)
+                if word_prime is not None:
+                    vocab[word_prime] = log_ratio
+
+            # Keep top-K most diagnostic words per chamber
+            if len(vocab) > self.CHAMBER_VOCAB_TOP_PER_CHAMBER:
+                top = sorted(vocab.items(), key=lambda x: -x[1])
+                vocab = dict(top[:self.CHAMBER_VOCAB_TOP_PER_CHAMBER])
+            self._chamber_vocab[k] = vocab
+
+        # Step 3: precompute soft chamber distribution per doc
+        # doc_dist[k] = sum over doc's word primes of chamber_vocab[k][prime]
+        for doc_id in self.doc_id_to_prime:
+            doc_prime = self.doc_id_to_prime[doc_id]
+            doc_chain = self.lattice.resolve(doc_prime).sub_chain or ()
+            doc_set = set(doc_chain)
+            dist: dict[int, float] = {}
+            for k, vocab in self._chamber_vocab.items():
+                s = 0.0
+                for p in doc_set:
+                    aff = vocab.get(p)
+                    if aff is not None:
+                        s += aff
+                if s > 0:
+                    dist[k] = s
+            # Normalize L2 so cosine sim is bounded in [0, 1]
+            norm = math.sqrt(sum(v * v for v in dist.values()))
+            if norm > 0:
+                self.doc_chamber_dist[doc_id] = {
+                    k: v / norm for k, v in dist.items()
+                }
+
+    def _query_chamber_dist(self, query_primes_set: set[int]) -> dict[int, float]:
+        """Soft chamber distribution for a query."""
+        dist: dict[int, float] = {}
+        for k, vocab in self._chamber_vocab.items():
+            s = 0.0
+            for p in query_primes_set:
+                aff = vocab.get(p)
+                if aff is not None:
+                    s += aff
+            if s > 0:
+                dist[k] = s
+        norm = math.sqrt(sum(v * v for v in dist.values()))
+        if norm > 0:
+            return {k: v / norm for k, v in dist.items()}
+        return {}
 
     def _build_pmi_graph(self, corpus: dict[str, str]) -> None:
         # Step 1: word pair co-occurrence at the WHOLE-DOC level.
@@ -635,6 +754,13 @@ class LatticeRetriever:
         query_subjects: frozenset[int] = vote_query_chambers(
             tokens, max_chambers=self.SUBJECT_MAX_PER_QUERY,
         )
+        # Soft chamber distribution from learned vocabularies (Plan A)
+        q_chamber_dist: dict[int, float] = {}
+        if self.LAMBDA_CHAMBER_SOFT > 0 and self._chamber_vocab:
+            q_chamber_dist = self._query_chamber_dist(
+                query_primes_set | {self.token_to_prime[t] for t in tokens
+                                    if t in self.token_to_prime}
+            )
         query_primes = sorted(query_primes_set)
         query_chain = tuple(query_primes)
         n_q = len(query_primes)
@@ -731,15 +857,28 @@ class LatticeRetriever:
 
             score = bm25_term + self.LAMBDA_MORPH * morph_score
 
-            # Subject chamber boost: docs in the same semantic chamber(s) as
-            # the query get a multiplicative boost. This is the 32-chamber
-            # structure acting as parallel semantic classifiers.
+            # Hard subject-chamber boost via keyword vote
             if query_subjects and self.LAMBDA_SUBJECT > 0:
                 d_subjects = self.doc_subjects.get(doc_id, frozenset())
                 if d_subjects:
                     overlap = len(query_subjects & d_subjects)
                     if overlap > 0:
                         score *= (1.0 + self.LAMBDA_SUBJECT * overlap)
+
+            # Soft chamber-distribution similarity via learned vocabularies
+            if q_chamber_dist:
+                d_chamber_dist = self.doc_chamber_dist.get(doc_id)
+                if d_chamber_dist:
+                    # Cosine: both distributions are L2-normalized
+                    cos_sim = 0.0
+                    smaller = q_chamber_dist if len(q_chamber_dist) < len(d_chamber_dist) else d_chamber_dist
+                    other = d_chamber_dist if smaller is q_chamber_dist else q_chamber_dist
+                    for k, v in smaller.items():
+                        ov = other.get(k)
+                        if ov is not None:
+                            cos_sim += v * ov
+                    if cos_sim > 0:
+                        score *= (1.0 + self.LAMBDA_CHAMBER_SOFT * cos_sim)
 
             scored.append((doc_id, score))
 
