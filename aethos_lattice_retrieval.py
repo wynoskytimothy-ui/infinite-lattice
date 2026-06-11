@@ -76,11 +76,20 @@ class LatticeRetriever:
     # Drop tokens appearing in fewer than MIN_DF docs (singletons, typos)
     MIN_DF: int = 1
 
-    def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000):
+    # L2 subword config (PMI-style morpheme mining)
+    L2_MIN_LEN: int = 3
+    L2_MAX_LEN: int = 4
+    L2_TOP_K: int = 800        # number of L2 subwords to promote per corpus
+    L2_MIN_PARENT_WORDS: int = 5  # subword must appear in >= N distinct words
+
+    def __init__(self, token_pool_size: int = 20000, doc_pool_size: int = 100000,
+                 l2_pool_size: int = 2000):
         # Doc primes still come from chain_primes; word "primes" are composites of
-        # letter primes (text_icn semantics), so no separate token pool needed.
-        all_primes = chain_primes(doc_pool_size + 1000)
+        # letter primes; L2 subword primes are a separate slice of chain_primes.
+        total = doc_pool_size + l2_pool_size + 1000
+        all_primes = chain_primes(total)
         self._doc_primes = all_primes[:doc_pool_size]
+        self._l2_primes = all_primes[doc_pool_size:doc_pool_size + l2_pool_size]
 
         self.lattice = RecursiveLattice()
 
@@ -91,6 +100,12 @@ class LatticeRetriever:
         # Cache of letter-prime factor sets per word for morph bonus scoring
         self._word_factors: dict[int, frozenset[int]] = {}
         self.token_doc_count: Counter = Counter()
+        # L2 subword promotion: subword string -> pool prime
+        self._l2_to_prime: dict[str, int] = {}
+        self._prime_to_l2: dict[int, str] = {}
+        # Cache: word -> set of L2 subword primes present in it
+        self._word_l2_primes: dict[str, frozenset[int]] = {}
+        self._next_l2_idx = 0
 
         self.doc_id_to_prime: dict[str, int] = {}
         self.prime_to_doc_id: dict[int, str] = {}
@@ -140,27 +155,109 @@ class LatticeRetriever:
         return p
 
     def build_from_corpus(self, corpus: dict[str, str]):
-        """Two-pass: filter by document frequency, then assign primes by rarity."""
-        # Pass 1: document frequency (how many docs each token appears in)
+        """Multi-pass:
+          1. Mine document frequencies + L2 subword stats from kept vocabulary
+          2. Promote top-PMI L2 subwords to pool primes
+          3. Allocate word composites and cache their L2 subwords
+        """
+        # Pass 1: document frequency
         df_counts: Counter = Counter()
         for text in corpus.values():
             df_counts.update(set(tokenize(text)))
 
         n_docs = max(len(corpus), 1)
         max_df = max(int(n_docs * self.MAX_DF_RATIO), 2)
-        # Build the kept-vocabulary set: not too common, not too rare
         self._kept_tokens: set[str] = {
             t for t, df in df_counts.items()
             if self.MIN_DF <= df <= max_df
         }
 
-        # Assign primes to kept tokens only - common-but-kept first, rare last
+        # Pass 2: mine L2 subword candidates from kept vocabulary
+        # PMI-like scoring: prefer subwords that appear in many distinct words
+        # AND are not just single-character coincidences.
+        l2_sw_doc_count: Counter = Counter()    # number of docs containing subword
+        l2_sw_word_count: Counter = Counter()   # number of distinct words containing subword
+        for text in corpus.values():
+            sw_in_doc: set[str] = set()
+            for word in tokenize(text):
+                w = word.lower()
+                if len(w) < self.L2_MIN_LEN:
+                    continue
+                word_subs: set[str] = set()
+                for length in range(self.L2_MIN_LEN, min(self.L2_MAX_LEN + 1, len(w) + 1)):
+                    for i in range(len(w) - length + 1):
+                        word_subs.add(w[i:i + length])
+                sw_in_doc.update(word_subs)
+                for sw in word_subs:
+                    l2_sw_word_count[sw] += 1
+            for sw in sw_in_doc:
+                l2_sw_doc_count[sw] += 1
+
+        # Score subwords: prefer those appearing in many distinct words
+        # but not in TOO many docs (would be a stopword-like cross-corpus noise).
+        l2_scored: list[tuple[str, float]] = []
+        for sw, word_count in l2_sw_word_count.items():
+            if word_count < self.L2_MIN_PARENT_WORDS:
+                continue
+            doc_count = l2_sw_doc_count.get(sw, 0)
+            if doc_count > n_docs * 0.5:  # in over half corpus -> noise
+                continue
+            # Score: log(word_count) * log(n_docs / doc_count)
+            score = math.log1p(word_count) * math.log((n_docs + 1.0) / (doc_count + 1.0))
+            l2_scored.append((sw, score))
+        l2_scored.sort(key=lambda x: -x[1])
+        # Promote top-K L2 subwords
+        for sw, _ in l2_scored[:self.L2_TOP_K]:
+            self._promote_l2(sw)
+
+        # Pass 3: assign primes to kept tokens (with their L2 subwords cached)
         kept_sorted = sorted(
             (t for t in self._kept_tokens),
             key=lambda t: -df_counts[t],
         )
         for token in kept_sorted:
             self._allocate_token_prime(token)
+            # Cache the L2 subword primes for this token
+            self._word_l2_primes[token] = self._l2_subword_primes_in(token)
+
+        # Pass 4: ingest each doc (was missing - bug)
+        for doc_id, text in corpus.items():
+            self._ingest_doc(doc_id, text)
+
+        # Compute avg doc length AND avg chain length (|K|) for normalization.
+        if self.doc_lengths:
+            self._avg_doc_len = sum(self.doc_lengths.values()) / len(self.doc_lengths)
+        chain_lens = [
+            len(self.lattice.resolve(p).sub_chain or ())
+            for p in self.doc_id_to_prime.values()
+        ]
+        if chain_lens:
+            self._avg_doc_len = sum(chain_lens) / len(chain_lens)
+
+    def _promote_l2(self, sw: str) -> int:
+        if sw in self._l2_to_prime:
+            return self._l2_to_prime[sw]
+        if self._next_l2_idx >= len(self._l2_primes):
+            return 0  # pool exhausted
+        p = self._l2_primes[self._next_l2_idx]
+        self._next_l2_idx += 1
+        self._l2_to_prime[sw] = p
+        self._prime_to_l2[p] = sw
+        self.lattice.register_base(p, label=f"L2:{sw}")
+        return p
+
+    def _l2_subword_primes_in(self, word: str) -> frozenset[int]:
+        w = word.lower()
+        if len(w) < self.L2_MIN_LEN:
+            return frozenset()
+        found: set[int] = set()
+        for length in range(self.L2_MIN_LEN, min(self.L2_MAX_LEN + 1, len(w) + 1)):
+            for i in range(len(w) - length + 1):
+                sw = w[i:i + length]
+                p = self._l2_to_prime.get(sw)
+                if p:
+                    found.add(p)
+        return frozenset(found)
 
         # Pass 2: ingest docs in given order
         for doc_id, text in corpus.items():
@@ -189,6 +286,7 @@ class LatticeRetriever:
 
         # Build (prime, tf) pairs for unique tokens in the kept vocabulary.
         prime_tf_pairs: list[tuple[int, int]] = []
+        l2_primes_in_doc: set[int] = set()
         for t, c in tf_counts.items():
             if kept_vocab is not None and t not in kept_vocab:
                 continue
@@ -197,15 +295,19 @@ class LatticeRetriever:
                 continue
             prime_tf_pairs.append((p, c))
             self.token_doc_count[t] += 1
+            # Collect L2 subword primes present in this token
+            l2_primes_in_doc.update(self._word_l2_primes.get(t, frozenset()))
         # Cap to top-K rarest if needed
         if len(prime_tf_pairs) > self.MAX_CHAIN_PER_DOC:
             prime_tf_pairs.sort(key=lambda pt: -pt[0])
             prime_tf_pairs = prime_tf_pairs[:self.MAX_CHAIN_PER_DOC]
         prime_tf_pairs.sort(key=lambda pt: pt[0])
-        chain = tuple(p for p, _ in prime_tf_pairs)
+        # Doc chain = word composites UNION L2 subword primes
+        chain_set = {p for p, _ in prime_tf_pairs} | l2_primes_in_doc
+        chain = tuple(sorted(chain_set))
         if not chain:
             return None
-        # Store tf only for kept primes
+        # Store tf only for word composites (L2 subwords get default tf=1)
         self.doc_token_counts[doc_id] = Counter({
             self.prime_to_token[p]: tf for p, tf in prime_tf_pairs
         })
@@ -272,12 +374,22 @@ class LatticeRetriever:
         if not tokens:
             return []
         query_primes_set: set[int] = set()
+        # Track L2 subword primes separately so we can weight them lighter
+        query_l2_primes: set[int] = set()
         for t in tokens:
             p = self.token_to_prime.get(t)
             if p is not None:
                 query_primes_set.add(p)
-        if not query_primes_set:
+            # Get L2 subword primes for this query token (whether or not
+            # the word itself is in the vocab - this lets unseen query words
+            # still route through their morphemes).
+            l2_primes = self._l2_subword_primes_in(t)
+            query_l2_primes.update(l2_primes)
+        if not query_primes_set and not query_l2_primes:
             return []
+        # Include L2 subword primes in the set we look up via walk_up so
+        # the candidate set expands to morph-related docs.
+        query_primes_set = query_primes_set | query_l2_primes
         query_primes = sorted(query_primes_set)
         query_chain = tuple(query_primes)
         n_q = len(query_primes)
@@ -318,17 +430,23 @@ class LatticeRetriever:
             if not shared:
                 continue
 
-            # 1) BM25 backbone with IDF on shared word composites
+            # 1) BM25 backbone with IDF on shared word composites + L2 subwords.
+            #    Word composites use stored tf; L2 subword anchors have tf=1
+            #    (each unique subword counts once per doc).
             doc_len = len(doc_chain)
             doc_counts = self.doc_token_counts.get(doc_id)
             length_norm = 1.0 - self.BM25_B + self.BM25_B * (doc_len / max(self._avg_doc_len, 1.0))
             bm25_term = 0.0
             for anchor in shared:
                 tf = 1
-                if doc_counts is not None:
-                    tf = doc_counts.get(self.prime_to_token[anchor], 1)
+                # Only word composites have stored tf; L2 primes do not.
+                word = self.prime_to_token.get(anchor)
+                if word is not None and doc_counts is not None:
+                    tf = doc_counts.get(word, 1)
                 tf_sat = (tf * (self.BM25_K1 + 1)) / (tf + self.BM25_K1 * length_norm)
-                bm25_term += idf_for[anchor] * tf_sat
+                # L2 subword anchors carry slightly less weight than exact word match
+                anchor_weight = 0.6 if anchor in self._prime_to_l2 else 1.0
+                bm25_term += idf_for[anchor] * tf_sat * anchor_weight
 
             # 2) Containment morphology: q_letters subset of d_letters.
             #    Only fires when the doc word strictly EXTENDS the query word's
