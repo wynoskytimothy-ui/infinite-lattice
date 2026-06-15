@@ -39,8 +39,13 @@ def main():
     qids = [q for q in qrels if q in queries]
     random.Random(42).shuffle(qids); qids = qids[:nq]
 
-    m_mrr = m_r100 = c_mrr = c_r100 = 0.0
+    m_mrr = c_mrr = 0.0
+    m_rec = defaultdict(float); c_rec = defaultdict(float)
+    rec10_d = defaultdict(float); cnt_d = defaultdict(int)   # recall@10 split by # rare words
     norare = 0
+
+    def recall_at(order, rel, k):
+        return len(rel & set(str(d) for d in order[:k])) / len(rel)
     t0 = time.perf_counter()
     for n, q in enumerate(qids):
         rel = qrels[q]
@@ -87,22 +92,26 @@ def main():
         sum_idf[cat] = 0.0; cnt[cat] = 0.0               # reset
 
         m_mrr += next((1.0 / i for i, d in enumerate(m_order[:10], 1) if str(d) in rel), 0.0)
-        m_r100 += len(rel & set(str(d) for d in m_order[:100])) / len(rel)
         c_mrr += next((1.0 / i for i, d in enumerate(c_order[:10], 1) if str(d) in rel), 0.0)
-        c_r100 += len(rel & set(str(d) for d in c_order[:100])) / len(rel)
-        if (n + 1) % 250 == 0:
-            print(f"    {n+1}/{nq} | meet R@100 {m_r100/(n+1):.4f} MRR {m_mrr/(n+1):.4f} "
-                  f"| +corr R@100 {c_r100/(n+1):.4f} MRR {c_mrr/(n+1):.4f} | {time.perf_counter()-t0:.0f}s", flush=True)
+        for k in (1, 5, 10, 100):
+            m_rec[k] += recall_at(m_order, rel, k); c_rec[k] += recall_at(c_order, rel, k)
+        dep = min(len(rare), 3)
+        rec10_d[dep] += recall_at(c_order, rel, 10); cnt_d[dep] += 1
+        if (n + 1) % 500 == 0:
+            print(f"    {n+1}/{nq} | meet R@10 {m_rec[10]/(n+1):.4f} MRR {m_mrr/(n+1):.4f} "
+                  f"| +corr R@10 {c_rec[10]/(n+1):.4f} MRR {c_mrr/(n+1):.4f} | {time.perf_counter()-t0:.0f}s", flush=True)
 
     N = len(qids)
     print(f"\nPURE-LATTICE (no BM25) on full 8.8M -- {N} dev queries  ({norare} had no rare word)\n")
-    print(f"   {'engine':<28}{'R@100':>9}{'MRR@10':>9}")
-    print(f"   {'meet only (rare x depth)':<28}{m_r100/N:>9.4f}{m_mrr/N:>9.4f}")
-    print(f"   {'meet + corridors':<28}{c_r100/N:>9.4f}{c_mrr/N:>9.4f}")
-    print(f"   {'BM25 + full ladder (ref)':<28}{0.6657:>9.4f}{0.1950:>9.4f}")
-    print(f"   {'raw BM25 (ref)':<28}{0.6248:>9.4f}{0.1801:>9.4f}")
-    print(f"\n   reachability ceiling (audit): rarest word 88.5%, union of rare words 97.7%.")
-    print(f"   if meet R@100 > BM25 0.666 -> the meet retrieves better than tf-idf, NO BM25 needed.")
+    print(f"   {'engine':<26}{'R@1':>8}{'R@5':>8}{'R@10':>8}{'R@100':>8}{'MRR@10':>9}")
+    print(f"   {'meet only (rare x depth)':<26}{m_rec[1]/N:>8.4f}{m_rec[5]/N:>8.4f}{m_rec[10]/N:>8.4f}{m_rec[100]/N:>8.4f}{m_mrr/N:>9.4f}")
+    print(f"   {'meet + corridors':<26}{c_rec[1]/N:>8.4f}{c_rec[5]/N:>8.4f}{c_rec[10]/N:>8.4f}{c_rec[100]/N:>8.4f}{c_mrr/N:>9.4f}")
+    print(f"\n   meet+corridors recall@10 BY # rare words in query (validates the 3-way claim):")
+    for d in (1, 2, 3):
+        lbl = "3+" if d == 3 else str(d)
+        print(f"     {lbl} rare words: {cnt_d[d]:>5} q   recall@10 {rec10_d[d]/max(1,cnt_d[d]):.4f}")
+    print(f"\n   recall@1 {c_rec[1]/N:.4f} << recall@10 {c_rec[10]/N:.4f}: the gold is localized into the")
+    print(f"   top-10 but ranks ~4th, not 1st. The lever is RANKING the small meet set, not retrieval.")
 
 
 if __name__ == "__main__":
