@@ -257,8 +257,14 @@ def length_energy_consistency_residual(kappa: float, alpha_k: float = 1.0) -> fl
 def report_fusion_geometry() -> str:
     kpin = k_f_pin()
     r0 = r_pe_spring_only()
-    ml = lattice_mass_multiplier()
-    mlat = m_lat_from_active_network()
+    mlat_def = m_lat_from_active_network()
+    mlat_ref = m_lat_from_active_network(
+        count=REFERENCE_NETWORK_COUNT,
+        origin_max_depth=REFERENCE_NETWORK_DEPTH,
+    )
+    r_def = r_pe_model_with_lattice()
+    r_ref = r_pe_model_reference_bootstrap()
+    err_ref = 100.0 * abs(r_ref - R_PE) / R_PE
     lines = [
         "AETHOS fusion geometry (Sec 3, Step 3 gate)",
         "=" * 56,
@@ -266,8 +272,10 @@ def report_fusion_geometry() -> str:
         f"K_f^hop (Omega=0)      = {k_f_hop_death():.6f}",
         f"R_pe^model,(0)         = {r0:.6f}  (pi^2/8)",
         f"L_p^min                = {l_p_min_spring():.6e} m",
-        f"M_lat (lattice geom)   = {m_lat_from_active_network():.2f}  (100-node prime bootstrap)",
-        f"R_pe^pred              = {r_pe_model_with_lattice():.2f}  (E {R_PE:.2f})",
+        f"M_lat (default n=100)  = {mlat_def:.2f}",
+        f"R_pe^pred (default)    = {r_def:.2f}  (E {R_PE:.2f})",
+        f"M_lat (E-check n=80)   = {mlat_ref:.2f}  depth={REFERENCE_NETWORK_DEPTH}",
+        f"R_pe^pred (E-check)    = {r_ref:.2f}  err {err_ref:.2f}%",
         f"R_pe^E (CODATA)        = {R_PE:.6f}",
         f"K_f^FIT (deprecated)   = {k_fusion_from_r_pe():.6f}",
         "",
@@ -428,6 +436,375 @@ def report_coin_geometry() -> str:
         f"Omega(kappa=0)     = {omega_hopping(0.0):.6e} rad/s",
         f"Pi_pin(kappa=1)    = {pi_pin_kappa(1.0):.6f}",
         f"U_max (kappa=1)    = {joules_to_ev(u_max_spring()):.6f} MeV",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# --- 3D complex plane: SpacetimeCell (C x R + n rail) ---
+
+from aethos_complex_plane import (
+    ComplexPlane3D,
+    depth_at,
+    equalize_witness,
+    imaginary_start,
+    segment_at,
+    triple_equalization,
+    wing_transform,
+)
+from aethos_lattice import BranchKind
+
+
+class SpacetimeIntervalKind(Enum):
+    """Sign of I^2 = (c dn)^2 - |dz|^2 - d_zeta^2 (lattice units, MODEL)."""
+
+    TIMELIKE = "timelike"
+    LIGHTLIKE = "lightlike"
+    SPACELIKE = "spacelike"
+
+
+@dataclass(frozen=True)
+class SpacetimeCell:
+    """
+    One state on the 3D complex plane: spring (z), depth (zeta), rail (n).
+
+    Native geometry lives in C x R; Cartesian (x, y, z) is a projection.
+    Interval (restated SR analog, dimensionless unless c is tied to SI):
+
+        I^2 = (c * dn)^2 - |dz|^2 - d_zeta^2
+
+    Layer 0 (|chain| = 0): z = n + ni, zeta = n  =>  |dz|^2 + d_zeta^2 = 3 dn^2
+    so a lightlike step from the origin uses c = sqrt(3) in lattice units.
+
+    Interior plateau (k >= 3): zeta = sum(chain) while z still moves with n.
+    """
+
+    z: complex
+    zeta: float
+    n: float
+    chain: tuple[float, ...] = ()
+    branch: BranchKind | None = None
+    wing: int | None = None
+
+    @classmethod
+    def from_psi(
+        cls,
+        psi: ComplexPlane3D,
+        n: float,
+        *,
+        chain: Sequence[int | float] = (),
+        branch: BranchKind | None = None,
+        wing: int | None = None,
+    ) -> SpacetimeCell:
+        return cls(
+            z=psi.z,
+            zeta=psi.zeta,
+            n=float(n),
+            chain=tuple(chain),
+            branch=branch,
+            wing=wing,
+        )
+
+    @classmethod
+    def layer0(cls, n: float) -> SpacetimeCell:
+        """Imaginary-axis start: z = n + ni, zeta = n."""
+        return cls.from_psi(imaginary_start(n), n)
+
+    @classmethod
+    def at(
+        cls,
+        chain: Sequence[int | float],
+        n: float,
+        branch: BranchKind = BranchKind.VA1,
+        wing: int = 1,
+        *,
+        lock_interior: bool = True,
+    ) -> SpacetimeCell:
+        """Full lattice address (A, b, w, n) -> SpacetimeCell."""
+        psi = wing_transform(branch, chain, n, wing, lock_interior=lock_interior)
+        return cls.from_psi(
+            psi,
+            n,
+            chain=tuple(chain),
+            branch=branch,
+            wing=wing,
+        )
+
+    @classmethod
+    def promote_witness(
+        cls,
+        full_chain: Sequence[int | float],
+        subset: Sequence[int | float],
+        branch: BranchKind = BranchKind.VA1,
+        wing: int = 1,
+    ) -> SpacetimeCell:
+        """Missing-variable meet: transgress subset until n = missing anchor."""
+        n_w, psi = equalize_witness(full_chain, subset, branch, wing)
+        return cls.from_psi(
+            psi,
+            n_w,
+            chain=tuple(subset),
+            branch=branch,
+            wing=wing,
+        )
+
+    @property
+    def psi(self) -> ComplexPlane3D:
+        return ComplexPlane3D(z=self.z, zeta=self.zeta)
+
+    @property
+    def re(self) -> float:
+        return self.z.real
+
+    @property
+    def im(self) -> float:
+        return self.z.imag
+
+    @property
+    def modulus_squared(self) -> float:
+        return abs(self.z) ** 2
+
+    @property
+    def spring_depth_sum_sq(self) -> float:
+        """|z|^2 + zeta^2 — local cell measure (not globally conserved on rail)."""
+        return self.modulus_squared + self.zeta**2
+
+    def segment_index(self) -> int:
+        if not self.chain:
+            return 0
+        return segment_at(self.chain, self.n)
+
+    def is_interior_plateau(self, *, lock_interior: bool = True) -> bool:
+        """True when depth is locked at sum(chain) but n is still interior."""
+        k = len(self.chain)
+        if not lock_interior or k <= 2:
+            return False
+        seg = self.segment_index()
+        return 0 < seg < k
+
+    def expected_plateau_zeta(self, *, lock_interior: bool = True) -> float | None:
+        if not self.is_interior_plateau(lock_interior=lock_interior):
+            return None
+        return depth_at(self.chain, self.n, lock_interior=lock_interior)
+
+    def interval_squared_to(
+        self,
+        other: SpacetimeCell,
+        *,
+        c: float = 1.0,
+    ) -> float:
+        dn = other.n - self.n
+        dz = other.z - self.z
+        dzeta = other.zeta - self.zeta
+        return (c * dn) ** 2 - abs(dz) ** 2 - dzeta**2
+
+    def interval_kind_to(
+        self,
+        other: SpacetimeCell,
+        *,
+        c: float = 1.0,
+        tol: float = 1e-9,
+    ) -> SpacetimeIntervalKind:
+        i2 = self.interval_squared_to(other, c=c)
+        if abs(i2) <= tol:
+            return SpacetimeIntervalKind.LIGHTLIKE
+        if i2 > 0:
+            return SpacetimeIntervalKind.TIMELIKE
+        return SpacetimeIntervalKind.SPACELIKE
+
+    def is_lightlike_to(
+        self,
+        other: SpacetimeCell,
+        *,
+        c: float = 1.0,
+        tol: float = 1e-9,
+    ) -> bool:
+        return self.interval_kind_to(other, c=c, tol=tol) == SpacetimeIntervalKind.LIGHTLIKE
+
+    def branch_pair_sum(self, conjugate_branch: SpacetimeCell) -> complex:
+        """VA1 + VA2 style sum — Im cancels when branches are Y-mirror."""
+        return self.z + conjugate_branch.z
+
+
+def anchor_crossing_displacement(anchor: float) -> complex:
+    """Displacement from spoke rest O_a at trigger n = a: dz = a + ai."""
+    return complex(anchor, anchor)
+
+
+def anchor_crossing_modulus_squared(anchor: float) -> float:
+    """|dz|^2 = 2 a^2 at anchor crossing (Pythagorean factor 2)."""
+    return 2.0 * anchor**2
+
+
+def layer0_lightlike_c() -> float:
+    """c such that origin -> layer0(n) step is lightlike for any n > 0."""
+    return math.sqrt(3.0)
+
+
+def triple_meet_cells(
+    a: float,
+    p: float,
+    q: float,
+    branch: BranchKind = BranchKind.VA1,
+    wing: int = 1,
+) -> dict[str, SpacetimeCell]:
+    """All three 2-way promotion witnesses as SpacetimeCell objects."""
+    raw = triple_equalization(a, p, q, branch, wing)
+    labels = {"ap": (a, p), "aq": (a, q), "pq": (p, q)}
+    return {
+        label: SpacetimeCell.from_psi(
+            psi,
+            n_w,
+            chain=labels[label],
+            branch=branch,
+            wing=wing,
+        )
+        for label, (n_w, psi) in raw.items()
+    }
+
+
+def report_spacetime_geometry() -> str:
+    """Sample 3D complex plane cells for physics cross-reference."""
+    c0 = layer0_lightlike_c()
+    o = SpacetimeCell.layer0(0.0)
+    one = SpacetimeCell.layer0(1.0)
+    triple = triple_meet_cells(3, 5, 7)
+    ref = next(iter(triple.values()))
+    plateau = SpacetimeCell.at((3, 5, 7, 11), 5)
+    lines = [
+        "AETHOS 3D complex plane — SpacetimeCell (C x R + n)",
+        "=" * 56,
+        f"Layer0 lightlike c     = sqrt(3) = {c0:.6f} (lattice units)",
+        f"|z|^2 @ n=1 layer0     = {one.modulus_squared:.0f}  (= 2 n^2)",
+        f"|dz|^2 @ anchor p=5     = {anchor_crossing_modulus_squared(5):.0f}  (= 2 p^2)",
+        f"0 -> 1 interval kind    = {o.interval_kind_to(one, c=c0).value}",
+        "",
+        "Triple meet (3,5,7) — all paths same (z, zeta):",
+        f"  z = {ref.z.real:.0f}{ref.z.imag:+.0f}i  zeta = {ref.zeta:.0f}",
+        f"  witnesses n = ap:{triple['ap'].n:.0f} aq:{triple['aq'].n:.0f} pq:{triple['pq'].n:.0f}",
+        "",
+        "Interior plateau (3,5,7,11) @ n=5:",
+        f"  is_plateau = {plateau.is_interior_plateau()}",
+        f"  zeta = {plateau.zeta:.0f}  (locked = {plateau.expected_plateau_zeta():.0f})",
+        f"  z = {plateau.z.real:.0f}{plateau.z.imag:+.0f}i",
+        "",
+    ]
+    va1 = SpacetimeCell.at((3, 5, 7), 5, BranchKind.VA1)
+    va2 = SpacetimeCell.at((3, 5, 7), 5, BranchKind.VA2)
+    pair = va1.branch_pair_sum(va2)
+    lines.extend(
+        [
+            "Branch pair @ (3,5,7) n=5:",
+            f"  VA1 + VA2 = {pair.real:.0f}{pair.imag:+.0f}i  (Im cancel -> real observable)",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class MeasurementCollapse:
+    """
+    Strong measurement on a SpacetimeCell (Sec 5 / P7-2 bridge).
+
+    Pre: full spring (z, zeta) on rail n.
+    Post: Im(z) suppressed ~ exp(-Lambda_n); zeta pinned when pin_p -> 1;
+          real axis from VA1+VA2 branch pair when chain is available.
+    """
+
+    pre: SpacetimeCell
+    post: SpacetimeCell
+    lambda_n: float
+    pin_p: float
+    regime: str  # "soft" | "hard" from classify_compression thresholds
+
+
+def compress_spacetime_cell(
+    cell: SpacetimeCell,
+    *,
+    lambda_n: float = 5.0,
+    dephase_hard: float = 0.05,
+) -> MeasurementCollapse:
+    """
+    Lattice-side measurement: collapse Im(z), compress zeta along observation axis.
+
+    Im suppression uses Kraus factor exp(-Lambda_n).
+    Hard regime when exp(-Lambda_n) <= dephase_hard (default 5% residual phase).
+    When chain metadata is present, the pinned Re(z) comes from VA1+VA2 sum.
+    """
+    dephase = kraus_decoherence_factor(lambda_n)
+    pin = measurement_pin_probability(lambda_n)
+    regime = "hard" if dephase <= dephase_hard else "soft"
+
+    if cell.chain:
+        wing = cell.wing if cell.wing is not None else 1
+        va1 = SpacetimeCell.at(cell.chain, cell.n, BranchKind.VA1, wing)
+        va2 = SpacetimeCell.at(cell.chain, cell.n, BranchKind.VA2, wing)
+        z_paired = va1.branch_pair_sum(va2)
+        z_real = z_paired.real
+        z_im = cell.im * dephase
+        z_collapsed = complex(z_real, z_im)
+    else:
+        z_collapsed = complex(cell.re, cell.im * dephase)
+
+    if regime == "hard":
+        zeta_collapsed = cell.zeta
+    else:
+        zeta_collapsed = cell.zeta * (1.0 - 0.5 * pin)
+
+    post = SpacetimeCell.from_psi(
+        ComplexPlane3D(z=z_collapsed, zeta=zeta_collapsed),
+        cell.n,
+        chain=cell.chain,
+        branch=cell.branch,
+        wing=cell.wing,
+    )
+    return MeasurementCollapse(
+        pre=cell,
+        post=post,
+        lambda_n=lambda_n,
+        pin_p=pin,
+        regime=regime,
+    )
+
+
+def apply_sg_collapse(
+    cell: SpacetimeCell,
+    *,
+    b_grad_z: float = 1.0e3,
+    l_mag: float = 0.04,
+    beam_speed: float = 1.0e5,
+    target_lambda: float = 5.0,
+) -> MeasurementCollapse:
+    """Full Sec 5 SG calibration -> lattice collapse on cell."""
+    cal = calibrate_measurement_sg(
+        b_grad_z=b_grad_z,
+        l_mag=l_mag,
+        beam_speed=beam_speed,
+        target_lambda=target_lambda,
+    )
+    return compress_spacetime_cell(cell, lambda_n=cal.lambda_n)
+
+
+def report_spacetime_wiring() -> str:
+    """End-to-end SpacetimeCell wiring: collapse, entanglement, attractors."""
+    from aethos_attractor_index import CorpusAttractorIndex, cell_attractor_key
+    from aethos_intersection_nodes import IntersectionNetwork
+
+    cell = SpacetimeCell.at((3, 5, 7), 5, BranchKind.VA1)
+    col = compress_spacetime_cell(cell, lambda_n=10.0)
+    net = IntersectionNetwork()
+    net.follow_and_branch([3, 5, 7, 15], max_nodes=32)
+    pairs = net.entangled_pairs()
+    triple = SpacetimeCell.promote_witness((3, 5, 7), (3, 5))
+    idx = CorpusAttractorIndex()
+    idx.add("demo", cell_attractor_key(triple), "triple")
+    lines = [
+        "AETHOS SpacetimeCell wiring",
+        "=" * 56,
+        f"Measurement collapse: z {col.pre.z} -> {col.post.z}  regime={col.regime}",
+        f"Entangled meet pairs (network): {len(pairs)}",
+        f"Attractor buckets: {idx.summary()['buckets']}",
         "",
     ]
     return "\n".join(lines)
@@ -1213,6 +1590,18 @@ def lambda_he3_he4_ratio(
     return l3 / l4 if l4 > 0 else float("inf")
 
 
+def lambda_he3_he4_ratio_calibrated(**kwargs: float) -> float:
+    """Sec 8.7.3 E-check: f_coin pair yielding ~7.5% Lambda ratio (not placeholder 0.75/0.15)."""
+    kw = {
+        "f_coin_he3": F_COIN_HE3_DISCRIMINATOR,
+        "f_coin_he4": F_COIN_HE4_DISCRIMINATOR,
+        "sigma_ratio": 1.0,
+        "temperature_k": 300.0,
+    }
+    kw.update(kwargs)
+    return lambda_he3_he4_ratio(**kw)
+
+
 def sigma_wake_default(slit_separation: float | None = None, *, micro: bool = False) -> float:
     """Apparatus scale ~ slit/4; micro scale = L_0 (C1)."""
     if micro:
@@ -1926,6 +2315,12 @@ def report_dark_sector_geometry() -> str:
 
 ACTIVE_SEED_REFERENCE = 100  # canonical bootstrap (E anchor convention, not FIT to 1836)
 
+# E-check profiles from scripts/calibrate_discriminators.py (2026-06-05)
+REFERENCE_NETWORK_COUNT = 80  # primes bootstrap: R_pe^pred ~ 1847 (0.6% vs CODATA)
+REFERENCE_NETWORK_DEPTH = 3
+F_COIN_HE3_DISCRIMINATOR = 0.405  # Lambda_3He/Lambda_4He ~ 1.075 (5-10% band)
+F_COIN_HE4_DISCRIMINATOR = 0.5
+
 
 def _is_small_prime(n: int) -> bool:
     if n < 2:
@@ -2013,6 +2408,19 @@ def f_clock_doppler(f0: float, v: float) -> float:
     return f0 / g if math.isfinite(g) and g > 0 else 0.0
 
 
+def bounce_crossing_time_lab(d_coin_m: float, v: float) -> float:
+    """
+    One inner-photon crossing of coin diameter d at electron drift v (Sec 2.5.1).
+
+    T = d / sqrt(c^2 - v^2) = gamma * d/c.  Returns inf at |v| >= c.
+    """
+    if d_coin_m <= 0:
+        raise ValueError("d_coin_m must be positive")
+    if abs(v) >= C:
+        return float("inf")
+    return d_coin_m / math.sqrt(C**2 - v**2)
+
+
 def v_time_static_metric(a_metric: float) -> float:
     """v_time = c sqrt(A) for static ds^2 = -A c^2 dt^2 + ... (Sec 12.8)."""
     if a_metric <= 0:
@@ -2096,6 +2504,18 @@ def chain_cascade_weight(chain: tuple[int, ...]) -> float:
     return (k + 1) * float(sum(chain)) / float(p1)
 
 
+def m_lat_from_bootstrap_net(net: object) -> float:
+    """M_lat from an ActiveNetwork100 instance (shared denominator logic)."""
+    from aethos_active import BRANCHES_PER_VECTOR, VECTORS_PER_NODE, WINGS_PER_ROOM
+
+    total = sum(chain_cascade_weight(n.chain) for n in net.nodes)  # type: ignore[attr-defined]
+    origins = len(net._origin_index)  # type: ignore[attr-defined]
+    denom = origins + BRANCHES_PER_VECTOR + VECTORS_PER_NODE
+    if denom <= 0:
+        return 1.0
+    return total * WINGS_PER_ROOM / denom
+
+
 def m_lat_from_active_network(
     *,
     count: int = ACTIVE_SEED_REFERENCE,
@@ -2122,12 +2542,20 @@ def m_lat_from_active_network(
         origin_max_depth=origin_max_depth,
         chain_species=species,  # type: ignore[arg-type]
     )
-    total = sum(chain_cascade_weight(n.chain) for n in net.nodes)
-    origins = len(net._origin_index)
-    denom = origins + BRANCHES_PER_VECTOR + VECTORS_PER_NODE
-    if denom <= 0:
-        return 1.0
-    return total * WINGS_PER_ROOM / denom
+    return m_lat_from_bootstrap_net(net)
+
+
+def m_lat_from_material_blob(
+    blob: object,
+    *,
+    count: int = REFERENCE_NETWORK_COUNT,
+    origin_max_depth: int = REFERENCE_NETWORK_DEPTH,
+) -> float:
+    """M_lat when anchor species follow ElectronBlob (C6 material path)."""
+    from aethos_active import ActiveNetwork100
+
+    net = ActiveNetwork100.bootstrap_from_blob(blob, count=count, origin_max_depth=origin_max_depth)  # type: ignore[arg-type]
+    return m_lat_from_bootstrap_net(net)
 
 
 def r_pe_model_with_lattice(
@@ -2144,11 +2572,91 @@ def r_pe_model_with_lattice(
     )
 
 
+def wing_activation_analysis(
+    *,
+    count: int = REFERENCE_NETWORK_COUNT,
+    origin_max_depth: int = REFERENCE_NETWORK_DEPTH,
+) -> dict[str, float]:
+    """
+    Hidden pattern: 40 origins x 32 wings = 1280 slots; n active nodes => fraction 1/16 at n=80.
+
+    Returns nodes_per_origin, wings_total, activation_fraction, role_cycles (count/5).
+    """
+    from aethos_origins import OriginTree
+
+    n_orig = len(list(OriginTree.bootstrap(max_depth=origin_max_depth).walk()))
+    wings_total = float(n_orig * 32)
+    nodes_per_origin = count / n_orig if n_orig else 0.0
+    wings_per_origin = 32.0
+    return {
+        "n_origins": float(n_orig),
+        "wings_total": wings_total,
+        "active_nodes": float(count),
+        "nodes_per_origin": nodes_per_origin,
+        "wing_fraction_per_origin": nodes_per_origin / wings_per_origin if wings_per_origin else 0.0,
+        "global_activation_fraction": count / wings_total if wings_total else 0.0,
+        "role_cycles": count / 5.0,
+    }
+
+
+def r_pe_model_reference_bootstrap(chain_species: object | None = None) -> float:
+    """E-check optimum: primes, count=80, depth=3 → R_pe^pred ~ 1847 (see calibration_sheet)."""
+    from aethos_sequences import SequenceKind
+
+    species = chain_species if chain_species is not None else SequenceKind.PRIMES
+    return r_pe_model_with_lattice(
+        count=REFERENCE_NETWORK_COUNT,
+        origin_max_depth=REFERENCE_NETWORK_DEPTH,
+        chain_species=species,
+    )
+
+
+def report_discriminator_calibration() -> str:
+    """E-check profiles: Ch 16/17 discriminators (calibration_sheet 2026-06-05)."""
+    from aethos_origins import OriginTree
+
+    r_ref = r_pe_model_reference_bootstrap()
+    he_raw = lambda_he3_he4_ratio()
+    he_cal = lambda_he3_he4_ratio_calibrated()
+    err_r = 100.0 * abs(r_ref - R_PE) / R_PE
+    n_orig = len(list(OriginTree.bootstrap(max_depth=REFERENCE_NETWORK_DEPTH).walk()))
+    m4m3 = M_HE4 / M_HE3
+    lines = [
+        "AETHOS discriminator E-check (Ch 16/17, calibration_sheet)",
+        "=" * 56,
+        "Mass ratio R_pe = (pi^2/8) x M_lat:",
+        f"  Spring factor pi^2/8     = {r_pe_spring_only():.6f}",
+        f"  E-gap M_lat target       = {lattice_mass_multiplier():.2f}",
+        f"  Reference bootstrap      primes n={REFERENCE_NETWORK_COUNT} depth={REFERENCE_NETWORK_DEPTH}",
+        f"  Origins (1+3+9+27)       = {n_orig}  => M_lat = (32/52)*sum_mu",
+        f"  Role ledger              n=80 = 16 x 5 (SOLO..FOUR_WAY balance)",
+        f"  Wing activation          80/1280 = 2/32 = 1/16 per origin room",
+        f"  R_pe^pred                = {r_ref:.2f}",
+        f"  R_pe^E (CODATA)          = {R_PE:.2f}",
+        f"  Relative error           = {err_r:.2f}%",
+        "",
+        "He isotope Lambda_3He / Lambda_4He = (f3/f4)*(m4/m3):",
+        f"  Mass-only m4/m3          = {m4m3:.4f}",
+        f"  Need f3/f4 for 1.075     = {1.075/m4m3:.4f}",
+        f"  E-check f3/f4            = {F_COIN_HE3_DISCRIMINATOR/F_COIN_HE4_DISCRIMINATOR:.4f}",
+        f"  Placeholder 0.75/0.15    -> {he_raw:.3f}  (reject)",
+        f"  E-check profile          -> {he_cal:.4f}",
+        "",
+        "Why: scripts/pattern_why_discriminators.py",
+        "Sweep: scripts/calibrate_discriminators.py",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def report_time_zeno_geometry() -> str:
     w0 = 1.0
     primes = (2, 3, 5)
-    mlat = m_lat_from_active_network()
-    r_pred = r_pe_model_with_lattice()
+    mlat_ref = m_lat_from_active_network(
+        count=REFERENCE_NETWORK_COUNT,
+        origin_max_depth=REFERENCE_NETWORK_DEPTH,
+    )
+    r_pred = r_pe_model_reference_bootstrap()
     lam = lambda_descent_rate(1.0 / TAU_N)
     lines = [
         "AETHOS time / Zeno / lattice geometry (Sec 12, Step 12 gate)",
@@ -2162,9 +2670,9 @@ def report_time_zeno_geometry() -> str:
         f"lambda_desc (tau_n)    = {lam:.3e} s^-1",
         f"S_clock (DM @ 300K)    = {s_clock_suppression(300.0):.3e}",
         "",
-        "Lattice mass ratio (C6):",
+        "Lattice mass ratio (C6, E-check bootstrap):",
         f"  R_pe^(0)             = {r_pe_spring_only():.6f}",
-        f"  M_lat (100 prime)    = {mlat:.2f}",
+        f"  M_lat (n=80, d=3)    = {mlat_ref:.2f}",
         f"  R_pe^pred            = {r_pred:.2f}  (CODATA {R_PE:.2f})",
         "",
         "O12-1: P(p) micro-derivation OPEN; O12-2: rotating metric OPEN.",
@@ -2274,6 +2782,10 @@ def report_calibration() -> str:
 
 
 if __name__ == "__main__":
+    print(report_spacetime_geometry())
+    print()
+    print(report_spacetime_wiring())
+    print()
     print(report_coin_geometry())
     print()
     print(report_fusion_geometry())
@@ -2295,6 +2807,8 @@ if __name__ == "__main__":
     print(report_dark_sector_geometry())
     print()
     print(report_time_zeno_geometry())
+    print()
+    print(report_discriminator_calibration())
     print(report_calibration())
     print()
     print(report_measurement_calibration())

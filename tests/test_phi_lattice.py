@@ -1,4 +1,4 @@
-"""φ-Prime Lattice — 57-test specification suite."""
+"""3D complex plane / lattice formula — 57-test specification suite (legacy file name test_phi_lattice)."""
 
 from __future__ import annotations
 

@@ -195,6 +195,49 @@ so Section 2's `v_int=sqrt(c^2-v^2)` is exactly the Section-12 motion-budget tim
 
 ---
 
+## 2.5.1 Cosmic speed limit — bounce completion (Section 2 extension)
+
+**Physical claim:** nothing with electron-like structure can reach `v=c` because the trapped-photon crossing cannot complete when the far wall recedes at `c`.
+
+One crossing of coin diameter `d` at electron drift speed `v`:
+
+\[
+D^2 = d^2 + (vT)^2,\quad D = cT
+\]
+
+\[
+T(v) = \frac{d}{\sqrt{c^2-v^2}} = \gamma T_0,\quad T_0 = \frac{d}{c}
+\]
+
+\[
+f_b(v) = \frac{1}{T_{\text{round}}} \propto \frac{1}{\gamma T_0} = \frac{f_{b0}}{\gamma}
+\]
+
+consistent with §2.5.
+
+**Limit:**
+
+\[
+v \to c^- \Rightarrow T \to \infty,\quad v_{\text{int}} = \sqrt{c^2-v^2} \to 0
+\]
+
+No completed bounce ⇒ no pump ⇒ no electron identity.
+
+**Energy (ANCHORED SR):** `E=\gamma m_0 c^2 \to \infty` as `v\to c` — interpreted in-model as forcing the inner photon to remain mid-crossing.
+
+**Philosophical / measurement link (Section 5):** bounce cycle = self-observation; halting bounce halts structured existence.
+
+**Forward conjecture (MODEL, OPEN — Section 11):** extreme drive toward `c` might strip inner photon (free photon + spring-only dark remnant). Not derived; falsifier TBD.
+
+Status:
+- bounce-time geometry + motion budget = **D / GEOMETRY** (light-clock, same as SR kinematics)
+- "electron ceases to exist at c" = **MODEL** interpretation (P2-5)
+- dark-matter split at c = **MODEL / OPEN** (P11 bridge)
+
+Code: `v_time_from_v_space`, `f_clock_doppler`, `gamma_lorentz` in `aethos_physics.py`.
+
+---
+
 ## 2.6 Spin mapping
 
 Your Section 2 rule:

@@ -10,6 +10,17 @@ from aethos_symbol_knowledge import SymbolKnowledgeIndex
 
 
 class TestSymbolKnowledge(unittest.TestCase):
+    def test_root_morph_link_to_inflected(self) -> None:
+        corpus = {
+            "d1": "diminish the score was lower",
+            "d2": "diminished scores over time",
+        }
+        idx = SymbolKnowledgeIndex.build_from_corpus(corpus, dataset="p3_root")
+        link = idx.correlates("diminish", "diminished")
+        self.assertIsNotNone(link, "root should morph-link to inflected form")
+        assert link is not None
+        self.assertEqual(link.kind, "morph")
+
     def test_direct_and_bridge(self) -> None:
         corpus = {
             "d1": "diminished score was lower",

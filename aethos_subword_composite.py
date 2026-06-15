@@ -396,14 +396,25 @@ def subword_composite_score(
         if not q_comps:
             continue
 
-        from core.phi_lattice import prime_factor_similarity
-
         exact_ratio = len(q_comps & doc_composites) / max(len(q_comps), 1)
-        jaccard_best = 0.0
-        for qc in q_comps:
-            for dc in doc_composites:
-                jaccard_best = max(jaccard_best, prime_factor_similarity(qc, dc))
-        ratio = max(exact_ratio, jaccard_best)
+        if exact_ratio > 0:
+            ratio = exact_ratio
+        elif len(q_comps) * len(doc_composites) <= 4096:
+            from core.phi_lattice import prime_factor_similarity
+
+            jaccard_best = 0.0
+            for qc in q_comps:
+                for dc in doc_composites:
+                    sim = prime_factor_similarity(qc, dc)
+                    if sim > jaccard_best:
+                        jaccard_best = sim
+                        if jaccard_best >= 1.0:
+                            break
+                if jaccard_best >= 1.0:
+                    break
+            ratio = jaccard_best
+        else:
+            ratio = 0.0
         if ratio > 0:
             score += idf.get(qw, 1.0) * ratio * weight
 

@@ -1,5 +1,7 @@
 # AETHOS Formal Derivations (Sections 1–12)
 
+**Ontology:** repo root [`ONTOLOGY.md`](../ONTOLOGY.md) — **π lattice** vs **3D complex plane** (not "prime lattice" / "infinity lattice").
+
 One derivation file per section. Each intuition block gets:
 
 | Tag | Meaning |
@@ -21,7 +23,7 @@ One derivation file per section. Each intuition block gets:
 
 | Section | Intuition source | Derivation file | Status |
 |---------|------------------|-----------------|--------|
-| 1 | Photon sea | `section_01_derivations.md` | **DONE** (this pass) |
+| 1 | Photon sea | `section_01_derivations.md` | **DONE** (v1.2 — lattice cell ontology, book Ch 1 sync) |
 | 2 | Electron / coin | `section_02_derivations.md` | **DONE** (v1) |
 | 3 | Proton / fusion | `section_03_derivations.md` | **DONE** (v1) |
 | 4 | Neutron | `section_04_derivations.md` | **DONE** (v1) |
@@ -47,6 +49,8 @@ Sec 1 (sea, photon math, ψ as disturbance)
 ```
 
 Work rule: finish and review each `section_XX_derivations.md` before starting the next.
+
+**Book chapters:** `book_ch02` … `book_ch15-17_derivations.md` (Ch 2 through Part VI synthesis).
 
 ## Geometry-first full rebuild
 

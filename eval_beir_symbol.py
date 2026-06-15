@@ -32,10 +32,11 @@ from beir_data_root import resolve_beir_root
 from eval_beir import load_paths, load_qrels, load_queries, merge_qrels, ndcg_at_k, recall_at_k
 from pipeline.bit_04_candidate_router import query_words_for_routing
 from aethos_cascade_retrieval import search_docs_cascade
-from aethos_rare_rank import search_docs_rare_correlations
+from aethos_rare_rank import _DocFreqCache, search_docs_rare_correlations
 from pipeline.bit_12_symbol_plane_index import (
     SymbolPlaneIndex,
     rank_symbol_plane_docs,
+    rank_symbol_plane_witness,
     route_symbol_plane_candidates,
 )
 
@@ -71,6 +72,13 @@ def load_brain_and_plane(
         plane = payload
     else:
         raise TypeError(f"unexpected plane pickle type: {type(payload)}")
+    from pipeline.bit_12_symbol_plane_index import (
+        _canonical_pair_link_cache,
+        _canonical_surface_map,
+    )
+
+    _canonical_surface_map(knowledge)
+    _canonical_pair_link_cache(knowledge)
     load_ms = (time.perf_counter() - t0) * 1000.0
     print(
         f"  loaded brain + plane in {load_ms:.0f} ms  "
@@ -103,11 +111,14 @@ class SymbolEvalResult:
     mean_query_ms: float
     p95_query_ms: float
     failures: list[dict[str, object]] = field(default_factory=list)
+    n_skipped: int = 0
+    skipped_qids: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         lines = [
             f"Symbol BEIR — {self.dataset} ({self.split})",
-            f"  queries     : {self.n_queries}",
+            f"  queries     : {self.n_queries}"
+            + (f"  (skipped {self.n_skipped})" if self.n_skipped else ""),
             f"  nDCG@10     : {self.ndcg_at_10:.4f}",
             f"  Recall@10   : {self.recall_at_10:.4f}",
             f"  MRR@10      : {self.mrr_at_10:.4f}",
@@ -127,16 +138,34 @@ def evaluate_symbol_beir(
     *,
     max_queries: int | None = None,
     rank_limit: int = 100,
-    route_max: int = 600,
+    route_max: int = 1200,
     max_keys: int = 768,
     max_corr_neighbors: int = 4,
     expand_correlations: bool = True,
     save_failures: int = 25,
     mode: str = "kappa",
+    use_idf_weighting: bool = False,
+    word_attributed_pool: bool = False,
+    rare_boost_hits: bool = False,
+    rare_only_hits: bool = False,
+    df_cache: _DocFreqCache | None = None,
 ) -> SymbolEvalResult:
     qids = [q for q in qrels if q in queries]
     if max_queries is not None:
         qids = qids[:max_queries]
+
+    cache = df_cache
+    if (word_attributed_pool or use_idf_weighting or rare_boost_hits or rare_only_hits) and cache is None:
+        cache = _DocFreqCache(knowledge)
+        cache.warm_corpus()
+
+    route_kw = {
+        "use_idf_weighting": use_idf_weighting,
+        "word_attributed_pool": word_attributed_pool,
+        "rare_boost_hits": rare_boost_hits,
+        "rare_only_hits": rare_only_hits,
+        "df_cache": cache,
+    }
 
     ndcgs: list[float] = []
     recalls: list[float] = []
@@ -144,51 +173,77 @@ def evaluate_symbol_beir(
     route_hits: list[float] = []
     query_ms: list[float] = []
     failures: list[dict[str, object]] = []
+    skipped: list[str] = []
 
     for qid in qids:
         words = query_words(queries[qid])
         rel = qrels[qid]
         t0 = time.perf_counter()
-        if mode == "cascade":
-            route, scored = search_docs_cascade(
-                knowledge,
-                plane,
-                words,
-                max_candidates=route_max,
-                limit=rank_limit,
-                max_keys=max_keys,
-                max_corr_neighbors=max_corr_neighbors,
-                expand_correlations=expand_correlations,
-            )
-            ranked = [doc_id for doc_id, _ in scored]
-        elif mode == "rare":
-            route, scored = search_docs_rare_correlations(
-                knowledge,
-                plane,
-                words,
-                max_candidates=route_max,
-                limit=rank_limit,
-            )
-            ranked = [doc_id for doc_id, _ in scored]
-        else:
-            route = route_symbol_plane_candidates(
-                knowledge,
-                plane,
-                words,
-                max_candidates=route_max,
-                max_keys=max_keys,
-                max_corr_neighbors=max_corr_neighbors,
-                expand_correlations=expand_correlations,
-            )
-            ranked = [doc_id for doc_id, _ in rank_symbol_plane_docs(
-                knowledge,
-                plane,
-                words,
-                limit=rank_limit,
-                query_keys=set(route.query_keys),
-                candidate_doc_ids=route.doc_ids,
-                expand_correlations=expand_correlations,
-            )]
+        try:
+            if mode == "cascade":
+                route, scored = search_docs_cascade(
+                    knowledge,
+                    plane,
+                    words,
+                    max_candidates=route_max,
+                    limit=rank_limit,
+                    max_keys=max_keys,
+                    max_corr_neighbors=max_corr_neighbors,
+                    expand_correlations=expand_correlations,
+                )
+                ranked = [doc_id for doc_id, _ in scored]
+            elif mode == "rare":
+                route, scored = search_docs_rare_correlations(
+                    knowledge,
+                    plane,
+                    words,
+                    max_candidates=route_max,
+                    limit=rank_limit,
+                )
+                ranked = [doc_id for doc_id, _ in scored]
+            elif mode == "witness":
+                route = route_symbol_plane_candidates(
+                    knowledge,
+                    plane,
+                    words,
+                    max_candidates=route_max,
+                    max_keys=max_keys,
+                    max_corr_neighbors=max_corr_neighbors,
+                    expand_correlations=expand_correlations,
+                    **route_kw,
+                )
+                ranked = [doc_id for doc_id, _ in rank_symbol_plane_witness(
+                    knowledge,
+                    plane,
+                    words,
+                    limit=rank_limit,
+                    query_keys=set(route.query_keys),
+                    candidate_doc_ids=route.doc_ids,
+                    expand_correlations=expand_correlations,
+                )]
+            else:
+                route = route_symbol_plane_candidates(
+                    knowledge,
+                    plane,
+                    words,
+                    max_candidates=route_max,
+                    max_keys=max_keys,
+                    max_corr_neighbors=max_corr_neighbors,
+                    expand_correlations=expand_correlations,
+                    **route_kw,
+                )
+                ranked = [doc_id for doc_id, _ in rank_symbol_plane_docs(
+                    knowledge,
+                    plane,
+                    words,
+                    limit=rank_limit,
+                    query_keys=set(route.query_keys),
+                    candidate_doc_ids=route.doc_ids,
+                    expand_correlations=expand_correlations,
+                )]
+        except Exception:
+            skipped.append(qid)
+            continue
         elapsed = (time.perf_counter() - t0) * 1000.0
         query_ms.append(elapsed)
 
@@ -213,21 +268,23 @@ def evaluate_symbol_beir(
                 "query_ms": round(elapsed, 2),
             })
 
-    n = max(len(qids), 1)
+    n = max(len(ndcgs), 1)
     query_ms_sorted = sorted(query_ms)
     p95_idx = min(int(math.ceil(0.95 * len(query_ms_sorted))) - 1, len(query_ms_sorted) - 1)
 
     return SymbolEvalResult(
         dataset="",
         split="",
-        n_queries=len(qids),
+        n_queries=len(ndcgs),
         ndcg_at_10=sum(ndcgs) / n,
         recall_at_10=sum(recalls) / n,
         mrr_at_10=sum(mrrs) / n,
         route_recall=sum(route_hits) / n,
-        mean_query_ms=sum(query_ms) / n,
+        mean_query_ms=sum(query_ms) / n if query_ms else 0.0,
         p95_query_ms=query_ms_sorted[p95_idx] if query_ms_sorted else 0.0,
         failures=failures,
+        n_skipped=len(skipped),
+        skipped_qids=skipped,
     )
 
 
@@ -240,11 +297,22 @@ def main() -> int:
     p.add_argument("--split", choices=("test", "train", "all"), default="test")
     p.add_argument("--max-queries", type=int, default=None)
     p.add_argument("--rank-limit", type=int, default=100)
+    p.add_argument("--route-max", type=int, default=1200)
+    p.add_argument(
+        "--word-attributed-pool",
+        action="store_true",
+        help="word-attributed IDF pool (default: uniform per-κ-key hit count)",
+    )
+    p.add_argument(
+        "--uniform-pool",
+        action="store_true",
+        help=argparse.SUPPRESS,  # legacy alias; uniform is now default
+    )
     p.add_argument(
         "--mode",
-        choices=("cascade", "rare", "kappa"),
+        choices=("cascade", "rare", "kappa", "witness"),
         default="kappa",
-        help="kappa = symbol-plane route + Jaccard (default); cascade/rare = experimental",
+        help="kappa = asymmetric κ overlap; witness = intersection rank (meet+rare); cascade/rare = legacy",
     )
     p.add_argument("--max-keys", type=int, default=768)
     p.add_argument("--max-corr-neighbors", type=int, default=4)
@@ -283,9 +351,11 @@ def main() -> int:
         qrels,
         max_queries=args.max_queries,
         rank_limit=args.rank_limit,
+        route_max=args.route_max,
         mode=args.mode,
         max_keys=args.max_keys,
         max_corr_neighbors=args.max_corr_neighbors,
+        word_attributed_pool=args.word_attributed_pool and not args.uniform_pool,
     )
     result.dataset = args.dataset
     result.split = args.split
@@ -302,7 +372,11 @@ def main() -> int:
         "brain": brain_name,
         "split": args.split,
         "mode": args.mode,
+        "route_max": args.route_max,
+        "word_attributed_pool": args.word_attributed_pool and not args.uniform_pool,
         "n_queries": result.n_queries,
+        "n_skipped": result.n_skipped,
+        "skipped_qids": result.skipped_qids,
         "ndcg_at_10": round(result.ndcg_at_10, 6),
         "recall_at_10": round(result.recall_at_10, 6),
         "mrr_at_10": round(result.mrr_at_10, 6),

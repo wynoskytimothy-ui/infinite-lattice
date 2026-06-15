@@ -1,6 +1,8 @@
 # AETHOS architecture
 
-Two layers: **lattice core** (pure formulas) and **token processor** (semantics).
+**Ontology:** [`ONTOLOGY.md`](ONTOLOGY.md) — **π lattice** (bisection, `pi/`) vs **3D complex plane** (Ψ=(z,ζ), lattice formula). Do not use "prime lattice" or "infinity lattice."
+
+Two layers: **3D complex plane core** (pure formulas) and **token processor** (semantics).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -19,7 +21,7 @@ Two layers: **lattice core** (pure formulas) and **token processor** (semantics)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Lattice core (`aethos_core.py`)
+## 3D complex plane core (`aethos_core.py`)
 
 **No tokens.** Use for any project that only needs your formulas.
 
@@ -93,12 +95,33 @@ pipe.open_lattice_project("photon", origin_depth=2)  # core-only side
 | Word order dots | `aethos_words` | core + permutation |
 | Semantic overlay | `aethos_overlay` | tokens + codec local |
 
+## Capability suite & derived systems
+
+The formula's load-bearing properties are stress-tested in 33 capability
+tests (`scripts/test_*.py`, results in
+[`derivations/formula_capability_tests_results.md`](derivations/formula_capability_tests_results.md)).
+Several grew into standalone systems on the same core math:
+
+| System | Module(s) | What it is |
+|--------|-----------|------------|
+| Recursive lattice | `aethos_recursive_lattice` | Promoted-prime hierarchy; `walk_down`/`walk_up`, level invariant (Russell-safe), provenance |
+| Context-mixing codec | `scripts/test_chamber_mixer_v*` | FTA-addressed chambers + logistic mixer; 0.83 bits/byte (beats zlib/bz2/lzma), native-JIT, 32 parallel quadrant lanes; byte-exact suspend/resume |
+| Quantum / qubit | `aethos_quantum`, `aethos_qubit_node`, `aethos_ocean_graph` | Exact statevector; any node = qubit; ocean-fill dial (Werner 1/√2); Bell 2√2, GHZ |
+| Zeno kernel | `section_12` + `scripts/test_zeno_*` | One prime frame-descent = gatekeeper (terminate) + bookkeeper (address) + janitor (bounded resource) + security (no singular state) + ruler (clock); proven substitutable for the recycler |
+
+**The Zeno frame-descent is the shared substrate:** termination certificates,
+prime-base addressing, bounded-resource recycling, illegal-state safety, and
+the tick schedule are all the same descent (`w_n = 1/∏p_k`, positive-width
+floor) in different domains — see Tests 32–33.
+
 ## Entry points
 
 ```bash
 python aethos_core.py              # lattice-only demo
 python aethos_token_processor.py   # token demo
 python run_aethos.py               # full regression
+python scripts/run_capability_suite.py   # 33 capability tests (fast tier)
+python aethos_quantum.py           # 2-qubit Bell/CHSH demo
 ```
 
 ## Golden & persistence

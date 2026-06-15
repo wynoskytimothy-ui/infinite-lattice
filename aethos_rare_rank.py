@@ -330,6 +330,7 @@ def score_doc_rare_correlations(
     rare_query: Sequence[str] | None = None,
     rare_cache: dict[str, bool] | None = None,
     degrees: dict[str, int] | None = None,
+    rare_doc_tokens: set[str] | None = None,
 ) -> float:
     """
     Sum rare query→doc correlation strengths; bonus for rare 3-way triples.
@@ -347,13 +348,16 @@ def score_doc_rare_correlations(
     if not rare_query:
         return 0.0
 
-    doc_toks = _unique_tokens(doc_text)
-    rare_doc = {
-        t for t in doc_toks
-        if _rare_word_cached(
-            knowledge, t, df_cache=cache, rare_cache=rcache, degrees=degrees,
-        )
-    }
+    if rare_doc_tokens is not None:
+        rare_doc = set(rare_doc_tokens)
+    else:
+        doc_toks = _unique_tokens(doc_text)
+        rare_doc = {
+            t for t in doc_toks
+            if _rare_word_cached(
+                knowledge, t, df_cache=cache, rare_cache=rcache, degrees=degrees,
+            )
+        }
     if not rare_doc:
         return 0.0
 
@@ -447,19 +451,9 @@ def rank_docs_rare_weighted(
 
 def morph_trigger_pieces(knowledge: SymbolKnowledgeIndex, token: str) -> list[str]:
     """Subwords / composite parts / rare morph word activated by a query token."""
-    w = token.lower()
-    morph = knowledge.morph
-    out: list[str] = []
-    if w in morph.composites:
-        comp = morph.composites[w]
-        out.append(w)
-        out.extend(comp.parts)
-    if w in morph.subwords:
-        out.append(w)
-    for sw in sorted(morph.subwords, key=len, reverse=True):
-        if len(sw) >= 3 and sw in w:
-            out.append(sw)
-    return list(dict.fromkeys(out))
+    from aethos_symbol_morph_pieces import morph_pieces
+
+    return morph_pieces(knowledge, token, mode="query")
 
 
 def is_morph_signal_piece(knowledge: SymbolKnowledgeIndex, piece: str) -> bool:

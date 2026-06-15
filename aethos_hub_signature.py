@@ -18,21 +18,33 @@ Step 2 will replace the inverted-index candidate pass with a MeetIndex
 this signature layout because each HubEntry already stores prime + coord.
 
 Byte estimate (compact):
-  HubEntry: 4 (prime) + 4 (strength) + 12 (3 × float32 coord) = 20 bytes
-  K = 12 → 240 bytes/doc for coord index
-  Full in-memory: slightly more; on-disk packing reaches ~100 B/doc target.
+  Legacy HubEntry: prime(4) + strength(4) + coord(12) + band + z_obs ≈ 25 B + word
+  Pin wire (α + critical line): 8 B pin + strength(4) + band(1) + z_obs(4) + word
+  K = 12 → ~96–120 B/doc pin mode vs ~240 B/doc legacy coord index
+  Coords regenerated via SpacetimeCell.at (3D complex plane = lattice).
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
 
 from functools import reduce
 from operator import mul
 
 from aethos_composite import morph_meet_score
-from aethos_lattice import LatticeId
+from aethos_hub_wire import (
+    CriticalLinePin,
+    LegSumMeetKey,
+    WIRE_BYTES,
+    hub_coord_from_word,
+    leg_sum_meet_key,
+    leg_sum_meet_key_from_coord,
+    pin_for_query_word,
+    wing_coords_for_word,
+)
+from aethos_lattice import LatticeId, lattice_id_parts
 from aethos_promotion import LatticeTier, is_stopword
 # Pool-promoted primes only for meet/composite indexing (letter primes are universal).
 MIN_POOL_PRIME = 107
@@ -104,21 +116,56 @@ class HubEntry:
     strength: float
     prime: int
     lattice_composite: int                                  # product of pool primes in chain
-    coord: tuple[float, float, float]                       # formula_coord at n=anchor_n, L01
     neighbors: frozenset[str]                               # L4-L6 correlated words
+    coord: tuple[float, float, float] | None = None          # legacy L01; None when pin wire
     pool_factors: frozenset[int] = frozenset()              # factors for Signal 5b Jaccard
+    band_id: int = 0                                        # BIT 5: |z| band 0..3
+    z_obs: float = 0.0                                      # BIT 5: Re(z_VA1 + z_VA2)
     # Multi-wing coords for consensus scoring: tuple of (lattice_id_int, x, y, z).
     # Stored as a tuple of tuples so HubEntry stays frozen/hashable.
     # Populated for wings in CONSENSUS_WINGS; empty tuple = not computed.
     wing_coord_tuples: tuple[tuple[int, float, float, float], ...] = ()
+    pin: CriticalLinePin | None = None
+    lazy_wings: bool = False
 
     def wing_coords(self) -> dict[int, tuple[float, float, float]]:
         """Return {lattice_id: (x,y,z)} for fast O(1) lookup in Signal 2."""
         return {lid: (x, y, z) for lid, x, y, z in self.wing_coord_tuples}
 
+    def resolve_wing_coords(
+        self,
+        registry,
+        *,
+        consensus_wings: tuple[int, ...] | None = None,
+    ) -> dict[int, tuple[float, float, float]]:
+        """Materialized wings or on-demand regen from lattice address α."""
+        if self.wing_coord_tuples:
+            return self.wing_coords()
+        wings = consensus_wings if consensus_wings is not None else CONSENSUS_WINGS
+        if registry is not None and self.lazy_wings:
+            return wing_coords_for_word(
+                registry,
+                self.word,
+                rail_n=self.pin.rail_n if self.pin else 7,
+                consensus_wings=wings,
+            )
+        if self.coord:
+            return {1: self.coord}
+        return {}
+
+    def resolve_coord(self, registry) -> tuple[float, float, float] | None:
+        if self.coord:
+            return self.coord
+        if self.pin is not None and registry is not None:
+            return hub_coord_from_word(registry, self.word, self.pin)
+        return None
+
     def compact_bytes(self) -> int:
-        """Lower bound on wire size: prime(4) + strength(4) + coord(12) + utf8 word."""
-        return 20 + len(self.word.encode("utf-8"))
+        """Wire size estimate: pin mode vs legacy float coord."""
+        word_b = len(self.word.encode("utf-8"))
+        if self.pin is not None and self.lazy_wings:
+            return WIRE_BYTES + 4 + 1 + 4 + word_b  # pin + strength + band + z_obs + word
+        return 25 + word_b
 
 
 @dataclass
@@ -127,12 +174,16 @@ class LatticeHubSignature:
     Compact per-document lattice index.
 
     ``hubs``       : word → HubEntry  (top-K by compression_strength)
-    ``hub_coords`` : coord → word     (for O(1) meet detection at query time)
+    ``hub_coords``  : coord → word (legacy float meet, omitted when pin wire)
+    ``hub_pins``    : CriticalLinePin → word (pin-keyed L01 meet)
+    ``hub_leg_sum`` : LegSumMeetKey → word (S-partner leg_sum dedup on j)
     """
 
     doc_id: str
     hubs: dict[str, HubEntry] = field(default_factory=dict)
     hub_coords: dict[tuple[float, float, float], str] = field(default_factory=dict)
+    hub_pins: dict[CriticalLinePin, str] = field(default_factory=dict)
+    hub_leg_sum: dict[LegSumMeetKey, str] = field(default_factory=dict)
 
     def hub_words(self) -> frozenset[str]:
         return frozenset(self.hubs.keys())
@@ -279,6 +330,7 @@ def build_hub_signature_from_tokens(
     idx: RegistryIndex,
     *,
     top_k: int = 12,
+    use_pin_wire: bool = True,
 ) -> LatticeHubSignature:
     """
     Build a LatticeHubSignature using precomputed RegistryIndex.
@@ -300,18 +352,42 @@ def build_hub_signature_from_tokens(
         if c is None:
             continue
         pf = idx.pool_factors(word)
+        from pipeline.bit_05_z_band import band_profile_for_word
+
+        band = band_profile_for_word(idx.registry, word, n=idx.anchor_n)
+        branch, vec = lattice_id_parts(idx.lattice_id)
+        pin = CriticalLinePin.from_coord(
+            c,
+            idx.prime(word),
+            rail_n=idx.anchor_n,
+            branch=int(branch),
+            wing=vec.index,
+        )
         entry = HubEntry(
             word=word,
             strength=strength,
             prime=idx.prime(word),
             lattice_composite=idx.lattice_composite(word),
             pool_factors=pf,
-            coord=c,
+            band_id=band.band_id,
+            z_obs=band.z_obs,
+            coord=None if use_pin_wire else c,
             neighbors=idx.neighbors(word),
-            wing_coord_tuples=idx.all_wing_coords(word),
+            wing_coord_tuples=() if use_pin_wire else idx.all_wing_coords(word),
+            pin=pin if use_pin_wire else None,
+            lazy_wings=use_pin_wire,
         )
         sig.hubs[word] = entry
-        sig.hub_coords[c] = word
+        if use_pin_wire:
+            prev = sig.hub_pins.get(pin)
+            if prev is None or entry.strength > sig.hubs[prev].strength:
+                sig.hub_pins[pin] = word
+            lsk = leg_sum_meet_key(pin)
+            prev_ls = sig.hub_leg_sum.get(lsk)
+            if prev_ls is None or entry.strength > sig.hubs[prev_ls].strength:
+                sig.hub_leg_sum[lsk] = word
+        else:
+            sig.hub_coords[c] = word
 
     return sig
 
@@ -324,11 +400,52 @@ def build_hub_signature(
     top_k: int = 12,
     anchor_n: int = 7,
     lattice_id: LatticeId = LatticeId.L01,
+    use_pin_wire: bool = True,
 ) -> LatticeHubSignature:
     """Single-doc helper for tests.  For corpus-scale use build_all_hub_signatures."""
     from aethos_tokenize import tokenize_words
     idx = precompute_registry_index(registry, anchor_n=anchor_n, lattice_id=lattice_id)
-    return build_hub_signature_from_tokens(doc_id, frozenset(tokenize_words(text)), idx, top_k=top_k)
+    return build_hub_signature_from_tokens(
+        doc_id,
+        frozenset(tokenize_words(text)),
+        idx,
+        top_k=top_k,
+        use_pin_wire=use_pin_wire,
+    )
+
+
+def materialize_lazy_hub_wings(
+    sigs: dict[str, LatticeHubSignature],
+    registry,
+    *,
+    consensus_wings: tuple[int, ...] | None = None,
+) -> None:
+    """
+    One-shot wing regen from pin wire — query path matches legacy (O(1) lookup).
+
+    Pin wire keeps ``encoded_size()`` small; wings live in RAM only after build.
+    """
+    wings = consensus_wings if consensus_wings is not None else CONSENSUS_WINGS
+    for sig in sigs.values():
+        new_hubs: dict[str, HubEntry] = {}
+        changed = False
+        for word, entry in sig.hubs.items():
+            if entry.wing_coord_tuples or not entry.lazy_wings:
+                new_hubs[word] = entry
+                continue
+            wc = wing_coords_for_word(
+                registry,
+                word,
+                rail_n=entry.pin.rail_n if entry.pin else 7,
+                consensus_wings=wings,
+            )
+            tuples = tuple(
+                (lid, x, y, z) for lid in wings for x, y, z in [wc[lid]] if lid in wc
+            )
+            new_hubs[word] = replace(entry, wing_coord_tuples=tuples)
+            changed = True
+        if changed:
+            sig.hubs = new_hubs
 
 
 def build_all_hub_signatures(
@@ -338,6 +455,8 @@ def build_all_hub_signatures(
     *,
     top_k: int = 12,
     anchor_n: int = 7,
+    use_pin_wire: bool = True,
+    materialize_wings: bool = True,
 ) -> dict[str, LatticeHubSignature]:
     """
     Build hub signatures for all docs after ingest.
@@ -346,7 +465,15 @@ def build_all_hub_signatures(
     idx = precompute_registry_index(registry, anchor_n=anchor_n)
     sigs: dict[str, LatticeHubSignature] = {}
     for did in doc_ids:
-        sigs[did] = build_hub_signature_from_tokens(did, doc_tokens.get(did, frozenset()), idx, top_k=top_k)
+        sigs[did] = build_hub_signature_from_tokens(
+            did,
+            doc_tokens.get(did, frozenset()),
+            idx,
+            top_k=top_k,
+            use_pin_wire=use_pin_wire,
+        )
+    if use_pin_wire and materialize_wings:
+        materialize_lazy_hub_wings(sigs, registry)
     return sigs
 
 
@@ -361,8 +488,9 @@ def build_all_hub_signatures(
 # ---------------------------------------------------------------------------
 
 LAMBDA_COORD = 0.5      # Signal 2: coord meet bonus ∝ IDF of the matching word
-LAMBDA_NEIGHBOR = 0.3   # Signal 3: neighbor expansion (softer signal; conservative)
-LAMBDA_PRIME_FACTOR = 0.35  # Signal 5b: Jaccard on lattice prime-factor composites
+LAMBDA_NEIGHBOR = 0.15  # Signal 3: reduced — audit showed false-doc lift on SciFact
+LAMBDA_PRIME_FACTOR = 0.0   # Signal 5b: off until pool-prime promotion sufficient
+LAMBDA_KAPPA = 0.0      # Signal 8a: off until train-tuned (0.25 regressed on SciFact slice)
 
 
 @dataclass
@@ -382,10 +510,12 @@ class QueryProfile:
 
     words: list[str]
     word_set: frozenset[str]
-    coords: dict[tuple[float, float, float], str]    # coord → word (L01, backward compat)
+    coords: dict[tuple[float, float, float], str]    # coord → word (legacy L01)
     idf: dict[str, float]                            # word → IDF score
     flat_neighbors: dict[str, float]                 # neighbor_word → max raw weight
     neighbor_source: dict[str, str]                  # neighbor_word → query_word that fired it
+    pins: dict[CriticalLinePin, str] = field(default_factory=dict)
+    leg_sum_pins: dict[LegSumMeetKey, str] = field(default_factory=dict)
     max_neighbor_weight: float = 1.0                 # normalization denominator
     wing_coords: dict[int, dict[tuple[float, float, float], str]] = field(default_factory=dict)
     # {lattice_id_int: {coord: query_word}} for each lid in CONSENSUS_WINGS
@@ -418,6 +548,8 @@ def build_query_profile(
 
     words = tokenize_words(query)
     coords: dict[tuple[float, float, float], str] = {}
+    pins: dict[CriticalLinePin, str] = {}
+    leg_sum_pins: dict[LegSumMeetKey, str] = {}
     idf: dict[str, float] = {}
     word_pool_factors: dict[str, frozenset[int]] = {}
     flat_neighbors: dict[str, float] = {}
@@ -442,10 +574,16 @@ def build_query_profile(
         if is_stopword(w) or len(w) < 3:
             continue  # stopwords contribute to IDF scoring but not coord/neighbor signals
 
-        # L01 coord (backward compat)
+        # L01 coord + pin meet keys
         try:
             c = registry.lattice_address(w, LatticeTier.L3_WORD, anchor_n, lattice_id)
             coords[c] = w
+            pin = pin_for_query_word(
+                registry, w, c, anchor_n=anchor_n, lattice_id=lattice_id
+            )
+            pins[pin] = w
+            leg_sum_pins[leg_sum_meet_key(pin)] = w
+            leg_sum_pins[leg_sum_meet_key_from_coord(c, rail_n=anchor_n)] = w
         except Exception:
             pass
 
@@ -471,6 +609,8 @@ def build_query_profile(
         words=words,
         word_set=frozenset(w for w in words if w.isalpha()),
         coords=coords,
+        pins=pins,
+        leg_sum_pins=leg_sum_pins,
         idf=idf,
         flat_neighbors=flat_neighbors,
         neighbor_source=neighbor_source,
@@ -483,6 +623,47 @@ def build_query_profile(
 # ---------------------------------------------------------------------------
 # Scoring — O(Q × K) instead of O(Q × D_tokens)
 # ---------------------------------------------------------------------------
+
+def _l01_meet_query_word(
+    profile: QueryProfile,
+    hub_entry: HubEntry,
+    hub_word: str,
+) -> str:
+    """Query word that L01-meets hub_word, or '' if none."""
+    if hub_entry.pin is not None and profile.pins:
+        q_word = profile.pins.get(hub_entry.pin, "")
+        if q_word and q_word != hub_word:
+            return q_word
+        if profile.leg_sum_pins:
+            lsk = leg_sum_meet_key(hub_entry.pin)
+            q_word = profile.leg_sum_pins.get(lsk, "")
+            if q_word and q_word != hub_word:
+                return q_word
+    if hub_entry.coord and hub_entry.coord in profile.coords:
+        q_word = profile.coords[hub_entry.coord]
+        if q_word and q_word != hub_word:
+            return q_word
+    return ""
+
+
+def _l01_coord_meet_for_sig(profile: QueryProfile, sig: LatticeHubSignature) -> float:
+    """Binary L01 coord meet when wing maps are empty (legacy path)."""
+    bonus = 0.0
+    if sig.hub_pins:
+        for pin, hub_word in sig.hub_pins.items():
+            q_word = profile.pins.get(pin, "")
+            if not q_word or q_word == hub_word:
+                q_word = profile.leg_sum_pins.get(leg_sum_meet_key(pin), "")
+            if q_word and q_word != hub_word:
+                bonus += profile.idf.get(q_word, 1.0) * LAMBDA_COORD
+        return bonus
+    for coord, hub_word in sig.hub_coords.items():
+        if coord in profile.coords:
+            q_word = profile.coords[coord]
+            if q_word != hub_word:
+                bonus += profile.idf.get(q_word, 1.0) * LAMBDA_COORD
+    return bonus
+
 
 def prime_factor_meet_score(
     profile: QueryProfile,
@@ -524,6 +705,7 @@ def score_document(
     b: float = 0.75,
     doc_composites: list[tuple[str, int]] | None = None,
     composite_cache: dict[str, int] | None = None,
+    registry=None,
 ) -> float:
     """
     Four-signal score.  O(Q + K) per document.
@@ -564,14 +746,11 @@ def score_document(
     n_wings = len(CONSENSUS_WINGS)
     if profile.wing_coords and n_wings > 0:
         for hub_word, hub_entry in sig.hubs.items():
-            hub_wc = hub_entry.wing_coords()
+            hub_wc = hub_entry.resolve_wing_coords(registry)
             if not hub_wc:
-                # Fallback: check L01 only (old behavior) for entries without wing data
-                c = hub_entry.coord
-                if c in profile.coords:
-                    q_word = profile.coords[c]
-                    if q_word != hub_word:
-                        score += profile.idf.get(q_word, 1.0) * LAMBDA_COORD
+                q_word = _l01_meet_query_word(profile, hub_entry, hub_word)
+                if q_word:
+                    score += profile.idf.get(q_word, 1.0) * LAMBDA_COORD
                 continue
             # Count how many wings agree: same coord for different words
             wing_matches = 0
@@ -585,12 +764,7 @@ def score_document(
             if wing_matches > 0:
                 score += profile.idf.get(matched_q_word, 1.0) * LAMBDA_COORD * (wing_matches / n_wings)
     else:
-        # Fallback to L01 binary check when wing_coords not populated
-        for coord, hub_word in sig.hub_coords.items():
-            if coord in profile.coords:
-                q_word = profile.coords[coord]
-                if q_word != hub_word:
-                    score += profile.idf.get(q_word, 1.0) * LAMBDA_COORD
+        score += _l01_coord_meet_for_sig(profile, sig)
 
     # Signal 3 — IDF-weighted neighbor expansion  O(K)
     # Normalize raw correlation weight to [0,1] so it can't dominate BM25.
@@ -657,6 +831,80 @@ BM25_GATE_THRESHOLD = 0.12
 BM25_DOMINANCE_THRESHOLD = 5.0   # queries with max_bm25 >= this use the cap
 BM25_DOMINANCE_CAP = 4.5          # weak-BM25 docs capped at 4.5× their BM25
 
+# Two-tier rank: cheap BM25+κ on all capped candidates; full lattice on top-N only.
+FULL_SCORE_LIMIT = 120
+
+
+def _bm25_for_doc(
+    profile: QueryProfile,
+    did: str,
+    *,
+    doc_tokens: dict[str, frozenset[str]] | None,
+    doc_tf: dict[str, dict[str, int]] | None,
+    doc_len: dict[str, int] | None,
+    avg_dl: float,
+    k1: float = 1.5,
+    b: float = 0.75,
+) -> float:
+    tokens = doc_tokens[did] if doc_tokens and did in doc_tokens else frozenset()
+    tf_d = doc_tf[did] if doc_tf and did in doc_tf else None
+    dl_d = doc_len[did] if doc_len and did in doc_len else 0
+    s1 = 0.0
+    for w in profile.word_set:
+        if w not in tokens:
+            continue
+        idf = profile.idf.get(w, 1.0)
+        if tf_d and dl_d:
+            tf = tf_d.get(w, 0)
+            norm = tf * (k1 + 1.0) / (tf + k1 * (1.0 - b + b * dl_d / avg_dl))
+        else:
+            norm = 1.0
+        s1 += idf * norm
+    return s1
+
+
+def _select_full_score_pool(
+    candidates: list[str],
+    bm25_scores: dict[str, float],
+    *,
+    attractor_index,
+    query_kappa_keys,
+    limit: int,
+    protect: Iterable[str] = (),
+) -> set[str]:
+    """Top ``limit`` docs by BM25 + κ overlap; protected docs always included."""
+    protect_set = set(protect) & set(candidates)
+    if len(candidates) <= limit:
+        return set(candidates)
+    if attractor_index is not None and query_kappa_keys:
+        pre_ranked = attractor_index.rank_docs_by_overlap(
+            query_kappa_keys,
+            candidate_doc_ids=candidates,
+        )
+        overlap_rank = {doc_id: i for i, (_, doc_id) in enumerate(pre_ranked)}
+        order = sorted(
+            candidates,
+            key=lambda did: (
+                -bm25_scores.get(did, 0.0),
+                overlap_rank.get(did, len(candidates)),
+                did,
+            ),
+        )
+    else:
+        order = sorted(
+            candidates,
+            key=lambda did: (-bm25_scores.get(did, 0.0), did),
+        )
+    picked = set(order[:limit]) | protect_set
+    if len(picked) <= limit:
+        return picked
+    # Too many protected — keep all protected + top BM25 from rest
+    extra = limit - len(protect_set)
+    if extra <= 0:
+        return protect_set
+    rest = [d for d in order if d not in protect_set][:extra]
+    return protect_set | set(rest)
+
 
 def rank_with_hub_signatures(
     profile: QueryProfile,
@@ -675,36 +923,53 @@ def rank_with_hub_signatures(
     anchor_idx=None,
     query_anchor_comps: "dict[int, float] | None" = None,
     query_phrase_comps: "dict[int, float] | None" = None,
+    attractor_index=None,
+    query_kappa_keys=None,
+    kappa_candidate_cap: int = 0,
+    protect_doc_ids: Iterable[str] | None = None,
     top_k: int = 100,
 ) -> list[str]:
     """
     Score candidate docs; return top_k ranked ids.
 
-    BM25 gating: lattice Signals 2–6 are suppressed for docs whose BM25
+    BM25 gating: lattice Signals 2–8 are suppressed for docs whose BM25
     (Signal 1) score is below BM25_GATE_THRESHOLD × max_bm25_in_candidates.
     This prevents correlation/neighbor noise from reordering docs that have
     no lexical overlap with the query.
+
+    Signal 8a (BIT 10): when ``attractor_index`` and ``query_kappa_keys`` are
+    set, adds κ Jaccard bonus inside the BM25-gated branch. Optional
+    ``kappa_candidate_cap`` pre-filters candidates by overlap before Pass A.
     """
+    from pipeline.bit_10_score_fusion import (
+        cap_candidates_by_kappa_overlap,
+        signal_8a_kappa_jaccard,
+    )
+
     cache = composite_index.word_cache if composite_index else {}
+
+    candidates = list(candidate_ids)
+    protect = list(protect_doc_ids or ())
+    if kappa_candidate_cap > 0 and attractor_index is not None and query_kappa_keys:
+        candidates = cap_candidates_by_kappa_overlap(
+            candidates,
+            attractor_index,
+            query_kappa_keys,
+            cap=kappa_candidate_cap,
+            protect=protect,
+        )
 
     # --- Pass A: BM25-only scores for gating threshold ---
     bm25_scores: dict[str, float] = {}
-    k1, b = 1.5, 0.75
-    for did in candidate_ids:
-        tokens = (doc_tokens[did] if doc_tokens and did in doc_tokens else frozenset())
-        tf_d = doc_tf[did] if doc_tf and did in doc_tf else None
-        dl_d = doc_len[did] if doc_len and did in doc_len else 0
-        s1 = 0.0
-        for w in profile.word_set:
-            if w in tokens:
-                idf = profile.idf.get(w, 1.0)
-                if tf_d and dl_d:
-                    tf = tf_d.get(w, 0)
-                    norm = tf * (k1 + 1.0) / (tf + k1 * (1.0 - b + b * dl_d / avg_dl))
-                else:
-                    norm = 1.0
-                s1 += idf * norm
-        bm25_scores[did] = s1
+    for did in candidates:
+        bm25_scores[did] = _bm25_for_doc(
+            profile,
+            did,
+            doc_tokens=doc_tokens,
+            doc_tf=doc_tf,
+            doc_len=doc_len,
+            avg_dl=avg_dl,
+        )
     max_bm25 = max(bm25_scores.values(), default=0.0)
 
     # Gate only when the query HAS some lexical signal (max_bm25 above a floor).
@@ -715,15 +980,34 @@ def rank_with_hub_signatures(
     lattice_gating_active = max_bm25 >= BM25_QUERY_FLOOR
     bm25_gate = max_bm25 * BM25_GATE_THRESHOLD if lattice_gating_active else 0.0
 
-    # --- Pass B: full scoring with BM25 gating ---
+    full_score_ids = _select_full_score_pool(
+        candidates,
+        bm25_scores,
+        attractor_index=attractor_index,
+        query_kappa_keys=query_kappa_keys,
+        limit=FULL_SCORE_LIMIT,
+        protect=protect,
+    )
+
+    # --- Pass B: two-tier scoring with BM25 gating ---
     scored: list[tuple[float, str]] = []
-    for did in candidate_ids:
+    for did in candidates:
         s1 = bm25_scores.get(did, 0.0)
         if lattice_gating_active and s1 < bm25_gate:
-            # BM25 signal exists for this query but this doc has near-zero lexical match.
-            # Lattice signals would only add noise relative to better-matching docs.
             if s1 > 0:
                 scored.append((s1, did))
+            continue
+
+        if did not in full_score_ids:
+            s = s1 + signal_8a_kappa_jaccard(
+                profile,
+                did,
+                attractor_index,
+                query_kappa_keys,
+                lambda_kappa=LAMBDA_KAPPA,
+            )
+            if s > 0:
+                scored.append((s, did))
             continue
 
         sig = hub_sigs.get(did)
@@ -736,6 +1020,7 @@ def rank_with_hub_signatures(
             profile, tokens, sig,
             doc_tf=tf, doc_len=dl, avg_dl=avg_dl,
             doc_composites=dc, composite_cache=cache,
+            registry=registry,
         )
         # Signal 4: subword composite origin score
         if sub_comp_idx is not None and registry is not None:
@@ -757,6 +1042,21 @@ def rank_with_hub_signatures(
         if query_anchor_comps is not None and anchor_idx is not None:
             from aethos_discriminative import score_with_heavy_anchors
             s += score_with_heavy_anchors(query_anchor_comps, did, anchor_idx)
+
+        # Signal 8a: κ Jaccard (BIT 10) — BM25-gated branch only
+        s += signal_8a_kappa_jaccard(
+            profile,
+            did,
+            attractor_index,
+            query_kappa_keys,
+            lambda_kappa=LAMBDA_KAPPA,
+        )
+
+        # Lattice noise cap: non-BM25 signals cannot dominate when doc has lexical match
+        if lattice_gating_active and s1 > 0 and s > s1:
+            max_extra = s1 * 3.0
+            if s - s1 > max_extra:
+                s = s1 + max_extra
 
         # BM25 dominance cap (Fix 2a): when the query has strong lexical signal,
         # prevent weak-BM25 docs from overtaking strong-BM25 docs purely via

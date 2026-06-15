@@ -1,0 +1,21 @@
+{
+  "name": "packets-and-strings",
+  "private": true,
+  "description": "AETHOS / Packets and Strings book build",
+  "scripts": {
+    "book:ch1": "node book/01_Chapter_1.js",
+    "book:ch2": "node book/02_Chapter_2.js",
+    "book:ch3d": "node book/03_ThreeD_Complex_Plane.js",
+    "book:ch3": "node book/03_Particles.js",
+    "book:ch4": "node book/04_QM.js",
+    "book:ch5": "node book/05_Atoms_and_Cosmology.js",
+    "book:ch6": "node book/06_Synthesis.js",
+    "book:front": "node book/00_Front_Matter.js",
+    "book:appendices": "node book/07_Appendices.js",
+    "book:full": "python scripts/merge_book_docx.py",
+    "book:pdf": "python scripts/export_book_pdf.py"
+  },
+  "dependencies": {
+    "docx": "^9.5.0"
+  }
+}

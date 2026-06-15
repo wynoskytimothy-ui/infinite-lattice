@@ -1,4 +1,6 @@
-# The Right-Triangle Recurrence
+# The Right-Triangle Recurrence (π lattice)
+
+**π lattice only** — unit-circle bisection. The **3D complex plane** Ψ=(z,ζ) is a separate construction (`aethos_complex_plane.py`). See repo [`ONTOLOGY.md`](../ONTOLOGY.md).
 
 A complete computational geometry framework derived from one Pythagorean identity.
 

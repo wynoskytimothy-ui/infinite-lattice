@@ -115,6 +115,17 @@ Default reference: `|dB/dz|=10³ T/m`, `L=0.04 m`, `v=10⁵ m/s` → `τ_m=4×10
 
 **3He / 4He test:** fit `Λ_{3He}`, `Λ_{4He}` under matched `(P,T)`; model predicts `Λ_{3He} ≠ Λ_{4He}` via `f_{coin,i}`.
 
+**E-check profile (2026-06-05, `scripts/calibrate_discriminators.py`):**
+
+| Quantity | Calibrated inputs | Result |
+|----------|-------------------|--------|
+| `Λ_{3He}/Λ_{4He}` | `f_{coin,3}=0.405`, `f_{coin,4}=0.5` | **1.075** (~7.5%) |
+| `R_pe^pred` | primes, `count=80`, `depth=3` | **1847.1** (0.6% vs CODATA) |
+
+Code: `lambda_he3_he4_ratio_calibrated()`, `r_pe_model_reference_bootstrap()`.
+
+Note: placeholder defaults `f_{3}=0.75`, `f_{4}=0.15` overshoot; proxy scales as `(f_3/f_4)(m_4/m_3)`.
+
 ---
 
 ## 6. Tunneling / chemistry / atom

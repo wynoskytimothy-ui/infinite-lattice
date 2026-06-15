@@ -4,7 +4,7 @@ Rows = source section. Columns = sections that must be rechecked when source cha
 
 | Source | Recheck targets | Why |
 |---|---|---|
-| 1 Photon sea | 2–12 | Base ontology, photon math, causality assumptions |
+| 1 Photon sea | 2–12 | Base ontology, photon math, causality, **P1-L** cell/`λ_C`/C1 (book Ch 1) |
 | 2 Electron | 3–12 | Pump/clock mechanism reused everywhere |
 | 3 Proton | 4,9,10,11 | Fusion, drain mechanics, mass/charge structure |
 | 4 Neutron | 9,10,11 | Trapped layers, pressure, decay and stability |
@@ -24,6 +24,9 @@ These cross-links were explicitly closed in this pass:
 - `2 -> 12` clock-law closure:
   - `f_b=f_{b0}/gamma`
   - `v_int=sqrt(c^2-v^2)` mapped to Section-12 `v_time`
+- `2 -> 5` self-observation / speed-limit closure:
+  - bounce cycle = continuous self-observation (Sec 5)
+  - incomplete bounce at `v=c` ⇒ no pump / no electron (Sec 2.5.1)
 - `10 -> 12` gravity-time closure:
   - `v_flow=sqrt(2GM/r)`
   - `d tau / dt = sqrt(1-2GM/(rc^2))` mapped to motion-budget identity

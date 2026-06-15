@@ -157,18 +157,14 @@ class EntanglementRegistry:
 
 def find_morph_pieces(text: str, morph: MorphRegistry) -> list[str]:
     """Token-level morph composites, subwords, and polarity lexicon pieces."""
-    tokens = _TOKEN_RE.findall(text.lower())
-    catalog = set(morph.composites) | set(morph.subwords)
-    found: list[str] = []
-    for tok in tokens:
-        if tok in catalog:
-            found.append(tok)
-            continue
-        if tok in _POLARITY_LEXICON:
-            if tok not in morph.subwords:
-                morph.promote_morph_piece(tok, parents=frozenset({tok}))
-            found.append(tok)
-    return list(dict.fromkeys(found))
+    from aethos_symbol_morph_pieces import morph_pieces_in_text
+
+    return morph_pieces_in_text(
+        morph,
+        text,
+        mode="ingest",
+        polarity_lexicon=_POLARITY_LEXICON,
+    )
 
 
 def score_context(

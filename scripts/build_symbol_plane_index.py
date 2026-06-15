@@ -64,6 +64,7 @@ def main() -> int:
         rare_pairs_only=slim,
         rare_adjacency_only=slim,
         max_adjacency_per_word=max_adj,
+        index_doc_meet_keys=True,
     )
     ms = (time.perf_counter() - t0) * 1000.0
     adj_edges = sum(len(v) for v in plane.word_adjacency.values())

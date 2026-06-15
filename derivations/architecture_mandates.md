@@ -62,16 +62,16 @@
 
 ---
 
-## C6 — Address lattice (`aethos_active`, Sec 12)
+## C6 — 3D complex plane (`aethos_active`, Sec 12)
 
 | Field | Value |
 |-------|--------|
-| **Mandate** | **Physical + computational unified** — the lattice is the geometric coordinate substrate for motion budget / Zeno resolution |
-| **Active nodes** | **Any countable anchor set** may define the active nodes that build correlations — **not limited to primes**. Primes are one canonical species (`SequenceKind.PRIMES`); evens, powers of two, Fibonacci, sqrt-scaled, custom chains, etc. are equally valid **active-set choices**. |
-| **Correlations** | Different active sets → different correlation / address structures on the same 8×4 wing topology (`aethos_sequences.make_chain`, `ActiveNetwork100.bootstrap(chain_species=…)`). |
-| **Naming** | “Prime lattice” = historical label for the **recursive address engine**; do **not** read it as “only primes may participate.” |
-| **Rule** | Lattice modules must **import** Sec 2–12 geometry constants (`L`, `ω_b`, …), not replace them |
-| **Step** | Step 12 gate wires lattice ↔ `v_space²+v_time²=c²`; `\mathcal{M}_{lat}` (Step 3 gap) may depend on **which active set** is physically selected |
+| **Mandate** | **Physical + computational unified** — the **3D complex plane** Ψ=(z,ζ) is the arena; lattice formula on anchor chains generates coordinates |
+| **Active nodes** | **Any countable anchor set** may define active nodes — **not limited to primes**. Primes are one species (`SequenceKind.PRIMES`); evens, powers of two, Fibonacci, sqrt-scaled, custom chains, etc. are equally valid |
+| **Correlations** | Different species → different (X,Y,ζ) on the same 8×4 wing topology (`aethos_sequences.make_chain`, `ActiveNetwork100.bootstrap(chain_species=…)`). |
+| **Naming** | **Use:** 3D complex plane / lattice formula. **Deprecated:** prime lattice, infinity lattice, φ-prime lattice. See repo `ONTOLOGY.md`. **π lattice** (Part I) is a **separate** construction. |
+| **Rule** | 3D complex plane modules must **import** Sec 2–12 geometry constants (`L`, `ω_b`, …), not replace them |
+| **Step** | Step 12 gate wires plane ↔ `v_space²+v_time²=c²`; `\mathcal{M}_{lat}` (Step 3 gap) may depend on **which species** is physically selected |
 | **Tag** | **GEOMETRY** (Sec 12); code track **PHYSICS-LATTICE** |
 
 ---

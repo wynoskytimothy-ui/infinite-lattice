@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lattice-rag"
+version = "0.1.0"
+description = "Append-only multi-view lattice retrieval engine — BM25-class accuracy by pure counting on prime addresses, no neural weights."
+readme = "RAG_README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "AETHOS" }]
+keywords = ["retrieval", "search", "bm25", "rag", "inverted-index", "append-only"]
+dependencies = ["numpy"]
+
+[project.urls]
+Documentation = "README.md"
+
+[tool.setuptools]
+py-modules = [
+    "lattice_rag",
+    "aethos_append_index",
+    "aethos_bridges",
+    "aethos_sharded_index",
+]
+
+[tool.setuptools.packages.find]
+include = ["core*"]

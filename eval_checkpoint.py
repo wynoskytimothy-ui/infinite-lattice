@@ -36,6 +36,7 @@ class EvalBundle:
     p99_ingest_ms: float
     bytes_per_doc: float
     n_docs: int
+    attractor_index: Any = None  # CorpusAttractorIndex (BIT 3/4), built post-ingest
 
 
 def checkpoint_path(dataset: str, mode: str = "quality") -> Path:

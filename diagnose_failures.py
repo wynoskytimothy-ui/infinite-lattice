@@ -68,6 +68,31 @@ from aethos_phrase_composite import (
 )
 from aethos_subword_composite import build_subword_composite_index, subword_composite_score
 from aethos_tokenize import tokenize_words
+from pipeline.bit_01_word_cell import verify_bit01_gate
+from pipeline.bit_02_attractor_key import verify_bit02_gate
+from pipeline.bit_03_doc_attractor_set import (
+    build_attractor_index_from_hub_signatures,
+    verify_bit03_gate,
+)
+from pipeline.bit_04_candidate_router import (
+    Bit04GateReport,
+    DEFAULT_EXPAND_NEIGHBOR_KAPPA,
+    DEFAULT_UNION_LEXICAL,
+    candidate_set_sizes,
+    route_query_candidates,
+    verify_bit04_gate,
+)
+from pipeline.bit_05_z_band import verify_bit05_gate
+from pipeline.bit_06_notch_bind import build_all_notch_fingerprints, verify_bit06_gate
+from pipeline.bit_07_meet_witness import (
+    build_meet_witness_index,
+    verify_bit07_gate,
+    verify_bit07_routing_gate,
+)
+from pipeline.bit_09_query_cell_profile import verify_bit09_gate
+from pipeline.bit_10_score_fusion import verify_bit10_gate
+from aethos_hub_signature import build_all_hub_signatures
+from eval_beir import build_meet_index, build_neighbor_weights, load_qrels, load_queries, load_paths, merge_qrels
 
 # Rarity threshold — must match build_heavy_anchor_index default
 RARITY_THRESHOLD = 0.018
@@ -763,15 +788,309 @@ def diagnose(
     print(f"{'#'*W}")
 
 
+def run_bit01_gate(registry, *, max_words: int = 100) -> bool:
+    """BIT 1 gate — cell(w) matches hub coords for vocabulary sample."""
+    passed, total, failures = verify_bit01_gate(registry, max_words=max_words)
+    print(f"\nBIT 1 gate: {passed}/{total} words match hub SpacetimeCell", flush=True)
+    for word, reason in failures[:10]:
+        print(f"  FAIL {word!r}: {reason}", flush=True)
+    if len(failures) > 10:
+        print(f"  ... and {len(failures) - 10} more", flush=True)
+    return passed == total and total > 0
+
+
+def run_bit02_gate() -> bool:
+    ok, failures = verify_bit02_gate()
+    print(f"\nBIT 2 gate: {'PASS' if ok else 'FAIL'}", flush=True)
+    for msg in failures:
+        print(f"  FAIL {msg}", flush=True)
+    return ok
+
+
+def run_bit03_gate(registry, cidx, *, sample_size: int = 50) -> bool:
+    sigs = build_all_hub_signatures(cidx.doc_ids, cidx.doc_tokens, registry, top_k=12)
+    passed, total, failures = verify_bit03_gate(
+        registry,
+        sigs,
+        sample_size=sample_size,
+    )
+    print(f"\nBIT 3 gate: {passed}/{total} docs retrievable by top-hub κ", flush=True)
+    for doc_id, reason in failures[:10]:
+        print(f"  FAIL {doc_id!r}: {reason}", flush=True)
+    if len(failures) > 10:
+        print(f"  ... and {len(failures) - 10} more", flush=True)
+    summary = build_attractor_index_from_hub_signatures(registry, sigs).summary()
+    print(f"  index: {summary['buckets']} buckets, {summary['docs']} docs, "
+          f"avg {summary['avg_keys_per_doc']:.1f} keys/doc", flush=True)
+    return passed == total and total > 0
+
+
+def run_bit04_gate(
+    registry,
+    cidx,
+    *,
+    dataset: str = "scifact",
+    radius: int = 1,
+    min_candidates: int = 8,
+    target: float = 0.90,
+) -> bool:
+    root = Path(resolve_beir_root())
+    paths = load_paths(root, dataset)
+    queries = load_queries(paths.queries) if paths.queries.exists() else {}
+    qrels = merge_qrels(
+        load_qrels(paths.qrels_test) if paths.qrels_test.exists() else {},
+        load_qrels(paths.qrels_train) if paths.qrels_train.exists() else {},
+    )
+    sigs = build_all_hub_signatures(cidx.doc_ids, cidx.doc_tokens, registry, top_k=12)
+    index = build_attractor_index_from_hub_signatures(registry, sigs)
+    neighbor_map = build_neighbor_weights(registry)
+    meet_index = build_meet_witness_index(sigs, registry)
+    report = verify_bit04_gate(
+        registry,
+        queries,
+        qrels,
+        cidx.doc_ids,
+        cidx.doc_tokens,
+        sigs,
+        cidx.inv,
+        neighbor_map,
+        index=index,
+        meet_index=meet_index,
+        radius=radius,
+        min_candidates=min_candidates,
+        target=target,
+    )
+    loaded = set(cidx.doc_ids)
+    routes = []
+    for qid, query in list(queries.items())[:200]:
+        gold = {d for d, r in qrels.get(qid, {}).items() if r > 0 and d in loaded}
+        if not gold:
+            continue
+        from aethos_tokenize import tokenize_words
+
+        route = route_query_candidates(
+            tokenize_words(query),
+            registry,
+            index,
+            cidx.inv,
+            neighbor_map,
+            cidx.doc_ids,
+            radius=radius,
+            min_candidates=min_candidates,
+            meet_index=meet_index,
+        )
+        routes.append(route)
+    sizes = candidate_set_sizes(routes)
+    print(
+        f"\nBIT 4 gate: {'PASS' if report.passed else 'FAIL'} "
+        f"(target recall_merged≥{target:.2f})",
+        flush=True,
+    )
+    print(
+        f"  in-corpus gold: {report.n_gold_pairs_in_corpus}/{report.n_gold_pairs} pairs "
+        f"({100*report.gold_missing_rate:.0f}% missing from loaded corpus)",
+        flush=True,
+    )
+    print(
+        f"  recall_attr={report.recall_attr:.3f}  "
+        f"recall_attr_neighbor={report.recall_attr_neighbor:.3f}  "
+        f"recall_merged={report.recall_merged:.3f}",
+        flush=True,
+    )
+    print(
+        f"  |C(q)| p50={sizes['p50']:.0f} p95={sizes['p95']:.0f} "
+        f"({int(sizes['n'])} in-corpus queries)",
+        flush=True,
+    )
+    for qid, reason in report.failures[:8]:
+        print(f"  FAIL {qid}: {reason}", flush=True)
+    if len(report.failures) > 8:
+        print(f"  ... and {len(report.failures) - 8} more", flush=True)
+    return report.passed
+
+
+def run_bit05_gate() -> bool:
+    ok, failures = verify_bit05_gate()
+    print(f"\nBIT 5 gate: {'PASS' if ok else 'FAIL'}", flush=True)
+    for msg in failures:
+        print(f"  FAIL {msg}", flush=True)
+    return ok
+
+
+def run_bit06_gate(registry, cidx) -> bool:
+    sigs = build_all_hub_signatures(cidx.doc_ids, cidx.doc_tokens, registry, top_k=12)
+    ok, failures = verify_bit06_gate(registry, sigs)
+    fps = build_all_notch_fingerprints(sigs, registry)
+    avg_payload = (
+        sum(fp.payload_bytes for fp in fps.values()) / len(fps) if fps else 0.0
+    )
+    print(f"\nBIT 6 gate: {'PASS' if ok else 'FAIL'}", flush=True)
+    print(f"  {len(fps)} doc fingerprints, avg payload {avg_payload:.0f} B", flush=True)
+    for msg in failures[:8]:
+        print(f"  FAIL {msg}", flush=True)
+    if len(failures) > 8:
+        print(f"  ... and {len(failures) - 8} more", flush=True)
+    return ok
+
+
+def run_bit07_gate(registry, cidx) -> bool:
+    sigs = build_all_hub_signatures(cidx.doc_ids, cidx.doc_tokens, registry, top_k=12)
+    ok, failures = verify_bit07_gate(registry, sigs)
+    _, avg, route_failures = verify_bit07_routing_gate(
+        registry,
+        sigs,
+        cidx.doc_tokens,
+        min_factor_hits=1,
+    )
+    idx = build_meet_witness_index(sigs, registry)
+    summary = idx.summary()
+    print(f"\nBIT 7 gate: {'PASS' if ok else 'FAIL'}", flush=True)
+    print(
+        f"  index: {summary['factors']} factors, {summary['docs']} docs, "
+        f"routing recall avg={avg:.2f}",
+        flush=True,
+    )
+    for msg in failures + route_failures:
+        print(f"  FAIL {msg}", flush=True)
+    return ok
+
+
+def run_bit09_gate(registry, cidx) -> bool:
+    sigs = build_all_hub_signatures(cidx.doc_ids, cidx.doc_tokens, registry, top_k=12)
+    index = build_attractor_index_from_hub_signatures(registry, sigs)
+    neighbor_map = build_neighbor_weights(registry)
+    ok, failures = verify_bit09_gate(
+        registry,
+        neighbor_map=neighbor_map,
+        doc_freq=cidx.doc_freq,
+        n_docs=len(cidx.doc_ids),
+        index=index,
+    )
+    print(f"\nBIT 9 gate: {'PASS' if ok else 'FAIL'}", flush=True)
+    for msg in failures:
+        print(f"  FAIL {msg}", flush=True)
+    return ok
+
+
+def run_bit10_gate(registry, cidx) -> bool:
+    from eval_beir import build_neighbor_weights
+
+    sigs = build_all_hub_signatures(cidx.doc_ids, cidx.doc_tokens, registry, top_k=12)
+    index = build_attractor_index_from_hub_signatures(registry, sigs)
+    neighbor_map = build_neighbor_weights(registry)
+    query = "phone technical software"
+    profile = build_query_profile(
+        query,
+        registry,
+        neighbor_map=neighbor_map,
+        doc_freq=cidx.doc_freq,
+        n_docs=len(cidx.doc_ids),
+    )
+    from pipeline.bit_09_query_cell_profile import build_query_cell_profile
+
+    cell_profile = build_query_cell_profile(
+        query,
+        registry,
+        neighbor_map=neighbor_map,
+        doc_freq=cidx.doc_freq,
+        n_docs=len(cidx.doc_ids),
+    )
+    ok, failures = verify_bit10_gate(
+        registry,
+        profile,
+        cell_profile,
+        index,
+        sigs,
+        cidx.doc_ids,
+        cidx.doc_ids,
+        doc_tokens=cidx.doc_tokens,
+    )
+    print(f"\nBIT 10 gate: {'PASS' if ok else 'FAIL'}", flush=True)
+    for msg in failures:
+        print(f"  FAIL {msg}", flush=True)
+    return ok
+
+
+def run_pipeline_gates(
+    registry,
+    cidx,
+    *,
+    bit01_max_words: int = 100,
+    bit03_sample: int = 50,
+    dataset: str = "scifact",
+    bit04_target: float = 0.90,
+) -> bool:
+    ok = run_bit01_gate(registry, max_words=bit01_max_words)
+    ok = run_bit02_gate() and ok
+    ok = run_bit03_gate(registry, cidx, sample_size=bit03_sample) and ok
+    ok = run_bit04_gate(
+        registry,
+        cidx,
+        dataset=dataset,
+        target=bit04_target,
+    ) and ok
+    ok = run_bit05_gate() and ok
+    ok = run_bit06_gate(registry, cidx) and ok
+    ok = run_bit07_gate(registry, cidx) and ok
+    ok = run_bit09_gate(registry, cidx) and ok
+    ok = run_bit10_gate(registry, cidx) and ok
+    return ok
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="AETHOS retrieval failure diagnostic")
     parser.add_argument("--dataset", default="scifact")
     parser.add_argument("--n", type=int, default=5, help="Number of failing queries to trace")
     parser.add_argument("--max-docs", type=int, default=None)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--check-bit01",
+        action="store_true",
+        help="Run BIT 1 gate only (word→SpacetimeCell vs hub coords) and exit",
+    )
+    parser.add_argument(
+        "--check-pipeline",
+        action="store_true",
+        help="Run BIT 1–10 pipeline gates and exit",
+    )
+    parser.add_argument(
+        "--bit01-max-words",
+        type=int,
+        default=100,
+        help="Vocabulary sample size for BIT 1 gate",
+    )
+    parser.add_argument(
+        "--bit03-sample",
+        type=int,
+        default=50,
+        help="Doc sample size for BIT 3 gate",
+    )
     args = parser.parse_args()
 
     sys.stdout.reconfigure(encoding="utf-8")
+
+    if args.check_bit01 or args.check_pipeline:
+        root = Path(resolve_beir_root())
+        paths = load_paths(root, args.dataset)
+        corpus = load_corpus(paths.corpus, max_docs=args.max_docs or 500)
+        pipe = make_pipeline("scale")
+        _, cidx = ingest_corpus(pipe, corpus, mode="scale")
+        try:
+            pipe.flush()
+        except (IndexError, RuntimeError):
+            pass
+        if args.check_pipeline:
+            ok = run_pipeline_gates(
+                pipe.registry,
+                cidx,
+                bit01_max_words=args.bit01_max_words,
+                bit03_sample=args.bit03_sample,
+                dataset=args.dataset,
+            )
+        else:
+            ok = run_bit01_gate(pipe.registry, max_words=args.bit01_max_words)
+        return 0 if ok else 1
+
     diagnose(
         dataset=args.dataset,
         n_failing=args.n,

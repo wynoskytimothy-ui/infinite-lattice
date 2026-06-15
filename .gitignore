@@ -44,7 +44,12 @@ ocean_trace_demo.csv
 # *.npz are bearing datasets; bearing_*.json are monitor run outputs.
 marco_pool.pkl
 text8.zip
+text8
 *.npz
 bearing_*.json
 wiki_cache.json
 _viz_series.txt
+
+# Node + run logs (never source)
+node_modules/
+logs/

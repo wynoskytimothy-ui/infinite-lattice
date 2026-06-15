@@ -4,11 +4,23 @@
 │                                                                         │
 │   ═══════════════════════════════════════════════════════════════════   │
 │                                                                         │
+│   LATTICE FIRST (read before the sea):                                  │
+│                                                                         │
+│   The universe is a lattice of cells.                                   │
+│   Each cell: width λ_C, crossing time t_cell = λ_C/c.                   │
+│   Spacetime measure A_cell = λ_C².                                        │
+│   Mass fills cells. Energy = mass × measure: E = mc².                     │
+│   c² is the cell-area conversion factor (Pythagorean geometry).           │
+│   The photon sea is the continuous medium INSIDE and BETWEEN cells.       │
+│                                                                         │
+│   ═══════════════════════════════════════════════════════════════════   │
+│                                                                         │
 │   WHAT IT IS:                                                           │
 │                                                                         │
 │   The universe is a single connected ocean of photons.                  │
 │   Not something light travels THROUGH.                                  │
 │   The sea IS the medium. Space IS the sea.                              │
+│   The lattice is the address grid on the sea.                             │
 │                                                                         │
 │   ═══════════════════════════════════════════════════════════════════   │
 │                                                                         │

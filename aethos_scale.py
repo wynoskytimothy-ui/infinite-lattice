@@ -133,6 +133,35 @@ def fingerprint_document(doc_id: int, tokens: list[str], top_hub: str = "") -> D
     )
 
 
+def fingerprint_document_auto(
+    doc_id: int,
+    tokens: list[str],
+    *,
+    top_hub: str = "",
+    registry=None,
+) -> DocFingerprint:
+    """
+    Doc fingerprint respecting STORAGE_BACKEND.
+
+    hub (default): compact CRC fingerprint (~17–40 B)
+    notch: wave-correlation notch payload (~100–120 B) when registry provided
+    """
+    from aethos_notch_encoder import fingerprint_document_notch, storage_backend
+
+    if storage_backend() == "notch" and registry is not None:
+        hub = top_hub or (max(set(tokens), key=tokens.count, default="") if tokens else "")
+        nf = fingerprint_document_notch(doc_id, [hub] if hub else tokens[:3], registry)
+        # Map notch size into DocFingerprint reporting (token fields unchanged)
+        return DocFingerprint(
+            doc_id=doc_id,
+            token_count=len(tokens),
+            unique_tokens=len(set(tokens)),
+            stream_crc=nf.encoded_size() & 0xFFFFFFFF,
+            top_hub=nf.top_hub[:32],
+        )
+    return fingerprint_document(doc_id, tokens, top_hub=top_hub)
+
+
 def timed_ingest_one(pipe, doc_id: int, text: str) -> tuple[DocTiming, DocFingerprint]:
     from aethos_tokenize import tokenize_words
 

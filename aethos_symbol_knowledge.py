@@ -49,7 +49,7 @@ from aethos_symbol_subjects import (
 from beir_data_root import resolve_beir_root
 
 _TOKEN_RE = re.compile(r"[a-z]+")
-KNOWLEDGE_VERSION = 3
+KNOWLEDGE_VERSION = 4
 
 _BEIR_URLS: dict[str, str] = {
     "scifact": "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/scifact.zip",
@@ -382,6 +382,68 @@ class SymbolKnowledgeIndex:
             self._chamber_cooccur.get(MASTER_CHAMBER, {}),
         )
 
+    def _allows_morph_family_link(self, left: str, right: str) -> bool:
+        """Morph families must not bridge membrane filler ↔ signal (cellular rule)."""
+        from aethos_symbol_cellular import CellularRole
+
+        if not self.cellular.allows_correlation(left, right):
+            return False
+        rl, rr = self.cellular.role_of(left), self.cellular.role_of(right)
+        return rl == CellularRole.SIGNAL and rr == CellularRole.SIGNAL
+
+    def _morph_root_imag(self, root: str) -> int | None:
+        sw = self.morph.subwords.get(root.lower())
+        return int(sw.imaginary_position) if sw else None
+
+    def _vocab_tokens_for_morph_root(self, root: str, *, max_extra: int = 96) -> set[str]:
+        """Surface forms sharing promoted root subword (cell → cells, cellular)."""
+        rt = root.lower()
+        if rt not in self.morph.subwords or len(rt) < 4:
+            return set()
+        out: set[str] = set()
+        for w in self.vocab:
+            if w == rt or rt not in w:
+                continue
+            if len(w) - len(rt) > 8:
+                continue
+            out.add(w)
+            if len(out) >= max_extra:
+                break
+        return out
+
+    def _collect_morph_families(self) -> list[frozenset[str]]:
+        """Morph correlation families for P3 root ↔ inflected links."""
+        seen: set[frozenset[str]] = set()
+        groups: list[frozenset[str]] = []
+
+        def _push(raw: set[str]) -> None:
+            if len(raw) < 2:
+                return
+            key = frozenset(raw)
+            if key in seen:
+                return
+            seen.add(key)
+            groups.append(key)
+
+        for corr in self.morph.correlations.values():
+            fam: set[str] = set(corr.words)
+            fam.add(corr.root_text)
+            fam |= self._vocab_tokens_for_morph_root(corr.root_text)
+            _push(fam)
+
+        by_root: dict[str, set[str]] = {}
+        for word, comp in self.morph.composites.items():
+            rt = comp.correlation.root_text
+            bucket = by_root.setdefault(rt, set())
+            bucket.add(word)
+            bucket.update(comp.correlation.words)
+        for rt, fam in by_root.items():
+            fam.add(rt)
+            fam |= self._vocab_tokens_for_morph_root(rt)
+            _push(fam)
+
+        return groups
+
     def _shared_morph_links(self, chamber: int) -> dict[tuple[str, str], CrossLink]:
         """Morph family links — identical across chambers, computed once."""
         if self._morph_links_shared is not None:
@@ -398,23 +460,56 @@ class SymbolKnowledgeIndex:
                 )
                 for k, v in self._morph_links_shared.items()
             }
+        from aethos_rare_rank import _DocFreqCache
+
+        cache = _DocFreqCache(self)
+        cache.warm_corpus()
         base: dict[tuple[str, str], CrossLink] = {}
-        _MAX_MORPH_FAMILY = 24
-        by_root_prime: dict[int, set[str]] = {}
-        for word, comp in self.morph.composites.items():
-            by_root_prime.setdefault(comp.correlation.root_prime, set()).add(word)
-        for members in by_root_prime.values():
+        _MAX_MORPH_FAMILY = 64
+        _HUB_ROOT_DOC_FREQ = 400
+
+        for group in self._collect_morph_families():
+            members = set(group)
+            roots = [w for w in members if w in self.morph.subwords]
+            if roots:
+                hub_root = min(roots, key=len)
+                if len(members) > _MAX_MORPH_FAMILY and cache.get(hub_root) > _HUB_ROOT_DOC_FREQ:
+                    members = {
+                        w for w in members
+                        if w in self.morph.composites or w in self.morph.subwords
+                    }
             if len(members) > _MAX_MORPH_FAMILY:
                 continue
+            if len(members) < 2:
+                continue
+            root_imag = self._morph_root_imag(min(roots, key=len)) if roots else None
             mlist = sorted(members)
             for i, a in enumerate(mlist):
                 for b in mlist[i + 1 :]:
+                    if not self._allows_morph_family_link(a, b):
+                        continue
                     self._add_link(
                         a, b, kind="morph", strength=0.75,
                         chamber=MASTER_CHAMBER, store=base,
+                        intersection_imag=root_imag,
                     )
         self._morph_links_shared = dict(base)
         return self._shared_morph_links(chamber)
+
+    def _refresh_morph_links(self, chamber: int = MASTER_CHAMBER) -> int:
+        """Recompute morph links after P3 family expansion (safe on load)."""
+        self._morph_links_shared = None
+        self._family_of_cache = None
+        links = dict(self.chamber_links.get(chamber, {}))
+        removed = 0
+        for key, lk in list(links.items()):
+            if lk.kind == "morph":
+                del links[key]
+                removed += 1
+        fresh = self._shared_morph_links(chamber)
+        links.update(fresh)
+        self.chamber_links[chamber] = links
+        return len(fresh) - removed
 
     def _build_cross_links(
         self,
@@ -540,19 +635,51 @@ class SymbolKnowledgeIndex:
                         via=right, chamber=chamber, store=store,
                     )
 
+    def morph_canonical_surface(self, word: str) -> str:
+        """
+        P4 canonical surface for κ dedup — one witness per morph family per doc.
+
+        Prefers promoted morph root subword (``cell`` for ``cellular`` / ``cells``).
+        """
+        w = word.lower()
+        if w in self.morph.subwords:
+            return w
+        if w in self.morph.composites:
+            rt = self.morph.composites[w].correlation.root_text
+            if rt in self.morph.subwords:
+                return rt
+            return w
+        fam = self._word_families().get(w, {w})
+        roots = sorted(
+            (x for x in fam if x in self.morph.subwords and len(x) >= 3),
+            key=lambda x: (len(x), x),
+        )
+        if roots:
+            return roots[0]
+        for corr in self.morph.correlations.values():
+            if w in corr.words:
+                return corr.root_text
+        return w
+
     def _word_families(self) -> dict[str, set[str]]:
         if self._family_of_cache is not None:
             return self._family_of_cache
         out: dict[str, set[str]] = {}
+        for group in self._collect_morph_families():
+            members = set(group)
+            for w in members:
+                out.setdefault(w, set()).update(members)
         for word, comp in self.morph.composites.items():
             fam = out.setdefault(word, set())
             fam.add(word)
-            for w in comp.correlation.words:
-                fam.add(w)
+            fam.update(comp.correlation.words)
+            fam.add(comp.correlation.root_text)
         for corr in self.morph.correlations.values():
-            for w in corr.words:
-                fam = out.setdefault(w, set())
-                fam.update(corr.words)
+            members = set(corr.words)
+            members.add(corr.root_text)
+            members |= self._vocab_tokens_for_morph_root(corr.root_text)
+            for w in members:
+                out.setdefault(w, set()).update(members)
         self._family_of_cache = out
         return out
 
@@ -880,6 +1007,8 @@ class SymbolKnowledgeIndex:
         if not isinstance(obj, cls):
             raise TypeError(f"expected SymbolKnowledgeIndex, got {type(obj)}")
         cls._migrate_chambers(obj)
+        obj._refresh_morph_links()
+        obj.version = KNOWLEDGE_VERSION
         return obj
 
     @staticmethod

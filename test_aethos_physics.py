@@ -120,12 +120,18 @@ from aethos_physics import (
     lambda_n_from_sg,
     lattice_mass_multiplier,
     m_lat_from_active_network,
+    REFERENCE_NETWORK_COUNT,
+    REFERENCE_NETWORK_DEPTH,
+    lambda_he3_he4_ratio_calibrated,
+    r_pe_model_reference_bootstrap,
     r_pe_model_with_lattice,
+    wing_activation_analysis,
     frame_width_n,
     width_descent_positive_finite,
     mixed_radix_address,
     geometric_refinement_time_total,
     motion_budget_residual,
+    bounce_crossing_time_lab,
     d_tau_dt_kinematic,
     gamma_lorentz,
     v_time_from_v_space,
@@ -478,6 +484,11 @@ class TestDoubleSlitGeometryStep8(unittest.TestCase):
     def test_lambda_he3_he4_not_equal(self):
         self.assertGreater(lambda_he3_he4_ratio(), 1.5)
 
+    def test_lambda_he3_he4_calibrated_band(self):
+        r = lambda_he3_he4_ratio_calibrated()
+        self.assertGreater(r, 1.05)
+        self.assertLess(r, 1.10)
+
 
 class TestTunnelingGeometryStep7(unittest.TestCase):
     def test_u_bar_positive(self):
@@ -595,15 +606,25 @@ class TestFusionGeometryStep3(unittest.TestCase):
         self.assertGreater(r, 1.5)
         self.assertLess(r, 2.5)
 
+    def test_wing_activation_one_sixteenth(self):
+        wa = wing_activation_analysis(count=80, origin_max_depth=3)
+        self.assertEqual(int(wa["wings_total"]), 1280)
+        self.assertAlmostEqual(wa["global_activation_fraction"], 1.0 / 16.0, places=6)
+        self.assertAlmostEqual(wa["wing_fraction_per_origin"], 1.0 / 16.0, places=6)
+        self.assertAlmostEqual(wa["role_cycles"], 16.0, places=6)
+
     def test_lattice_multiplier_order(self):
-        m = m_lat_from_active_network()
+        # E-check profile (calibration_sheet 2026-06-05): primes, count=80, depth=3
+        m = m_lat_from_active_network(
+            count=REFERENCE_NETWORK_COUNT,
+            origin_max_depth=REFERENCE_NETWORK_DEPTH,
+        )
         self.assertGreater(m, 1400.0)
         self.assertLess(m, 1600.0)
-        r_pred = r_pe_model_with_lattice()
+        r_pred = r_pe_model_reference_bootstrap()
         self.assertGreater(r_pred, 1800.0)
         self.assertLess(r_pred, 1900.0)
-        # E-check ratio matches legacy helper
-        self.assertAlmostEqual(m, lattice_mass_multiplier(), delta=30.0)
+        self.assertAlmostEqual(r_pred, r_pe_model_with_lattice(count=80, origin_max_depth=3), delta=1.0)
 
 
 class TestTimeZenoGeometryStep12(unittest.TestCase):
@@ -612,6 +633,15 @@ class TestTimeZenoGeometryStep12(unittest.TestCase):
 
     def test_motion_budget_zero_residual(self):
         self.assertAlmostEqual(motion_budget_residual(0.6 * C), 0.0, delta=1.0)
+
+    def test_bounce_crossing_time_dilation(self):
+        d = 2.0 * coin_half_width()
+        t0 = bounce_crossing_time_lab(d, 0.0)
+        self.assertAlmostEqual(t0, d / C, places=12)
+        v = 0.9 * C
+        g = gamma_lorentz(v)
+        self.assertAlmostEqual(bounce_crossing_time_lab(d, v), g * t0, places=9)
+        self.assertTrue(math.isinf(bounce_crossing_time_lab(d, C)))
 
     def test_gamma_at_half_c(self):
         self.assertAlmostEqual(d_tau_dt_kinematic(0.5 * C), math.sqrt(3) / 2, places=6)

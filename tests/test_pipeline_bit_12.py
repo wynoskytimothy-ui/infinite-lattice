@@ -8,9 +8,13 @@ import unittest
 from aethos_symbol_knowledge import SymbolKnowledgeIndex
 from pipeline.bit_12_symbol_plane_index import (
     build_symbol_plane_index,
+    canonical_pair_key,
     correlation_meet_keys,
+    get_pair_meet_keys,
     query_symbol_plane_keys,
+    resolve_pair_link,
     route_symbol_plane_candidates,
+    score_doc_meet_witness,
     symbol_word_chain,
     verify_bit12_gate,
     word_to_symbol_plane_cell,
@@ -82,6 +86,22 @@ class TestBit12SymbolPlane(unittest.TestCase):
         )
         self.assertTrue(ok, failures)
 
+    def test_doc_meet_keys_indexed_on_cooccurring_pair(self) -> None:
+        plane = build_symbol_plane_index(
+            self.knowledge, index_doc_meet_keys=True, max_doc_meet_pairs=32,
+        )
+        lk = self.knowledge.correlates("cancer", "cell")
+        self.assertIsNotNone(lk)
+        meet = plane.pair_keys.get(canonical_pair_key(self.knowledge, "cancer", "cell"))
+        self.assertIsNotNone(meet)
+        doc_k = plane.doc_keys.get("d1", set())
+        overlap = len(meet & doc_k)
+        self.assertGreater(overlap, 0, "d1 co-occurs cancer+cell; meet keys on doc")
+        score = score_doc_meet_witness(
+            self.knowledge, plane, ["cancer", "cell"], "d1",
+        )
+        self.assertGreater(score, 0.0)
+
     def test_slim_plane_smaller_than_full(self) -> None:
         full = build_symbol_plane_index(self.knowledge)
         slim = build_symbol_plane_index(
@@ -97,6 +117,41 @@ class TestBit12SymbolPlane(unittest.TestCase):
         self.assertLess(slim_adj, full_adj)
         for nbrs in slim.word_adjacency.values():
             self.assertLessEqual(len(nbrs), 4)
+
+    def test_resolve_pair_link_canonical_bucket(self) -> None:
+        """Morph-canonical surfaces resolve via cross-link family bucket."""
+        lk = resolve_pair_link(self.knowledge, "canc", "cell")
+        self.assertIsNotNone(lk)
+        self.assertGreaterEqual(lk.strength, 0.5)
+
+    def test_canonical_pair_meet_keys_shared(self) -> None:
+        knowledge = SymbolKnowledgeIndex.load("scifact")
+        plane = build_symbol_plane_index(
+            knowledge,
+            rare_pairs_only=True,
+            rare_adjacency_only=True,
+            max_adjacency_per_word=4,
+        )
+        pk_cell = canonical_pair_key(knowledge, "cell", "protein")
+        pk_cellular = canonical_pair_key(knowledge, "cellular", "protein")
+        self.assertEqual(pk_cell, pk_cellular)
+        meet_cell = get_pair_meet_keys(plane, knowledge, "cell", "protein")
+        meet_cellular = get_pair_meet_keys(plane, knowledge, "cellular", "protein")
+        self.assertEqual(meet_cell, meet_cellular)
+
+    def test_family_dedup_reduces_doc_keys(self) -> None:
+        corpus = {"d1": "diminished diminishes lower score pathway"}
+        knowledge = SymbolKnowledgeIndex.build_from_corpus(corpus, dataset="p4_dedup")
+        literal = build_symbol_plane_index(
+            knowledge, canonical_family_index=False, dedupe_family_keys=False,
+        )
+        canonical = build_symbol_plane_index(
+            knowledge, canonical_family_index=True, dedupe_family_keys=True,
+        )
+        lit_k = len(literal.doc_keys.get("d1", set()))
+        can_k = len(canonical.doc_keys.get("d1", set()))
+        self.assertLess(can_k, lit_k)
+        self.assertGreater(len(canonical.word_keys.get("diminishes", set())), 0)
 
     def test_router_faster_than_scan(self) -> None:
         """κ lookup should beat linear scan over all cross_links."""

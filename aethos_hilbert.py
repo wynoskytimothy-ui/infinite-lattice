@@ -225,7 +225,7 @@ def estimate_hilbert_tower(
         "Meet quotient: coordinate collision identifies states (same-ocean)",
         "Origin tree: tensor product across 3^d rooms -- dimensionless depth",
         "k! order fiber: path history orthogonal to sorted multiset content",
-        "Countable species: sum over species -- infinite lattice types",
+        "Countable species: sum over species -- distinct 3D complex plane anchor templates",
         "L4-L9 (token layer): correlation inner product on sparse prime weights",
         "Transgressor n->inf + extend k: separable infinite-dimensional completion",
     )

@@ -127,6 +127,40 @@
 │   = square of wave amplitude at that location.                          │
 │   This is MECHANICAL, not postulated.                                   │
 │                                                                         │
+│   THE SPRING SPIRALS OUT:                                               │
+│                                                                         │
+│   Same lattice strings as the coin — wound as opposing coils.           │
+│   Extended = SOFT (low tension, open cavity, photon in transit).        │
+│   Flattened = HARD (high tension, boundaries on one plane).             │
+│                                                                         │
+│   WHY COMPRESSED LOOKS LIKE A COIN:                                     │
+│   Not because it is solid. The spiral's geometric boundary              │
+│   folds onto a single plane under compression.                          │
+│   Release: trapped photon resumes bounce path; strings                  │
+│   spiral outward by lattice recursion — not "stored spring energy."     │
+│                                                                         │
+│   MEMBRANE = PACKET.  SPRING = POLARIZER.                               │
+│                                                                         │
+│   ═══════════════════════════════════════════════════════════════════   │
+│                                                                         │
+│   FOUR MECHANICAL STATES (not abstract spin):                           │
+│                                                                         │
+│   WH  White-Hard   — white face flat, photon pinned                     │
+│   WS  White-Soft   — white visible, spring spiraled open                │
+│   BH  Black-Hard   — black face flat, photon pinned                     │
+│   BS  Black-Soft   — black visible, spring spiraled open                │
+│                                                                         │
+│   FREE PUMP:  WH ↔ BS ↔ WH ↔ BS  (hard at impact, soft opposite)       │
+│   TRANSIT:    spring soft → superposition                               │
+│                                                                         │
+│   MEASUREMENT (unilateral polarizer compression):                         │
+│   WS stable → compress to flat coin → AXES FLIP at max →                │
+│   release spiral → BH (white-soft became black-hard).                   │
+│                                                                         │
+│   MAX COMPRESSION (both sides):                                           │
+│   Ball state — perfect sphere, highest confined frequency.              │
+│   Route to proton fusion when spring limit exceeded (Part 3).           │
+│                                                                         │
 │   ═══════════════════════════════════════════════════════════════════   │
 │                                                                         │
 │   THE MEMBRANE:                                                         │
@@ -180,6 +214,87 @@
 │                                                                         │
 │   v_internal = √(c² - v²)                                               │
 │   Bounce rate = f₀ · √(1 - v²/c²) = f₀/γ                                │
+│                                                                         │
+│   ═══════════════════════════════════════════════════════════════════   │
+│                                                                         │
+│   THE COSMIC SPEED LIMIT — FROM THE BOUNCE GEOMETRY:                    │
+│                                                                         │
+│   The inner photon bounces at speed c inside the coin.                  │
+│   The electron moves at velocity v through space.                       │
+│                                                                         │
+│   As v increases:                                                       │
+│   The inner photon must travel a longer diagonal path                   │
+│   to reach the other side of the moving coin.                           │
+│                                                                         │
+│   At v = c:                                                             │
+│   The diagonal path becomes infinite.                                   │
+│   The inner photon can NEVER catch up to the other side.                │
+│   No bounce can complete.                                               │
+│   No bounce = no pump = no electron.                                    │
+│                                                                         │
+│   Therefore: an electron cannot reach c.                                │
+│   Not because of an imposed "rule."                                     │
+│   Because at c, the electron literally cannot exist.                    │
+│                                                                         │
+│   ─────────────────────────────────────────────────────────────────    │
+│                                                                         │
+│   STATIONARY (v = 0):                                                   │
+│   Inner photon bounces straight up/down.                                  │
+│   Distance per bounce = d.   Time per bounce = T₀ = d/c.                │
+│                                                                         │
+│   MOVING (v < c):                                                       │
+│   Coin drifts sideways while photon crosses.                            │
+│   Diagonal path. Longer bounce. Slower internal clock.                  │
+│                                                                         │
+│   APPROACHING v = c:                                                    │
+│   Coin moves almost as fast as the photon.                              │
+│   Photon barely catches the far side. Internal clock nearly stops.      │
+│                                                                         │
+│   AT v = c (IMPOSSIBLE FOR STRUCTURE):                                  │
+│   Far side recedes at c. Photon never completes the crossing.           │
+│   Pump stops. Structure dissolves.                                      │
+│                                                                         │
+│   ─────────────────────────────────────────────────────────────────    │
+│                                                                         │
+│   THE MATH:                                                             │
+│                                                                         │
+│   Pythagorean path during one crossing:                                 │
+│   D² = d² + (vT)²        photon path at speed c:  D = cT                │
+│                                                                         │
+│   (cT)² = d² + (vT)²  →  T²(c² - v²) = d²  →  T = d/√(c² - v²)         │
+│                                                                         │
+│   Compare stationary:  T₀ = d/c                                         │
+│   T = T₀/√(1 - v²/c²) = γT₀                                             │
+│                                                                         │
+│   This IS time dilation — derived from coin geometry, not postulated.   │
+│                                                                         │
+│   v → c:   γ → ∞,  T → ∞  (bounce never completes)                     │
+│   E = γm₀c² → ∞  (infinite energy to force an incomplete bounce)       │
+│                                                                         │
+│   MOTION BUDGET (same geometry, vector form):                           │
+│   Inner photon always travels at c. Motion splits:                      │
+│   v_internal² + v_external² = c²                                        │
+│   v_external = v     v_internal = √(c² - v²) = c/γ                       │
+│                                                                         │
+│   At v = c: v_internal = 0 — all motion external, none for bouncing.    │
+│                                                                         │
+│   ─────────────────────────────────────────────────────────────────    │
+│                                                                         │
+│   WHY ONLY PHOTONS REACH c:                                             │
+│   Photons have no coin, no spring, no trapped inner photon.             │
+│   No internal motion to maintain. All motion can be external.           │
+│                                                                         │
+│   STRUCTURE = INTERNAL BOUNCE = VELOCITY < c.                           │
+│   c is the speed at which structured existence becomes impossible.      │
+│                                                                         │
+│   ─────────────────────────────────────────────────────────────────    │
+│                                                                         │
+│   MODEL (OPEN — Section 11 link):                                       │
+│   If an electron were driven toward c, the inner photon might escape;   │
+│   spring without inner photon → dark-matter-like remnant (Sec 11);      │
+│   escaped photon → free c-traveler. Testable only as forward conjecture.│
+│                                                                         │
+│   See also: Section 5 (self-observation), Section 12 (motion budget).   │
 │                                                                         │
 │   ═══════════════════════════════════════════════════════════════════   │
 │                                                                         │

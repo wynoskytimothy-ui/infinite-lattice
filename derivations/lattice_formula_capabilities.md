@@ -1,4 +1,6 @@
-# AETHOS lattice formulas — deep audit & latent capabilities
+# AETHOS 3D complex plane — lattice formula audit
+
+The **lattice formula** generates coordinates on the **3D complex plane** Ψ=(z,ζ). Not the π lattice (see `ONTOLOGY.md`).
 
 Audit of `aethos_lattice`, `aethos_recursive`, `aethos_sequences` (verified by probes, Jun 2026).
 

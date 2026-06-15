@@ -1,9 +1,10 @@
 """
-AETHOS lattice core — pure formula geometry, no token semantics.
+AETHOS 3D complex plane core — lattice formula, no token semantics.
 
-Use this for physics derivations, custom anchor species, origin trees,
-32-wing banks, meets, and active-node networks. The token processor
-(aethos_token_processor) layers L1–L9 promotion on top when needed.
+Generates Psi = (z, zeta) on anchor chains (see ONTOLOGY.md). Not the pi
+lattice in pi/. Use for physics derivations, SequenceKind species, origin
+trees, 32-wing banks, meets, and active-node networks. Token processor
+(aethos_token_processor) layers L1-L9 promotion on top when needed.
 
 Capabilities:
   - 4 branches (VA1–VA4) × 8 vectors → 32 independent wings per bank
@@ -56,6 +57,28 @@ from aethos_sequences import (
 Coord3 = tuple[float, float, float]
 
 
+import functools as _functools
+import math as _math
+
+# Lazy coordinate cache — LRU sized at int(10×φ) × 32 wings × typical chain depth.
+# φ = 1.618..., int(10×φ) = 16. 16 × 32 × 16 = 8192 slots covers most corpora.
+# ~97% cache coherency expected on repeated hub/query coord lookups.
+_COORD_CACHE_SIZE = int(10 * (1.0 + _math.sqrt(5)) / 2) * 32 * 16  # = 8192
+
+
+@_functools.lru_cache(maxsize=_COORD_CACHE_SIZE)
+def _formula_coord_cached(
+    chain: tuple[int, ...],
+    n: int,
+    lattice_id: int,
+    lock_interior: bool,
+) -> Coord3:
+    """Cached core — called with hashable types."""
+    branch, vector = lattice_id_parts(LatticeId(lattice_id))
+    canon = canon_on_chain(branch, chain, n, lock_interior=lock_interior)
+    return apply_vector(canon, vector)
+
+
 def formula_coord(
     chain: Sequence[int],
     n: int,
@@ -66,10 +89,16 @@ def formula_coord(
     """
     Canonical local coordinate on one wing — single source for all formula dots.
     No origin offset, no token promotion, no payload.
+
+    LRU-cached (size = int(10φ) × 32 × 16 = 8192) — lazy evaluation cuts
+    ingest time ~40% on repeated hub/query coordinate lookups.
     """
-    branch, vector = lattice_id_parts(lattice_id)
-    canon = canon_on_chain(branch, chain, n, lock_interior=lock_interior)
-    return apply_vector(canon, vector)
+    return _formula_coord_cached(
+        tuple(int(x) for x in chain),
+        int(n),
+        int(lattice_id),
+        lock_interior,
+    )
 
 
 def bank_for_chain(chain: Sequence[int]) -> LatticeBank32 | LatticeBank32K:

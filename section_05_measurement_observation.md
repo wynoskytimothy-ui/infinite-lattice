@@ -185,6 +185,28 @@
 │                                                                         │
 │   ═══════════════════════════════════════════════════════════════════   │
 │                                                                         │
+│   SELF-OBSERVATION AND THE SPEED LIMIT (Section 2 link):                │
+│                                                                         │
+│   The electron does not only get observed from outside.                 │
+│   The inner photon bouncing IS continuous self-observation:             │
+│   each wall-hit pins one side, launches transit, repeats.               │
+│   The pump cycle is the electron observing itself into existence.       │
+│                                                                         │
+│   As external speed v increases (Section 2 light-clock):                │
+│   bounce crossings take longer → self-observation rate drops →          │
+│   internal clock slows (time dilation).                                 │
+│                                                                         │
+│   At v = c: bounce cannot complete → self-observation halts →           │
+│   no pump → no electron.                                                │
+│                                                                         │
+│   To keep movement AND observation going, v must stay below c.          │
+│   c is not merely a speed limit — it is the threshold where             │
+│   structured self-observation becomes impossible.                       │
+│                                                                         │
+│   Cross-ref: Section 2 (bounce geometry), Section 12 (motion budget).   │
+│                                                                         │
+│   ═══════════════════════════════════════════════════════════════════   │
+│                                                                         │
 │   YOU CANNOT STOP MOTION TO OBSERVE:                                    │
 │                                                                         │
 │   From your notes:                                                      │

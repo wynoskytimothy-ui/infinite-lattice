@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 from aethos_symbol_map import text_icn_chain, text_intersection
-from aethos_symbol_morph import pick_root_suffix
+from aethos_symbol_morph_pieces import morph_pieces
 from pipeline.bit_02_attractor_key import AttractorKey, attractor_neighbors, kappa_branch_fan
 from pipeline.bit_12_symbol_plane_index import (
     DEFAULT_QUANTIZE,
@@ -30,9 +30,6 @@ from pipeline.bit_12_symbol_plane_index import (
 if TYPE_CHECKING:
     from aethos_symbol_knowledge import SymbolKnowledgeIndex
     from pipeline.bit_12_symbol_plane_index import SymbolPlaneIndex
-
-_SUFFIXES = ("tion", "ment", "ness", "ing", "ive", "ous", "ial", "ed", "es", "ly", "er")
-
 
 @dataclass(frozen=True)
 class QueryLatticeNode:
@@ -49,29 +46,7 @@ class QueryLatticeNode:
 
 def morph_subword_pieces(knowledge: SymbolKnowledgeIndex, token: str) -> list[str]:
     """Morph substrings of token that exist in the brain morph registry."""
-    w = token.lower()
-    morph = knowledge.morph
-    out: list[str] = []
-    if w in morph.composites:
-        out.append(w)
-        out.extend(morph.composites[w].parts)
-    if w in morph.subwords:
-        out.append(w)
-    for sw in sorted(morph.subwords, key=len, reverse=True):
-        if len(sw) >= 3 and sw in w:
-            out.append(sw)
-    split = pick_root_suffix(w, knowledge.vocab)
-    if split:
-        root, suffix = split
-        out.extend([root, suffix])
-    for suf in _SUFFIXES:
-        if w.endswith(suf) and len(w) > len(suf) + 2:
-            root = w[: -len(suf)]
-            if len(root) >= 3:
-                out.append(root)
-            if suf in morph.subwords or suf in knowledge.vocab:
-                out.append(suf)
-    return list(dict.fromkeys(p for p in out if len(p) >= 2))
+    return morph_pieces(knowledge, token, mode="query")
 
 
 def structural_anchor_words(

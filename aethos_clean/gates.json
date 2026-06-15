@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "presets": {
+    "lean": {
+      "description": "BIT-4 router + hub rank, no neural, no signal 8a",
+      "pool_cap": 350,
+      "kappa_scoring": false,
+      "lambda_kappa": 0.0,
+      "mode": "quality",
+      "train_mode": "full"
+    },
+    "lean_composite": {
+      "description": "Composite-only bridges (query→gold rare words), no bulk anchors",
+      "pool_cap": 350,
+      "kappa_scoring": false,
+      "lambda_kappa": 0.0,
+      "mode": "quality",
+      "train_mode": "composite_only",
+      "max_composite_anchors": 2000,
+      "max_composite_meta": 500,
+      "max_composite_negatives": 500,
+      "clear_bad_correlation": true
+    },
+    "accuracy_max": {
+      "description": "Reserved — neural rerank tier (not wired in Phase 1)",
+      "pool_cap": 350,
+      "kappa_scoring": false,
+      "lambda_kappa": 0.0,
+      "mode": "quality",
+      "train_mode": "full"
+    }
+  },
+  "corpora": {
+    "scifact": {
+      "ndcg10_min": 0.65,
+      "ndcg10_target": 0.78,
+      "recall10_min": 0.70,
+      "recall100_min": 0.85,
+      "p50_query_ms_max": 50.0,
+      "p99_query_ms_max": 200.0,
+      "hot_bytes_per_doc_max": 250.0,
+      "bm25_ref": 0.643
+    },
+    "nfcorpus": {
+      "ndcg10_min": 0.28,
+      "ndcg10_target": 0.34,
+      "recall10_min": 0.12,
+      "recall100_min": 0.25,
+      "p50_query_ms_max": 50.0,
+      "p99_query_ms_max": 200.0,
+      "hot_bytes_per_doc_max": 250.0,
+      "bm25_ref": 0.321
+    },
+    "fiqa": {
+      "ndcg10_min": 0.20,
+      "ndcg10_target": 0.24,
+      "recall10_min": 0.20,
+      "recall100_min": 0.35,
+      "p50_query_ms_max": 50.0,
+      "p99_query_ms_max": 200.0,
+      "hot_bytes_per_doc_max": 250.0,
+      "bm25_ref": 0.236
+    }
+  },
+  "merge_rule": {
+    "min_corpora_pass": 2,
+    "corpora": ["scifact", "nfcorpus", "fiqa"]
+  }
+}

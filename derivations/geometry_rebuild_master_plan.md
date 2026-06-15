@@ -230,7 +230,7 @@ See **`architecture_mandates.md`** for C1–C7. Summary:
 | C3 | Pressure escape primary |
 | C4 | Network only; no gluons |
 | C5 | Joint DM ripple; sign sketch **REJECT** |
-| C6 | Address lattice (any active anchor set; Sec 12) |
+| C6 | 3D complex plane / lattice formula (any SequenceKind; Sec 12) |
 | C7 | Stage A `ℓ_c` → Stage B `φ_AB` |
 
 **Step 2:** **CORE GATE PASS** — `section_02_geometry_audit.md`.  

@@ -1,5 +1,5 @@
 """
-φ-Prime Lattice — geometric engine (VA1–VA4, 32 wings, k-anchor recursion).
+3D complex plane engine (VA1–VA4, 32 wings, anchor-chain formula). Legacy module name phi_lattice — see ONTOLOGY.md.
 
 Canonical spec implementation for the core package:
   - Anchor point (p,0,p) distinct from branch coordinates at transgressor n

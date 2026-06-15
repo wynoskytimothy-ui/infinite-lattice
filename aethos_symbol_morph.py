@@ -35,7 +35,17 @@ from aethos_symbol_synthesis import (
 )
 
 # Re-export for morph tests / demos
-__all__ = ["meet_2way_on_line", "build_morph_registry", "explain_diminish_family", "MorphRegistry"]
+__all__ = [
+    "meet_2way_on_line",
+    "build_morph_registry",
+    "explain_diminish_family",
+    "MorphRegistry",
+    "canonical_morph_chain_and_imag",
+    "longest_embedded_subword",
+    "pick_root_suffix",
+]
+
+_MORPH_SUFFIXES = ("tion", "ment", "ness", "ing", "ious", "ular", "ed", "es", "er", "ly", "s")
 
 _CORRELATION_PRIMES: tuple[int, ...] = ()  # filled at import from pool tail
 
@@ -156,21 +166,92 @@ def discover_unique_subwords(
     return out
 
 
-def pick_root_suffix(word: str, vocab: set[str]) -> tuple[str, str] | None:
-    """Prefer ``root + ed/es`` split for diminish-family style words."""
-    for suffix in ("ed", "es", "ing", "ly"):
-        if word.endswith(suffix) and len(word) > len(suffix):
-            root = word[: -len(suffix)]
-            if 3 <= len(root) <= 14:
-                return root, suffix
+def pick_root_suffix(word: str, vocab: set[str] | None = None) -> tuple[str, str] | None:
+    """Split token into promoted root + suffix (longest suffix first)."""
+    w = word.lower()
+    for suffix in _MORPH_SUFFIXES:
+        if not w.endswith(suffix) or len(w) <= len(suffix) + 2:
+            continue
+        root = w[: -len(suffix)]
+        if not (3 <= len(root) <= 18):
+            continue
+        if vocab is not None and root not in vocab:
+            # still allow when root is already a morph subword (checked by caller)
+            pass
+        return root, suffix
     return None
+
+
+def longest_embedded_subword(
+    morph: MorphRegistry,
+    word: str,
+    *,
+    min_len: int = 3,
+    min_remainder: int = 2,
+) -> str | None:
+    """
+    Longest morph subword in *word* when the leftover suffix is not a bare plural.
+
+    ``cellular`` → ``cell`` (remainder ``ular``, len 4).
+    ``shows`` → None (remainder ``s`` only — avoids hub collapse).
+    """
+    w = word.lower()
+    if w in morph.subwords or w in morph.composites:
+        return None
+    hits = [
+        sw for sw in morph.subwords
+        if len(sw) >= min_len and sw in w and len(w) - len(sw) >= min_remainder
+    ]
+    return max(hits, key=len) if hits else None
+
+
+def canonical_morph_chain_and_imag(
+    morph: MorphRegistry,
+    word: str,
+) -> tuple[tuple[int, ...], int | None]:
+    """
+    Morph-aware chain + imaginary line position (Concrete Plane P1).
+
+    Priority: composite → subword → root+suffix meet → root decay → embedded root.
+    Returns ``((), None)`` when caller should fall back to L1 ICN chain.
+    """
+    w = word.lower()
+    if w in morph.composites:
+        comp = morph.composites[w]
+        return (
+            tuple(int(p) for p in comp.meeting_primes),
+            int(comp.imaginary_position),
+        )
+    if w in morph.subwords:
+        sw = morph.subwords[w]
+        return (int(sw.prime),), int(sw.imaginary_position)
+
+    embedded = longest_embedded_subword(morph, w)
+    if embedded:
+        sw = morph.subwords[embedded]
+        return (int(sw.prime),), int(sw.imaginary_position)
+
+    split = pick_root_suffix(w)
+    if split:
+        root, suffix = split
+        root_sw = morph.subwords.get(root)
+        suf_sw = morph.subwords.get(suffix)
+        if root_sw and suf_sw:
+            return (
+                (int(root_sw.prime), int(suf_sw.prime)),
+                int(root_sw.imaginary_position + suf_sw.imaginary_position),
+            )
+        if root_sw:
+            return (int(root_sw.prime),), int(root_sw.imaginary_position)
+
+    return (), None
 
 
 def build_morph_registry(
     vocab: set[str] | list[str],
     *,
     seed_subwords: tuple[str, ...] = (
-        "diminis", "dimin", "ed", "es", "sub", "raise", "lower", "improve", "improves",
+        "diminis", "dimin", "ed", "es", "s", "sub", "raise", "lower", "improve", "improves",
     ),
     max_composites: int | None = None,
 ) -> MorphRegistry:

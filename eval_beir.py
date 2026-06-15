@@ -26,6 +26,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+# BIT 10: pre-filter routed pool before rank (κ Jaccard top-N + BM25 fill).
+DEFAULT_KAPPA_CANDIDATE_CAP = 350
+
 from aethos_composite import build_composite_index
 from aethos_discriminative import (
     HeavyAnchorIndex,
@@ -231,6 +234,132 @@ def build_neighbor_weights(registry) -> dict[str, dict[str, float]]:
     return dict(out)
 
 
+MIN_POOL_PRIME = 107  # PROMOTION_POOL_FIRST — letter primes are corpus-wide noise
+
+
+def _tier1_lexical(
+    query_words: list[str],
+    inv: dict[str, set[str]],
+    neighbor_map: dict[str, dict[str, float]],
+) -> set[str]:
+    """Tier 1: inverted index + L4-L6 neighbor postings (BM25 vocabulary path)."""
+    cand: set[str] = set()
+    for w in query_words:
+        cand |= inv.get(w, set())
+        for nb in neighbor_map.get(w, {}):
+            cand |= inv.get(nb, set())
+    return cand
+
+
+def _tier2_meet_exact(
+    query_words: list[str],
+    meet_index: dict[int, set[str]],
+    registry,
+) -> set[str]:
+    """Tier 2: exact pool-prime lookup on word prime + L2 parent primes."""
+    cand: set[str] = set()
+    for w in query_words:
+        if len(w) < 3:
+            continue
+        try:
+            tok = registry.resolve_token(w)
+            for p in (tok.prime,) + tok.parent_primes:
+                if p >= MIN_POOL_PRIME:
+                    cand |= meet_index.get(p, set())
+        except Exception:
+            pass
+    return cand
+
+
+def _tier3a_meet_pool(
+    query_words: list[str],
+    meet_index: dict[int, set[str]],
+    registry,
+) -> set[str]:
+    """Tier 3a: union meet postings for every query pool factor."""
+    from aethos_hub_signature import pool_factors_for_word
+
+    cand: set[str] = set()
+    for w in query_words:
+        if len(w) < 3:
+            continue
+        try:
+            for p in pool_factors_for_word(registry, w):
+                cand |= meet_index.get(p, set())
+        except Exception:
+            pass
+    return cand
+
+
+def _tier3b_meet_fuzzy(
+    query_words: list[str],
+    meet_index: dict[int, set[str]],
+    registry,
+) -> set[str]:
+    """Tier 3b: prime_factor_similarity partial overlap on lattice composites."""
+    from aethos_hub_signature import lattice_composite_for_word
+    from core.phi_lattice import prime_factor_similarity
+
+    cand: set[str] = set()
+    for w in query_words:
+        if len(w) < 3:
+            continue
+        try:
+            qc = lattice_composite_for_word(registry, w)
+            if qc <= 1:
+                continue
+            for prime_key, docs in meet_index.items():
+                if prime_factor_similarity(qc, prime_key) > 0.0:
+                    cand |= docs
+        except Exception:
+            pass
+    return cand
+
+
+def candidate_generation_tier(
+    query_words: list[str],
+    inv: dict[str, set[str]],
+    neighbor_map: dict[str, dict[str, float]],
+    all_ids: list[str],
+    meet_index: "dict[int, set[str]] | None" = None,
+    registry=None,
+    attractor_index=None,
+    attractor_radius: int = 1,
+    min_attractor_candidates: int = 8,
+) -> str:
+    """Which tier supplied candidates (for P4 diagnostics)."""
+    if attractor_index is not None and registry is not None:
+        from pipeline.bit_04_candidate_router import route_query_candidates
+
+        route = route_query_candidates(
+            query_words,
+            registry,
+            attractor_index,
+            inv,
+            neighbor_map,
+            all_ids,
+            radius=attractor_radius,
+            min_candidates=min_attractor_candidates,
+            meet_index=meet_index,
+        )
+        if route.tier.startswith("bit4_") and route.tier != "bit4_fallback":
+            return "bit4_router"
+    t1 = _tier1_lexical(query_words, inv, neighbor_map)
+    if t1:
+        return "tier1_lexical"
+    if meet_index is not None and registry is not None:
+        t2 = _tier2_meet_exact(query_words, meet_index, registry)
+        if t2:
+            return "tier2_meet_exact"
+        t3a = _tier3a_meet_pool(query_words, meet_index, registry)
+        if t3a:
+            return "tier3_meet_pool"
+        t3b = _tier3b_meet_fuzzy(query_words, meet_index, registry)
+        if t3b:
+            return "tier3_meet_fuzzy"
+    return "tier4_full_corpus"
+
+
 def candidate_ids(
     query_words: list[str],
     inv: dict[str, set[str]],
@@ -238,90 +367,83 @@ def candidate_ids(
     all_ids: list[str],
     meet_index: "dict[int, set[str]] | None" = None,
     registry=None,
+    *,
+    attractor_index=None,
+    attractor_radius: int = 1,
+    min_attractor_candidates: int = 8,
 ) -> list[str]:
     """
-    Candidate generation with optional MeetIndex expansion.
+    P4 candidate cascade (invert generation for zero-BM25 queries).
 
-    Standard path: lexical inverted index + L4-L6 neighbor postings.
+    BIT 4 (when attractor_index set): C(q) from κ neighborhoods, ∪ tier1 if
+    |C| ≥ min_attractor_candidates; else fall through to tiers below.
 
-    MeetIndex path (when meet_index is provided): for each query word's prime
-    chain (parent_primes), look up docs with hub words sharing those prime
-    factors.  The swap-meet guarantee means these docs have a geometric witness
-    with the query word even when surface vocabulary is completely different.
-    This addresses ZERO_BM25 and PARTIAL failures where gold docs use
-    different terminology from the query.
+    Tier 1 — lexical inverted index + neighbor postings.
+    Tier 2 — exact MeetIndex on pool primes (only if tier 1 empty).
+    Tier 3 — pool-factor union + prime_factor_similarity fuzzy meet
+              (only if tiers 1–2 empty; replaces old all_ids fallback).
+    Tier 4 — full corpus only when meet index unavailable or tier 3 empty.
     """
-    cand: set[str] = set()
-    for w in query_words:
-        cand |= inv.get(w, set())
-        for nb in neighbor_map.get(w, {}):
-            cand |= inv.get(nb, set())
+    if attractor_index is not None and registry is not None:
+        from pipeline.bit_04_candidate_router import route_query_candidates
 
-    # MeetIndex expansion: add docs sharing prime factors with query words.
-    # Uses the swap-meet property: solo(p_q)@n=p_h == solo(p_h)@n=p_q on all
-    # 32 wings — so words sharing prime factors have a geometric meet witness.
+        meet_arg = (
+            meet_index.legacy_dict()
+            if meet_index is not None and hasattr(meet_index, "legacy_dict")
+            else meet_index
+        )
+        route = route_query_candidates(
+            query_words,
+            registry,
+            attractor_index,
+            inv,
+            neighbor_map,
+            all_ids,
+            radius=attractor_radius,
+            min_candidates=min_attractor_candidates,
+            meet_index=meet_index if hasattr(meet_index, "by_factor") else meet_arg,
+        )
+        if route.tier != "bit4_fallback":
+            return route.doc_ids
+
+    t1 = _tier1_lexical(query_words, inv, neighbor_map)
+    if t1:
+        return list(t1)
+
     if meet_index is not None and registry is not None:
-        for w in query_words:
-            if len(w) < 3:
-                continue
-            try:
-                tok = registry.resolve_token(w)
-                # Check word prime itself
-                meet_docs = meet_index.get(tok.prime)
-                if meet_docs:
-                    cand |= meet_docs
-                # Check parent primes (L2 subword primes if promoted)
-                for pp in tok.parent_primes:
-                    meet_docs = meet_index.get(pp)
-                    if meet_docs:
-                        cand |= meet_docs
-            except Exception:
-                pass
+        t2 = _tier2_meet_exact(query_words, meet_index, registry)
+        if t2:
+            return list(t2)
+        t3a = _tier3a_meet_pool(query_words, meet_index, registry)
+        if t3a:
+            return list(t3a)
+        t3b = _tier3b_meet_fuzzy(query_words, meet_index, registry)
+        if t3b:
+            return list(t3b)
 
-    return list(cand) if cand else all_ids
+    return all_ids
 
 
 def build_meet_index(
     hub_sigs: dict,
     registry,
+    *,
+    max_docs_per_factor: int = 500,
 ) -> "dict[int, set[str]]":
     """
     Build a prime-factor inverted index (MeetIndex) from hub signatures.
 
-    Maps prime → set of doc_ids whose hub words have that prime in their
-    prime chain (L3 pool prime or parent primes).
-
-    Used in candidate_ids for MeetIndex expansion: a query word with prime
-    chain (f1, f2, ...) can find docs that share ANY of those factors via
-    their hub words — the geometric swap-meet guarantee.
-
-    O(docs × K × len(parent_primes)) to build; O(1) per lookup at query time.
+    BIT 7: capped MeetWitnessIndex with pool-prime postings.
+    Returns legacy dict[int, set[str]] for candidate_ids tiers 2–3.
     """
-    from collections import defaultdict as _dd
-    idx: dict[int, set[str]] = {}
-    _idx = _dd(set)
+    from pipeline.bit_07_meet_witness import build_meet_witness_index
 
-    # Only index pool-promoted primes (≥ PROMOTION_POOL_FIRST = 107).
-    # Letter primes (3,5,7,...,101) appear in every word — indexing them
-    # would expand candidates to the entire corpus (pure noise).
-    # Pool primes are specific to promoted subwords/words and meaningful.
-    MIN_POOL_PRIME = 107
-
-    for did, sig in hub_sigs.items():
-        for word, entry in sig.hubs.items():
-            # Index by L3 pool prime only if it's a pool-promoted prime
-            if entry.prime >= MIN_POOL_PRIME:
-                _idx[entry.prime].add(did)
-            # Index by parent primes that are pool-promoted (L2 subword primes)
-            try:
-                tok = registry.resolve_token(word)
-                for pp in tok.parent_primes:
-                    if pp >= MIN_POOL_PRIME:
-                        _idx[pp].add(did)
-            except Exception:
-                pass
-
-    return dict(_idx)
+    idx = build_meet_witness_index(
+        hub_sigs,
+        registry,
+        max_docs_per_factor=max_docs_per_factor,
+    )
+    return idx.legacy_dict()
 
 
 # ---------------------------------------------------------------------------
@@ -423,18 +545,16 @@ def make_pipeline(mode: str) -> AethosPipeline:
             fast_cluster=True,
         )
     elif mode == "quality":
-        # Quality mode: fast_ingest=True (for speed) but with aggressive post-hoc
-        # subword promotion. The subword rebuild runs after ingest using vocabulary
-        # stats, promoting up to 320 L2 subwords (2× the scale-mode cap of 160).
-        # More L2 primes → L3 words get proper non-colliding parent_primes.
-        # Result: ~400-600 L3 pool primes (vs 199 with scale mode).
+        # Quality mode: same as scale but with 2× L2 subword promotion cap (320).
+        # Post-hoc subword rebuild promotes top-320 highest-PMI subwords to L2 primes.
+        # More L2 primes → better L3 parent_primes → more FTA-unique composites.
+        # Clusters stay lazy for speed; the quality gain is in the promotion layer.
         cfg = ScaleConfig(
-            rebuild_every=32,
-            lazy_clusters=False,
+            rebuild_every=128,
+            lazy_clusters=True,
             fast_ingest=True,
             defer_l2_promotion=True,
-            fast_cluster=False,
-            max_corr_pairs_per_doc=512,
+            fast_cluster=True,
         )
     else:
         cfg = ScaleConfig(
@@ -455,19 +575,230 @@ def make_pipeline(mode: str) -> AethosPipeline:
 # Query scoring (from checkpoint — fast A/B)
 # ---------------------------------------------------------------------------
 
+@dataclass
+class QueryScoreResult:
+    """One scored query — ranked ids plus routing/scoring metadata for progress logs."""
+
+    ranked: list[str]
+    profile: QueryProfile
+    n_candidates: int
+    route_tier: str
+    n_kappa_keys: int
+
+
+def _format_eta(elapsed_s: float, done: int, total: int) -> str:
+    if done <= 0 or total <= done:
+        return "—"
+    rem_s = (elapsed_s / done) * (total - done)
+    if rem_s < 90:
+        return f"{rem_s:.0f}s"
+    return f"{rem_s / 60:.1f}m"
+
+
+def _print_query_progress(
+    *,
+    arm_label: str,
+    qi: int,
+    total: int,
+    qid: str,
+    elapsed_ms: float,
+    n_candidates: int,
+    route_tier: str,
+    n_kappa_keys: int,
+    ndcg: float,
+    avg_ndcg: float,
+    loop_elapsed_s: float,
+    enable_kappa_scoring: bool,
+) -> None:
+    eta = _format_eta(loop_elapsed_s, qi + 1, total)
+    k8 = "8a" if enable_kappa_scoring else "—"
+    print(
+        f"  [{arm_label}] {qi + 1:4d}/{total}  q={qid:<6}  "
+        f"{elapsed_ms:6.0f}ms  |C|={n_candidates:5d}  "
+        f"k={n_kappa_keys:3d}  tier={route_tier:<22}  "
+        f"8a={k8}  ndcg={ndcg:.3f}  avg={avg_ndcg:.4f}  ETA={eta}",
+        flush=True,
+    )
+
+
+def _score_one_query(
+    query: str,
+    *,
+    pipe,
+    cidx,
+    hub_sigs,
+    neighbor_map,
+    meet_index,
+    sub_comp_idx,
+    comp_idx,
+    phrase_idx,
+    anchor_idx,
+    attractor_index=None,
+    kappa_candidate_cap: int = DEFAULT_KAPPA_CANDIDATE_CAP,
+    enable_kappa_scoring: bool = False,
+) -> QueryScoreResult:
+    """Score one query — shared by score_from_bundle and evaluate_dataset.
+
+    BIT 4 routing uses ``attractor_index`` whenever it is set.
+    Signal 8a (κ Jaccard) fires only when ``enable_kappa_scoring`` is True.
+    """
+    from pipeline.bit_04_candidate_router import route_query_candidates
+    from pipeline.bit_09_query_cell_profile import build_query_cell_profile
+
+    n_docs = len(cidx.doc_ids)
+    profile = build_query_profile(
+        query,
+        pipe.registry,
+        neighbor_map=neighbor_map,
+        doc_freq=cidx.doc_freq,
+        n_docs=n_docs,
+    )
+
+    cell = None
+    route_tier = "legacy"
+    cands: list[str]
+    n_kappa_keys = 0
+    protected_doc_ids: frozenset[str] = frozenset()
+
+    if attractor_index is not None:
+        cell = build_query_cell_profile(
+            pipe.registry,
+            query,
+            neighbor_map=neighbor_map,
+            doc_freq=cidx.doc_freq,
+            n_docs=n_docs,
+        )
+        n_kappa_keys = len(cell.kappa_neighbor_q)
+        meet_arg = (
+            meet_index.legacy_dict()
+            if meet_index is not None and hasattr(meet_index, "legacy_dict")
+            else meet_index
+        )
+        route = route_query_candidates(
+            profile.words,
+            pipe.registry,
+            attractor_index,
+            cidx.inv,
+            neighbor_map,
+            cidx.doc_ids,
+            meet_index=meet_index if hasattr(meet_index, "by_factor") else meet_arg,
+            doc_freq=cidx.doc_freq,
+            n_docs=n_docs,
+        )
+        cands = route.doc_ids
+        protected_doc_ids = route.protected_doc_ids
+        route_tier = (
+            "bit4_router"
+            if route.tier.startswith("bit4_") and route.tier != "bit4_fallback"
+            else route.tier
+        )
+    else:
+        cands = candidate_ids(
+            profile.words,
+            cidx.inv,
+            neighbor_map,
+            cidx.doc_ids,
+            meet_index=meet_index,
+            registry=pipe.registry,
+        )
+        route_tier = candidate_generation_tier(
+            profile.words,
+            cidx.inv,
+            neighbor_map,
+            cidx.doc_ids,
+            meet_index=meet_index,
+            registry=pipe.registry,
+        )
+
+    q_anchor_comps = None
+    if anchor_idx is not None and anchor_idx.n_anchors > 0:
+        q_anchor_comps = query_anchor_composites(
+            list(profile.word_set),
+            anchor_idx,
+            pipe.registry,
+            idf=profile.idf,
+        )
+
+    if pipe.reader.word_to_cluster:
+        query_clusters: dict[str, float] = {}
+        for w in profile.word_set:
+            cid = pipe.reader.word_to_cluster.get(w)
+            if cid:
+                query_clusters[cid] = max(
+                    query_clusters.get(cid, 0.0), profile.idf.get(w, 0.0)
+                )
+        if query_clusters:
+            qc_ids: dict[str, float] = {}
+            for w2, cid2 in pipe.reader.word_to_cluster.items():
+                if cid2 in query_clusters and w2 not in profile.word_set:
+                    if qc_ids.get(w2, 0.0) < query_clusters[cid2]:
+                        qc_ids[w2] = query_clusters[cid2]
+            profile.query_cluster_ids = qc_ids
+
+    q_phrase_comps = None
+    if phrase_idx is not None:
+        q_phrase_comps = _query_phrase_composites(
+            profile.words, phrase_idx, pipe.registry, profile.idf,
+        )
+
+    ranked = rank_with_hub_signatures(
+        profile,
+        cands,
+        hub_sigs,
+        cidx.doc_ids,
+        doc_tokens=cidx.doc_tokens,
+        doc_tf=cidx.doc_tf,
+        doc_len=cidx.doc_len,
+        avg_dl=cidx.avg_dl,
+        composite_index=comp_idx,
+        sub_comp_idx=sub_comp_idx,
+        registry=pipe.registry,
+        phrase_idx=phrase_idx,
+        anchor_idx=anchor_idx,
+        query_anchor_comps=q_anchor_comps,
+        query_phrase_comps=q_phrase_comps,
+        attractor_index=attractor_index,
+        query_kappa_keys=(
+            cell.kappa_neighbor_q if cell and enable_kappa_scoring else None
+        ),
+        kappa_candidate_cap=kappa_candidate_cap,
+        protect_doc_ids=protected_doc_ids,
+        top_k=100,
+    )
+    return QueryScoreResult(
+        ranked=ranked,
+        profile=profile,
+        n_candidates=len(cands),
+        route_tier=route_tier,
+        n_kappa_keys=n_kappa_keys,
+    )
+
+
 def score_from_bundle(
     bundle: EvalBundle,
     *,
     lambda_prime_factor: float | None = None,
+    lambda_kappa: float | None = None,
+    kappa_candidate_cap: int = DEFAULT_KAPPA_CANDIDATE_CAP,
     bad_store: BadCorrelationStore | None = None,
     verbose: bool = False,
+    progress_every: int = 1,
+    arm_label: str = "score",
 ) -> EvalResult:
     """Run the query loop only — reuse a saved EvalBundle from stage 1."""
     import aethos_hub_signature as _hs
+    from pipeline.bit_03_doc_attractor_set import build_attractor_index_from_hub_signatures
 
+    prev_kappa = _hs.LAMBDA_KAPPA
+    if lambda_kappa is not None:
+        _hs.LAMBDA_KAPPA = float(lambda_kappa)
     if lambda_prime_factor is not None:
         _hs.LAMBDA_PRIME_FACTOR = float(lambda_prime_factor)
-    print(f"  LAMBDA_PRIME_FACTOR={_hs.LAMBDA_PRIME_FACTOR}", flush=True)
+    print(
+        f"  LAMBDA_PRIME_FACTOR={_hs.LAMBDA_PRIME_FACTOR}  "
+        f"LAMBDA_KAPPA={_hs.LAMBDA_KAPPA}",
+        flush=True,
+    )
 
     pipe = bundle.pipe
     cidx = bundle.cidx
@@ -482,90 +813,93 @@ def score_from_bundle(
     qrels = bundle.qrels
     qids = bundle.qids
 
+    attractor_index = bundle.attractor_index
+    if attractor_index is None:
+        attractor_index = build_attractor_index_from_hub_signatures(
+            pipe.registry, hub_sigs,
+        )
+
+    enable_kappa_scoring = lambda_kappa is not None and lambda_kappa > 0
+
     if bad_store is None:
         bad_store = BadCorrelationStore.load(bad_correlation_path(bundle.dataset, bundle.mode))
 
     ndcgs: list[float] = []
     r10s: list[float] = []
     q_times: list[float] = []
-    n_docs = len(cidx.doc_ids)
-
-    print(f"  scoring {len(qids)} queries (from checkpoint)...", flush=True)
-    for qi, qid in enumerate(qids):
-        t0 = time.perf_counter()
-
-        profile = build_query_profile(
-            queries[qid],
-            pipe.registry,
-            neighbor_map=neighbor_map,
-            doc_freq=cidx.doc_freq,
-            n_docs=n_docs,
+    try:
+        print(
+            f"  scoring {len(qids)} queries  arm={arm_label}  "
+            f"docs={bundle.n_docs}  routing=BIT4  "
+            f"signal_8a={'on' if enable_kappa_scoring else 'off'}",
+            flush=True,
         )
-        cands = candidate_ids(
-            profile.words, cidx.inv, neighbor_map, cidx.doc_ids,
-            meet_index=meet_index, registry=pipe.registry,
-        )
+        loop_t0 = time.perf_counter()
+        for qi, qid in enumerate(qids):
+            t0 = time.perf_counter()
 
-        q_anchor_comps = None
-        if anchor_idx is not None and anchor_idx.n_anchors > 0:
-            q_anchor_comps = query_anchor_composites(
-                list(profile.word_set),
-                anchor_idx,
+            result = _score_one_query(
+                queries[qid],
+                pipe=pipe,
+                cidx=cidx,
+                hub_sigs=hub_sigs,
+                neighbor_map=neighbor_map,
+                meet_index=meet_index,
+                sub_comp_idx=sub_comp_idx,
+                comp_idx=comp_idx,
+                phrase_idx=phrase_idx,
+                anchor_idx=anchor_idx,
+                attractor_index=attractor_index,
+                kappa_candidate_cap=kappa_candidate_cap,
+                enable_kappa_scoring=enable_kappa_scoring,
+            )
+
+            q_ms = (time.perf_counter() - t0) * 1000.0
+            q_times.append(q_ms)
+            rel = qrels[qid]
+            ndcg = ndcg_at_k(result.ranked, rel, 10)
+            ndcgs.append(ndcg)
+            r10s.append(recall_at_k(result.ranked, rel, 10))
+
+            record_retrieval_false_positives(
+                bad_store,
+                result.ranked,
+                rel,
+                result.profile,
+                hub_sigs,
                 pipe.registry,
-                idf=profile.idf,
+                top_k=10,
             )
-
-        if pipe.reader.word_to_cluster:
-            query_clusters: dict[str, float] = {}
-            for w in profile.word_set:
-                cid = pipe.reader.word_to_cluster.get(w)
-                if cid:
-                    query_clusters[cid] = max(
-                        query_clusters.get(cid, 0.0), profile.idf.get(w, 0.0)
-                    )
-            if query_clusters:
-                qc_ids: dict[str, float] = {}
-                for w2, cid2 in pipe.reader.word_to_cluster.items():
-                    if cid2 in query_clusters and w2 not in profile.word_set:
-                        if qc_ids.get(w2, 0.0) < query_clusters[cid2]:
-                            qc_ids[w2] = query_clusters[cid2]
-                profile.query_cluster_ids = qc_ids
-
-        q_phrase_comps = None
-        if phrase_idx is not None:
-            q_phrase_comps = _query_phrase_composites(
-                profile.words, phrase_idx, pipe.registry, profile.idf,
-            )
-
-        ranked = rank_with_hub_signatures(
-            profile, cands, hub_sigs, cidx.doc_ids,
-            doc_tokens=cidx.doc_tokens,
-            doc_tf=cidx.doc_tf,
-            doc_len=cidx.doc_len,
-            avg_dl=cidx.avg_dl,
-            composite_index=comp_idx,
-            sub_comp_idx=sub_comp_idx,
-            registry=pipe.registry,
-            phrase_idx=phrase_idx,
-            anchor_idx=anchor_idx,
-            query_anchor_comps=q_anchor_comps,
-            query_phrase_comps=q_phrase_comps,
-            top_k=100,
-        )
-
-        q_times.append((time.perf_counter() - t0) * 1000.0)
-        rel = qrels[qid]
-        ndcgs.append(ndcg_at_k(ranked, rel, 10))
-        r10s.append(recall_at_k(ranked, rel, 10))
-
-        record_retrieval_false_positives(
-            bad_store, ranked, rel, profile, hub_sigs, pipe.registry, top_k=10,
-        )
-        if verbose and (qi + 1) % 50 == 0:
+            if progress_every > 0 and ((qi + 1) % progress_every == 0 or qi == 0):
+                _print_query_progress(
+                    arm_label=arm_label,
+                    qi=qi,
+                    total=len(qids),
+                    qid=qid,
+                    elapsed_ms=q_ms,
+                    n_candidates=result.n_candidates,
+                    route_tier=result.route_tier,
+                    n_kappa_keys=result.n_kappa_keys,
+                    ndcg=ndcg,
+                    avg_ndcg=sum(ndcgs) / len(ndcgs),
+                    loop_elapsed_s=time.perf_counter() - loop_t0,
+                    enable_kappa_scoring=enable_kappa_scoring,
+                )
+            elif verbose and (qi + 1) % 50 == 0:
+                print(
+                    f"  query {qi+1}/{len(qids)}  NDCG@10 avg: {sum(ndcgs)/len(ndcgs):.4f}",
+                    flush=True,
+                )
+        if ndcgs:
             print(
-                f"  query {qi+1}/{len(qids)}  NDCG@10 avg: {sum(ndcgs)/len(ndcgs):.4f}",
+                f"  [{arm_label}] done  NDCG@10={sum(ndcgs)/len(ndcgs):.4f}  "
+                f"R@10={sum(r10s)/len(r10s):.4f}  "
+                f"p50={sorted(q_times)[len(q_times)//2]:.0f}ms/query",
                 flush=True,
             )
+    finally:
+        if lambda_kappa is not None:
+            _hs.LAMBDA_KAPPA = prev_kappa
 
     n_q = max(len(qids), 1)
     p50_q = sorted(q_times)[len(q_times) // 2] if q_times else 0.0
@@ -604,17 +938,30 @@ def evaluate_dataset(
     n_passes: int = 2,
     verbose: bool = False,
     lambda_prime_factor: float | None = None,
+    lambda_kappa: float | None = None,
+    kappa_candidate_cap: int = DEFAULT_KAPPA_CANDIDATE_CAP,
     from_checkpoint: str | Path | None = None,
     save_checkpoint: bool | str | Path | None = None,
     build_only: bool = False,
     skip_training: bool = False,
     max_convergence_rounds: int = 8,
+    train_mode: str = "full",
+    max_composite_anchors: int = 2000,
+    max_composite_meta: int = 500,
+    max_composite_negatives: int = 500,
+    clear_bad_correlation: bool = False,
 ) -> EvalResult:
     if not paths.corpus.exists():
         raise FileNotFoundError(f"missing corpus: {paths.corpus}")
 
     bad_path = bad_correlation_path(paths.name, mode)
-    bad_store = BadCorrelationStore.load(bad_path)
+    if clear_bad_correlation:
+        bad_path.parent.mkdir(parents=True, exist_ok=True)
+        bad_store = BadCorrelationStore()
+        bad_store.save(bad_path)
+        print("  bad-correlation queue: cleared", flush=True)
+    else:
+        bad_store = BadCorrelationStore.load(bad_path)
 
     if from_checkpoint is not None:
         ckpt = Path(from_checkpoint)
@@ -623,6 +970,8 @@ def evaluate_dataset(
         result = score_from_bundle(
             bundle,
             lambda_prime_factor=lambda_prime_factor,
+            lambda_kappa=lambda_kappa,
+            kappa_candidate_cap=kappa_candidate_cap,
             bad_store=bad_store,
             verbose=verbose,
         )
@@ -634,6 +983,10 @@ def evaluate_dataset(
     if lambda_prime_factor is not None:
         _hs.LAMBDA_PRIME_FACTOR = float(lambda_prime_factor)
         print(f"  LAMBDA_PRIME_FACTOR={_hs.LAMBDA_PRIME_FACTOR}", flush=True)
+    prev_kappa = _hs.LAMBDA_KAPPA
+    if lambda_kappa is not None:
+        _hs.LAMBDA_KAPPA = float(lambda_kappa)
+        print(f"  LAMBDA_KAPPA={_hs.LAMBDA_KAPPA}", flush=True)
 
     if bad_store.entries:
         print(f"  bad-correlation queue: {len(bad_store.entries)} entries (loaded)", flush=True)
@@ -695,6 +1048,22 @@ def evaluate_dataset(
     meet_ms = (time.perf_counter() - t_meet) * 1000.0
     print(f"  meet index: {len(meet_index)} prime factors in {meet_ms:.0f} ms", flush=True)
 
+    # --- BIT 3/4 attractor index (κ buckets — routing always on in eval) ---
+    from pipeline.bit_03_doc_attractor_set import build_attractor_index_from_hub_signatures
+
+    t_attr = time.perf_counter()
+    attractor_index = build_attractor_index_from_hub_signatures(
+        pipe.registry, hub_sigs,
+    )
+    attr_summary = attractor_index.summary()
+    attr_ms = (time.perf_counter() - t_attr) * 1000.0
+    print(
+        f"  attractor index: {attr_summary['buckets']} buckets, "
+        f"{attr_summary['docs']} docs in {attr_ms:.0f} ms  "
+        f"(avg {attr_summary['avg_keys_per_doc']:.1f} keys/doc)",
+        flush=True,
+    )
+
     # --- subword composite origin index (Signal 4) ---
     # Cap at 500 composites to keep per-query O(1) lookup fast.
     # 32-lattice consensus will replace this with higher-quality signals.
@@ -719,34 +1088,55 @@ def evaluate_dataset(
         print(f"  phrase composites: {phrase_idx.n_composites} unique nodes "
               f"({phrase_idx.n_pairs_indexed} pairs)", flush=True)
 
+    composite_only = train_mode == "composite_only"
+    import aethos_hub_signature as _hs
+
     # --- heavy anchor discriminative index (Signal 6) ---
     t_anchor = time.perf_counter()
-    anchor_idx = build_heavy_anchor_index(
-        pipe.registry, cidx.doc_tokens, cidx.doc_freq,
-        max_doc_count=5, rarity_threshold=0.018,
-    )
-    anchor_ms = (time.perf_counter() - t_anchor) * 1000.0
-    print(
-        f"  heavy anchors: {anchor_idx.n_anchors} anchors in {anchor_ms:.0f} ms",
-        flush=True,
-    )
+    if composite_only:
+        from aethos_discriminative import HeavyAnchorIndex
+
+        anchor_idx = HeavyAnchorIndex()
+        _hs.LAMBDA_COORD = 0.5
+        _hs.LAMBDA_NEIGHBOR = 0.15
+        print("  heavy anchors: composite_only (empty index, skip bulk scan)", flush=True)
+    else:
+        anchor_idx = build_heavy_anchor_index(
+            pipe.registry, cidx.doc_tokens, cidx.doc_freq,
+            max_doc_count=5, rarity_threshold=0.018,
+        )
+        anchor_ms = (time.perf_counter() - t_anchor) * 1000.0
+        print(
+            f"  heavy anchors: {anchor_idx.n_anchors} anchors in {anchor_ms:.0f} ms",
+            flush=True,
+        )
 
     # --- load saved brain (compound learning across runs) ---
     b_path = brain_path_for_dataset(paths.name, mode)
     brain_exists = b_path.exists()
     qrels_train_data = load_qrels(paths.qrels_train)
-    init_lc, init_ln = load_brain(b_path, anchor_idx, verbose=True)
-    import aethos_hub_signature as _hs
-    _hs.LAMBDA_COORD = init_lc
-    _hs.LAMBDA_NEIGHBOR = init_ln
+    if composite_only:
+        if brain_exists and verbose:
+            print("  composite_only: ignoring saved brain (fresh composite index)", flush=True)
+    else:
+        init_lc, init_ln = load_brain(b_path, anchor_idx, verbose=True)
+        _hs.LAMBDA_COORD = init_lc
+        _hs.LAMBDA_NEIGHBOR = init_ln
 
-    do_train = qrels_train_data and anchor_idx.n_anchors > 0
-    if skip_training and brain_exists:
+    do_train = bool(qrels_train_data) and (
+        composite_only or anchor_idx.n_anchors > 0
+    )
+    if skip_training:
         do_train = False
-        print("  skip_training: using saved brain (no convergence/calibration)", flush=True)
+        if brain_exists:
+            print("  skip_training: using saved brain (no convergence/calibration)", flush=True)
+        else:
+            print("  skip_training: skipping anchor training and convergence", flush=True)
+
+    neighbor_map = build_neighbor_weights(pipe.registry)
 
     # --- train anchors on train qrels if available ---
-    if do_train:
+    if do_train and not composite_only:
         t_train = time.perf_counter()
         n_trained = train_heavy_anchors(
             anchor_idx,
@@ -779,12 +1169,8 @@ def evaluate_dataset(
         )
 
     # --- discriminating intersection discovery ---
-    # Run BEFORE the convergence loop so new anchors get a training pass.
-    # Finds words unique to gold docs (not in query, not in wrong docs) and builds
-    # new composites that anchor gold docs against vocabulary-mismatched queries.
-    neighbor_map = build_neighbor_weights(pipe.registry)
     if do_train:
-        discover_discriminating_intersections(
+        n_disc = discover_discriminating_intersections(
             anchor_idx,
             pipe.registry,
             queries,
@@ -800,35 +1186,44 @@ def evaluate_dataset(
             cidx.avg_dl,
             sub_comp_idx,
             phrase_idx,
+            max_new_anchors=max_composite_anchors,
             verbose=True,
         )
-        # Negative anchor training: suppress composites that predict wrong docs
-        train_negative_anchors(
+        n_neg = train_negative_anchors(
             anchor_idx, pipe.registry, queries, qrels_train_data,
             cidx.doc_ids, cidx.doc_tokens, cidx.doc_freq, len(cidx.doc_ids),
             hub_sigs, neighbor_map, cidx.doc_tf, cidx.doc_len, cidx.avg_dl,
-            sub_comp_idx, phrase_idx, verbose=True,
-        )
-        # Meta-intersections: depth-3 composites from pairs of trained anchors
-        discover_meta_intersections(
-            anchor_idx, cidx.doc_tokens, cidx.doc_freq, len(cidx.doc_ids),
+            sub_comp_idx, phrase_idx,
+            max_new_negatives=max_composite_negatives,
             verbose=True,
         )
-        # Second training pass: give new discriminating anchors real feedback
-        n_retrain = train_heavy_anchors(
-            anchor_idx,
-            queries,
-            qrels_train_data,
-            cidx.doc_ids,
-            cidx.doc_tokens,
-            pipe.registry,
-            cidx.doc_freq,
-            len(cidx.doc_ids),
+        n_meta = discover_meta_intersections(
+            anchor_idx, cidx.doc_tokens, cidx.doc_freq, len(cidx.doc_ids),
+            max_new=max_composite_meta,
+            verbose=True,
         )
-        print(f"  anchor re-training: {n_retrain} queries (post-discovery)", flush=True)
+        if composite_only:
+            print(
+                f"  composite_only summary: +{n_disc} discriminators  "
+                f"+{n_neg} negatives  +{n_meta} meta  "
+                f"total={anchor_idx.n_anchors} anchors",
+                flush=True,
+            )
+        elif do_train:
+            n_retrain = train_heavy_anchors(
+                anchor_idx,
+                queries,
+                qrels_train_data,
+                cidx.doc_ids,
+                cidx.doc_tokens,
+                pipe.registry,
+                cidx.doc_freq,
+                len(cidx.doc_ids),
+            )
+            print(f"  anchor re-training: {n_retrain} queries (post-discovery)", flush=True)
 
     # --- multi-round convergence training ---
-    if do_train:
+    if do_train and not composite_only:
         qrels_test_data = load_qrels(paths.qrels_test)
         if qrels_test_data:
             print("  running convergence loop...", flush=True)
@@ -858,8 +1253,7 @@ def evaluate_dataset(
             )
 
     # --- λ calibration (grid-search LAMBDA_COORD × LAMBDA_NEIGHBOR on train qrels) ---
-    import aethos_hub_signature as _hs
-    if do_train and anchor_idx is not None:
+    if do_train and anchor_idx is not None and not composite_only:
         print("  calibrating signal weights on train qrels...", flush=True)
         calibrate_signal_weights(
             hub_sigs,
@@ -889,7 +1283,7 @@ def evaluate_dataset(
             if a.correct_count + a.wrong_count > 0
         )
         print(
-            f"  brain saved: {trained_count} trained anchors → {b_path.name}  "
+            f"  brain saved: {trained_count} trained anchors -> {b_path.name}  "
             f"(λ_coord={_hs.LAMBDA_COORD}, λ_neighbor={_hs.LAMBDA_NEIGHBOR}, "
             f"λ_pf={_hs.LAMBDA_PRIME_FACTOR})",
             flush=True,
@@ -918,6 +1312,7 @@ def evaluate_dataset(
         p99_ingest_ms=metrics.p99_ms,
         bytes_per_doc=metrics.mean_bytes_per_doc,
         n_docs=len(cidx.doc_ids),
+        attractor_index=attractor_index,
     )
     if save_checkpoint:
         ckpt_out = (
@@ -945,117 +1340,73 @@ def evaluate_dataset(
             bm25_ref=BM25_REF.get(paths.name),
         )
 
-    # --- query loop ---
+    # --- query loop (BIT 4 routing via attractor_index; 8a optional via lambda_kappa) ---
+    enable_kappa_scoring = lambda_kappa is not None and lambda_kappa > 0
+
     ndcgs: list[float] = []
     r10s: list[float] = []
     q_times: list[float] = []
-    n_docs = len(cidx.doc_ids)
 
     print(f"  scoring {len(qids)} queries...", flush=True)
-    for qi, qid in enumerate(qids):
-        t0 = time.perf_counter()
+    try:
+        loop_t0 = time.perf_counter()
+        for qi, qid in enumerate(qids):
+            t0 = time.perf_counter()
 
-        profile = build_query_profile(
-            queries[qid],
-            pipe.registry,
-            neighbor_map=neighbor_map,
-            doc_freq=cidx.doc_freq,   # document frequency, not term count
-            n_docs=n_docs,
-        )
-        cands = candidate_ids(
-            profile.words, cidx.inv, neighbor_map, cidx.doc_ids,
-            meet_index=meet_index, registry=pipe.registry,
-        )
+            result = _score_one_query(
+                queries[qid],
+                pipe=pipe,
+                cidx=cidx,
+                hub_sigs=hub_sigs,
+                neighbor_map=neighbor_map,
+                meet_index=meet_index,
+                sub_comp_idx=sub_comp_idx,
+                comp_idx=comp_idx,
+                phrase_idx=phrase_idx,
+                anchor_idx=anchor_idx,
+                attractor_index=attractor_index,
+                kappa_candidate_cap=kappa_candidate_cap,
+                enable_kappa_scoring=enable_kappa_scoring,
+            )
 
-        # Signal 6: precompute anchor composites once per query — O(Q²) here,
-        # O(|comps|) per doc (≈0–28 entries vs. iterating 168k anchors).
-        q_anchor_comps: dict[int, float] | None = None
-        if anchor_idx is not None and anchor_idx.n_anchors > 0:
-            q_anchor_comps = query_anchor_composites(
-                list(profile.word_set),
-                anchor_idx,
+            q_ms = (time.perf_counter() - t0) * 1000.0
+            q_times.append(q_ms)
+            rel = qrels[qid]
+            ndcg = ndcg_at_k(result.ranked, rel, 10)
+            ndcgs.append(ndcg)
+            r10s.append(recall_at_k(result.ranked, rel, 10))
+
+            n_bad = record_retrieval_false_positives(
+                bad_store,
+                result.ranked,
+                rel,
+                result.profile,
+                hub_sigs,
                 pipe.registry,
-                idf=profile.idf,
+                top_k=10,
             )
+            if verbose and n_bad:
+                print(f"    q={qid}: recorded {n_bad} bad-correlation signals", flush=True)
 
-        # Signal 7: precompute cluster membership for query words (L7-L9 routing).
-        # Maps hub words that share a cluster with any query word → IDF of the
-        # best query word in that cluster.  O(|word_to_cluster|) once per query.
-        if pipe.reader.word_to_cluster:
-            query_clusters: dict[str, float] = {}  # cluster_id → best IDF
-            for w in profile.word_set:
-                cid = pipe.reader.word_to_cluster.get(w)
-                if cid:
-                    query_clusters[cid] = max(
-                        query_clusters.get(cid, 0.0), profile.idf.get(w, 0.0)
-                    )
-            if query_clusters:
-                qc_ids: dict[str, float] = {}
-                for w2, cid2 in pipe.reader.word_to_cluster.items():
-                    if cid2 in query_clusters and w2 not in profile.word_set:
-                        if qc_ids.get(w2, 0.0) < query_clusters[cid2]:
-                            qc_ids[w2] = query_clusters[cid2]
-                profile.query_cluster_ids = qc_ids
-
-        # Signal 5: precompute phrase composite scores once per query — O(Q²) prime
-        # lookups (Q≤10 → ≤45 pairs). Per-doc scoring becomes O(|q_phrase_comps|)
-        # via frozenset lookup instead of recomputing primes for every candidate.
-        q_phrase_comps: dict[int, float] | None = None
-        if phrase_idx is not None:
-            q_phrase_comps = _query_phrase_composites(
-                profile.words, phrase_idx, pipe.registry, profile.idf,
-            )
-
-        # --- composite candidate expansion (Signals 4+5) ---
-        extra_cands: set[str] = set()
-        # Signal 4: subword composite expansion
-        for qw in profile.word_set:
-            q_comps = sub_comp_idx.word_composites.get(qw, frozenset())
-            for c in q_comps:
-                extra_cands |= sub_comp_idx.composite_to_docs.get(c, set())
-        # Signal 5 candidate expansion disabled — phrase composites are
-        # used for scoring only; candidate expansion caused 500ms+ query times.
-        # Re-enable when 32-lattice consensus scoring is implemented.
-
-        ranked = rank_with_hub_signatures(
-            profile, cands, hub_sigs, cidx.doc_ids,
-            doc_tokens=cidx.doc_tokens,
-            doc_tf=cidx.doc_tf,
-            doc_len=cidx.doc_len,
-            avg_dl=cidx.avg_dl,
-            composite_index=comp_idx,
-            sub_comp_idx=sub_comp_idx,
-            registry=pipe.registry,
-            phrase_idx=phrase_idx,
-            anchor_idx=anchor_idx,
-            query_anchor_comps=q_anchor_comps,
-            query_phrase_comps=q_phrase_comps,
-            top_k=100,
-        )
-
-        q_times.append((time.perf_counter() - t0) * 1000.0)
-        rel = qrels[qid]
-        ndcgs.append(ndcg_at_k(ranked, rel, 10))
-        r10s.append(recall_at_k(ranked, rel, 10))
-
-        n_bad = record_retrieval_false_positives(
-            bad_store,
-            ranked,
-            rel,
-            profile,
-            hub_sigs,
-            pipe.registry,
-            top_k=10,
-        )
-        if verbose and n_bad:
-            print(f"    q={qid}: recorded {n_bad} bad-correlation signals", flush=True)
-
-        if (qi + 1) % 50 == 0:
-            print(
-                f"  query {qi+1}/{len(qids)}  "
-                f"NDCG@10 running avg: {sum(ndcgs)/len(ndcgs):.4f}",
-                flush=True,
-            )
+            progress_every = 1 if verbose else 50
+            if (qi + 1) % progress_every == 0 or qi == 0:
+                _print_query_progress(
+                    arm_label="eval",
+                    qi=qi,
+                    total=len(qids),
+                    qid=qid,
+                    elapsed_ms=q_ms,
+                    n_candidates=result.n_candidates,
+                    route_tier=result.route_tier,
+                    n_kappa_keys=result.n_kappa_keys,
+                    ndcg=ndcg,
+                    avg_ndcg=sum(ndcgs) / len(ndcgs),
+                    loop_elapsed_s=time.perf_counter() - loop_t0,
+                    enable_kappa_scoring=enable_kappa_scoring,
+                )
+    finally:
+        if lambda_kappa is not None:
+            _hs.LAMBDA_KAPPA = prev_kappa
 
     n_q = max(len(qids), 1)
     p50_q = sorted(q_times)[len(q_times) // 2] if q_times else 0.0
@@ -1065,7 +1416,7 @@ def evaluate_dataset(
     unresolved = sum(1 for e in bad_store.entries.values() if not e.resolved)
     print(
         f"  bad-correlation queue saved: {len(bad_store.entries)} pairs, "
-        f"{unresolved} unresolved → {bad_path.name}",
+        f"{unresolved} unresolved -> {bad_path.name}",
         flush=True,
     )
     return EvalResult(

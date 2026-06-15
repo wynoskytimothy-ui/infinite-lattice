@@ -19,12 +19,16 @@ from core.phi_lattice import prime_factor_similarity
 from aethos_pipeline import AethosPipeline
 from aethos_tokenize import tokenize_words
 from eval_beir import (
+    build_meet_index,
+    candidate_generation_tier,
+    candidate_ids,
     doc_text,
     load_corpus,
     merge_qrels,
     ndcg_at_k,
     recall_at_k,
 )
+from aethos_hub_signature import build_all_hub_signatures
 
 
 class TestBeirMetrics(unittest.TestCase):
@@ -68,10 +72,23 @@ class TestHubSignature(unittest.TestCase):
             self.assertIn(w, doc_words)
 
     def test_hub_coords_consistent(self) -> None:
-        sig = build_hub_signature("d0", self.docs[0], self.pipe.registry, top_k=8)
+        sig = build_hub_signature(
+            "d0", self.docs[0], self.pipe.registry, top_k=8, use_pin_wire=False
+        )
         for coord, word in sig.hub_coords.items():
             self.assertIn(word, sig.hubs)
             self.assertEqual(sig.hubs[word].coord, coord)
+
+    def test_pin_wire_uses_pin_maps_not_float_coords(self) -> None:
+        sig = build_hub_signature(
+            "d0", self.docs[0], self.pipe.registry, top_k=8, use_pin_wire=True
+        )
+        self.assertEqual(len(sig.hub_coords), 0)
+        self.assertGreater(len(sig.hub_pins), 0)
+        self.assertGreater(len(sig.hub_leg_sum), 0)
+        for entry in sig.hubs.values():
+            self.assertIsNone(entry.coord)
+            self.assertIsNotNone(entry.pin)
 
     def test_hub_pool_factors_exclude_letters_only(self) -> None:
         sig = build_hub_signature("d0", self.docs[0], self.pipe.registry, top_k=8)
@@ -162,6 +179,76 @@ class TestHubScoring(unittest.TestCase):
         q_phone = 101 * 103
         self.assertGreater(prime_factor_similarity(q_phone, tech), 0.6)
         self.assertLess(prime_factor_similarity(q_phone, food), 0.35)
+
+
+class TestP4CandidateTiers(unittest.TestCase):
+    def setUp(self) -> None:
+        self.pipe = AethosPipeline(rebuild_every=2)
+        self.docs = {
+            "d0": "zebra wildlife savanna migration ecology",
+            "d1": "phone technical chip software network",
+        }
+        self.pipe.ingest(self.docs["d0"], self.docs["d1"])
+        self.tokens = {
+            "d0": frozenset(w for w in self.docs["d0"].split()),
+            "d1": frozenset(w for w in self.docs["d1"].split()),
+        }
+        self.inv: dict[str, set[str]] = {}
+        for did, toks in self.tokens.items():
+            for w in toks:
+                self.inv.setdefault(w, set()).add(did)
+        self.all_ids = ["d0", "d1"]
+        self.hub_sigs = build_all_hub_signatures(
+            self.all_ids,
+            self.tokens,
+            self.pipe.registry,
+            top_k=8,
+        )
+        self.meet_index = build_meet_index(self.hub_sigs, self.pipe.registry)
+
+    def test_tier1_lexical_when_overlap(self) -> None:
+        tier = candidate_generation_tier(
+            ["phone", "technical"],
+            self.inv,
+            {},
+            self.all_ids,
+            meet_index=self.meet_index,
+            registry=self.pipe.registry,
+        )
+        self.assertEqual(tier, "tier1_lexical")
+        cands = candidate_ids(
+            ["phone", "technical"],
+            self.inv,
+            {},
+            self.all_ids,
+            meet_index=self.meet_index,
+            registry=self.pipe.registry,
+        )
+        self.assertEqual(set(cands), {"d1"})
+
+    def test_tier3_not_full_corpus_on_oov_query(self) -> None:
+        """OOV query must not fall back to all_ids when meet index exists."""
+        tier = candidate_generation_tier(
+            ["quantum", "entanglement"],
+            self.inv,
+            {},
+            self.all_ids,
+            meet_index=self.meet_index,
+            registry=self.pipe.registry,
+        )
+        self.assertIn(
+            tier,
+            ("tier2_meet_exact", "tier3_meet_pool", "tier3_meet_fuzzy", "tier4_full_corpus"),
+        )
+        cands = candidate_ids(
+            ["quantum", "entanglement"],
+            self.inv,
+            {},
+            self.all_ids,
+            meet_index=self.meet_index,
+            registry=self.pipe.registry,
+        )
+        self.assertLessEqual(len(cands), len(self.all_ids))
 
 
 class TestBeirLoaders(unittest.TestCase):

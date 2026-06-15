@@ -64,7 +64,7 @@ Status: **PROVEN** (under this frame formalization).
 
 ### 12.3.0 Active anchor sets (C6 — user locked)
 
-The address lattice is **not** restricted to prime anchors for active nodes.
+The **3D complex plane** anchor formula is **not** restricted to prime species for active nodes (`SequenceKind` may be evens, squares, custom, etc.).
 
 - **Topology fixed:** 8 vectors × 4 branches × origin tree (same recursive VA1–VA4 law).
 - **Anchor set free:** any strictly increasing countable chain `A=(a_1,a_2,\ldots)` may label active nodes (`aethos_sequences`, `SequenceKind`, or `CUSTOM`).

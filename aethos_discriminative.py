@@ -507,17 +507,26 @@ def train_convergence_loop(
     neighbor_map,
     sub_comp_idx,
     *,
-    max_rounds: int = 8,
-    convergence_threshold: float = 0.002,
+    max_rounds: int = 16,        # int(10φ) = 16 — φ-derived observation window
+    convergence_threshold: float | None = None,  # None → use φ-gated adaptive gate
     verbose: bool = True,
 ) -> list[float]:
     """
     Repeatedly train on qrels_train and evaluate on qrels_eval.
 
     Each round: call train_on_qrels (accumulates correct/wrong counts) then
-    score all eval queries with the updated anchor weights.  Stop when the
-    NDCG@10 improvement between consecutive rounds falls below
-    convergence_threshold for one round.
+    score all eval queries with the updated anchor weights.
+
+    φ-gated convergence (CCR Master Prime supervisor decision logic):
+      φ = (1 + √5) / 2 ≈ 1.618 (golden ratio)
+      φ⁻¹ ≈ 0.618 (consolidation gate)
+
+      Stop when the per-round improvement falls below φ⁻¹ × first_round_gain.
+      This means each subsequent round must preserve at least 61.8% of the
+      initial learning velocity to continue — the same criterion your CCR
+      "compress when stable" rule used.
+
+      If convergence_threshold is given explicitly, use that instead.
 
     Optimisations:
     - Inverted index built once (not per-round) for candidate generation.
@@ -620,11 +629,26 @@ def train_convergence_loop(
                 flush=True,
             )
 
-        # Convergence: stop when last improvement < threshold
-        if len(history) >= 2 and (history[-1] - history[-2]) < convergence_threshold:
-            if verbose:
-                print(f"  Converged after {round_num} rounds.", flush=True)
-            break
+        # φ-gated convergence (CCR Master Prime supervisor decision logic)
+        if len(history) >= 2:
+            delta = history[-1] - history[-2]
+            if convergence_threshold is not None:
+                # Explicit threshold
+                gate = convergence_threshold
+            else:
+                # Adaptive φ-gate: require improvement ≥ φ⁻¹ of first-round gain
+                # φ⁻¹ ≈ 0.618 — consolidation gate from CCR "compress when stable"
+                PHI_INV = 0.6180339887  # 1/φ = φ - 1
+                first_delta = history[1] - history[0] if len(history) > 1 else 0.0
+                gate = max(first_delta * PHI_INV, 0.0005)  # floor of 0.05% gain
+            if delta < gate:
+                if verbose:
+                    print(
+                        f"  φ-converged after {round_num} rounds "
+                        f"(delta={delta:.4f} < gate={gate:.4f}).",
+                        flush=True,
+                    )
+                break
 
     return history
 

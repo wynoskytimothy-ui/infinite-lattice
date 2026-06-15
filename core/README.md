@@ -17,7 +17,7 @@ Micro-step stack: **L1 characters → L2 subwords → bridge → production regi
 - `primes.py` — odd-prime chains, `PrimePool`, FTA helpers
 - `l1_characters.py` — `char_prime`, `intersection_prime` (letter sum)
 - `l2_subwords.py` — `SubwordStats`, PMI/z, `SubwordPromoter`, `decompose`, `shared_l2_factors`
-- `phi_lattice.py` — VA1–VA4, 32 wings, Z plateau, `swap_meet`, `prime_factor_similarity`
+- `phi_lattice.py` — **3D complex plane** engine (legacy filename): VA1–VA4, 32 wings, Z plateau, `swap_meet`
 - `bridge_registry.py` — sync L2 into `PromotionRegistry`
 - `bridge_library.py` — adapter for `aethos_library.PrimeAssigner` (when pasted)
 - `learning_engine.py` — bad-correlation queue, factor analogy, distilled registry brain, BEIR FP hooks
