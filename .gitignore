@@ -37,3 +37,14 @@ brains/
 
 # Optional heavy outputs
 ocean_trace_demo.csv
+
+# Regenerable data caches / downloaded datasets (not source).
+# (Comments must be on their own line — git ignores no trailing comments.)
+# marco_pool.pkl regenerates via marco_lab.load_pool(); text8.zip is a download;
+# *.npz are bearing datasets; bearing_*.json are monitor run outputs.
+marco_pool.pkl
+text8.zip
+*.npz
+bearing_*.json
+wiki_cache.json
+_viz_series.txt
