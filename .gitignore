@@ -53,3 +53,7 @@ _viz_series.txt
 # Node + run logs (never source)
 node_modules/
 logs/
+
+# user photo dumps (large binaries, not source)
+_user_photos/
+_user_photos2/
