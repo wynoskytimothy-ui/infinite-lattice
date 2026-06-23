@@ -61,8 +61,10 @@ def build(corpus):
     doc_w = [set(tid[("w", w)] for w in set(toks(corpus[c]))) for c in cids]
     ndist = np.array([len(s) for s in doc_w], np.float32)
     wlen = np.array([len(toks(corpus[c])) for c in cids], np.float32)
+    wv = [k[1] for k in vocab if k[0] == "w"]
+    awl = float(np.mean([len(w) for w in wv])) if wv else 5.0   # alignment signal: avg word length
     return dict(cids=cids, M=M, tid=tid, wtid=wtid, idf=idf, ptr=ptr, di=di, tf=tf,
-                doclen=doclen, avgdl=float(doclen.mean()), doc_w=doc_w, ndist=ndist, wlen=wlen)
+                doclen=doclen, avgdl=float(doclen.mean()), doc_w=doc_w, ndist=ndist, wlen=wlen, awl=awl)
 
 
 def widf(eng, w):
@@ -103,7 +105,14 @@ def bm25(eng, qbag, B):
 
 
 def search(eng, corr, query, cfg, k=10):
-    if cfg.get("router"):                         # per-query router: long argument-query vs short question
+    if cfg.get("router2"):                        # multi-signal router: query length + corpus alignment
+        if len(toks(query)) > 40:
+            cfg = {"div": 0.5, "lenp": 0.3}                      # long argument query -> length+diversity
+        elif eng["awl"] < cfg.get("awl_thresh", 6.3):
+            cfg = {"wordonly": True, "div": 0.25}               # short + everyday/aligned -> fragment-cap
+        else:
+            cfg = {"div": 0.25}                                  # short + scientific -> keep gears, diversity
+    elif cfg.get("router"):                       # wave-3 router: query length only
         cfg = {"div": 0.5, "lenp": 0.3} if len(toks(query)) > 40 else {"div": 0.25}
     qbag = dbag(query)
     if cfg.get("wordonly"):                       # fragment-cap: drop trigram/prefix gears at query time
