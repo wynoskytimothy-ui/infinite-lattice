@@ -103,7 +103,12 @@ def bm25(eng, qbag, B):
 
 
 def search(eng, corr, query, cfg, k=10):
-    qbag = dbag(query); lex = bm25(eng, qbag, cfg.get("b", 0.75)); M = eng["M"]
+    if cfg.get("router"):                         # per-query router: long argument-query vs short question
+        cfg = {"div": 0.5, "lenp": 0.3} if len(toks(query)) > 40 else {"div": 0.25}
+    qbag = dbag(query)
+    if cfg.get("wordonly"):                       # fragment-cap: drop trigram/prefix gears at query time
+        qbag = {kk: vv for kk, vv in qbag.items() if kk[0] == "w"}
+    lex = bm25(eng, qbag, cfg.get("b", 0.75)); M = eng["M"]
     exp = np.zeros(M, np.float32)
     for qt in set(toks(query)):
         for (dt, wt) in corr.get(qt, []):
@@ -117,10 +122,12 @@ def search(eng, corr, query, cfg, k=10):
     lmax = max(float(lex[cand].max()), 1e-9); emax = max(float(exp.max()), 1e-9)
     score = lex[pool] / lmax + LAM * exp[pool] / emax
     qw = set(t for t in (eng["tid"].get(("w", w)) for w in set(toks(query))) if t is not None)
-    if cfg and (cfg.get("contain") or cfg.get("div") or cfg.get("hub") or cfg.get("rare")):
+    if cfg and any(cfg.get(x) for x in ("contain", "div", "hub", "rare", "lenp")):
         qidf = {t: float(eng["idf"][t]) for t in qw}
         for i, d in enumerate(pool):
             matched = qw & eng["doc_w"][d]
+            if cfg.get("lenp"):                   # length de-pile-up: demote long docs
+                score[i] *= max(eng["wlen"][d], 1.0) ** (-cfg["lenp"])
             if cfg.get("contain"):
                 score[i] *= 1 + cfg["contain"] * len(matched) / max(len(qw), 1)
             if cfg.get("div"):
@@ -147,17 +154,12 @@ def main():
         ids = [q for q in test_q if q in queries]
         engs[nm] = (eng, corr, queries, test_q, ids)
         print(f"  built {nm}: {eng['M']:,} docs, {len(ids)} test q", flush=True)
-    configs = {
+    configs = {                                   # WAVE 3: the per-query ROUTER vs single rules vs oracle
         "baseline": {},
-        "contain0.3": {"contain": 0.3}, "contain0.6": {"contain": 0.6}, "contain1.0": {"contain": 1.0},
-        "div0.10": {"div": 0.10}, "div0.25": {"div": 0.25}, "div0.50": {"div": 0.50},
-        "hub0.85": {"hub": 0.85}, "hub0.70": {"hub": 0.70},
-        "rare0.3": {"rare": 0.3}, "rare0.6": {"rare": 0.6},
-        "b0.4": {"b": 0.4}, "b0.9": {"b": 0.9},
-        "contain0.6+div0.25": {"contain": 0.6, "div": 0.25},
-        "contain0.6+hub0.85": {"contain": 0.6, "hub": 0.85},
-        "contain0.6+div0.25+hub0.85": {"contain": 0.6, "div": 0.25, "hub": 0.85},
-        "contain1.0+div0.25": {"contain": 1.0, "div": 0.25},
+        "div0.25 (best single)": {"div": 0.25},
+        "len0.3": {"lenp": 0.3},
+        "div0.5+len0.3": {"div": 0.5, "lenp": 0.3},
+        "ROUTER (qlen>40)": {"router": True},
     }
     rows = []
     for cname, cfg in configs.items():
@@ -165,13 +167,17 @@ def main():
         rows.append((cname, sum(per.values()) / len(NAMES), per))
     base = next(a for n, a, p in rows if n == "baseline")
     base_per = next(p for n, a, p in rows if n == "baseline")
+    oracle_per = {nm: max(p[nm] for _, _, p in rows) for nm in NAMES}   # router ceiling: each corpus its best rule
+    oracle_avg = sum(oracle_per.values()) / len(NAMES)
     rows.sort(key=lambda x: -x[1])
-    print(f"\n  RULE SWEEP -- avg nDCG@10 across {NAMES} (baseline {base:.4f})\n")
-    print(f"  {'config':<30}{'avg':>8}{'delta':>9}  " + "".join(f"{n[:8]:>9}" for n in NAMES))
+    print(f"\n  RULE SWEEP WAVE 2 -- avg nDCG@10 across {NAMES} (baseline {base:.4f})\n")
+    print(f"  {'config':<28}{'avg':>8}{'delta':>9}  " + "".join(f"{n[:8]:>9}" for n in NAMES))
     for cname, avg, per in rows:
-        gen = avg > base and all(per[n] >= base_per[n] - 0.003 for n in NAMES)   # helps avg, hurts none >0.003
-        print(f"  {cname:<30}{avg:>8.4f}{avg-base:>+9.4f}  " + "".join(f"{per[n]:>9.4f}" for n in NAMES) +
+        gen = avg > base and all(per[n] >= base_per[n] - 0.003 for n in NAMES)
+        print(f"  {cname:<28}{avg:>8.4f}{avg-base:>+9.4f}  " + "".join(f"{per[n]:>9.4f}" for n in NAMES) +
               ("  <- generalizes" if gen and cname != "baseline" else ""))
+    print(f"\n  {'ORACLE ROUTER (per-corpus best)':<28}{oracle_avg:>8.4f}{oracle_avg-base:>+9.4f}  " +
+          "".join(f"{oracle_per[n]:>9.4f}" for n in NAMES) + "  = ceiling if we pick the right rule per corpus")
 
 
 if __name__ == "__main__":
