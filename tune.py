@@ -131,10 +131,14 @@ def search(eng, corr, query, cfg, k=10):
     lmax = max(float(lex[cand].max()), 1e-9); emax = max(float(exp.max()), 1e-9)
     score = lex[pool] / lmax + LAM * exp[pool] / emax
     qw = set(t for t in (eng["tid"].get(("w", w)) for w in set(toks(query))) if t is not None)
-    if cfg and any(cfg.get(x) for x in ("contain", "div", "hub", "rare", "lenp")):
+    if cfg and any(cfg.get(x) for x in ("contain", "div", "hub", "rare", "lenp", "jac")):
         qidf = {t: float(eng["idf"][t]) for t in qw}
+        nq = max(len(qw), 1)
         for i, d in enumerate(pool):
             matched = qw & eng["doc_w"][d]
+            if cfg.get("jac"):                    # prime_factor_similarity = Jaccard of term-sets (anti-goblin)
+                inter = len(matched); union = nq + len(eng["doc_w"][d]) - inter
+                score[i] += cfg["jac"] * (inter / max(union, 1))
             if cfg.get("lenp"):                   # length de-pile-up: demote long docs
                 score[i] *= max(eng["wlen"][d], 1.0) ** (-cfg["lenp"])
             if cfg.get("contain"):
@@ -163,12 +167,13 @@ def main():
         ids = [q for q in test_q if q in queries]
         engs[nm] = (eng, corr, queries, test_q, ids)
         print(f"  built {nm}: {eng['M']:,} docs, {len(ids)} test q", flush=True)
-    configs = {                                   # WAVE 3: the per-query ROUTER vs single rules vs oracle
+    configs = {                                   # prime_factor_similarity (Jaccard) -- the user's anti-goblin formula
         "baseline": {},
-        "div0.25 (best single)": {"div": 0.25},
-        "len0.3": {"lenp": 0.3},
-        "div0.5+len0.3": {"div": 0.5, "lenp": 0.3},
+        "div0.25": {"div": 0.25},
+        "jac0.3": {"jac": 0.3}, "jac0.6": {"jac": 0.6}, "jac1.0": {"jac": 1.0},
+        "jac0.6+div0.25": {"jac": 0.6, "div": 0.25},
         "ROUTER (qlen>40)": {"router": True},
+        "ROUTER+jac0.6": {"router": True, "jac": 0.6},
     }
     rows = []
     for cname, cfg in configs.items():
