@@ -199,8 +199,16 @@ def routed_search(
     mode: str = "strict",
     signal: GapSignal | None = None,
     pair_bridges=None,
+    restricted_score=None,
+    bridge_idf=None,
+    hub_idf_gate: float = 0.0,
+    hub_blocklist=None,
 ) -> tuple[list, GapSignal]:
-    """Lexical floor, or lexical + gated PRF + gated teach expansion."""
+    """Lexical floor, or lexical + gated PRF + gated teach expansion.
+
+    restricted_score: optional ``(query) -> {doc: score}`` used instead of
+    ``idx._score`` on teach rewrites — keeps κ-primary search pool-bounded.
+    """
     prf = prf_expansion(
         idx, corpus, idf, query, lex, rare_doc_cache=rare_doc_cache,
     )
@@ -218,7 +226,12 @@ def routed_search(
     exp: dict[int, float] = defaultdict(float)
     if pair_bridges is not None:
         from aethos_bridges import bridge_expansion
-        for d, s in bridge_expansion(idx, pair_bridges, query).items():
+        for d, s in bridge_expansion(
+            idx, pair_bridges, query,
+            idf=bridge_idf,
+            hub_idf_gate=hub_idf_gate,
+            hub_blocklist=hub_blocklist,
+        ).items():
             exp[d] += s
 
     if not sig.route_prf and not route_teach and not exp:
@@ -227,7 +240,10 @@ def routed_search(
     if route_teach and teach is not None:
         rq = teach.rewrite_query(query)
         if rq != query:
-            lex = idx._score(rq)
+            if restricted_score is not None:
+                lex = restricted_score(rq)
+            else:
+                lex = idx._score(rq)
 
     if sig.route_prf:
         for d, s in prf.items():
