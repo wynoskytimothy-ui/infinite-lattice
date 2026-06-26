@@ -1,0 +1,268 @@
+AETHOS
+ Prime-Corridor Lattice
+ Operations Design Specification
+Author:
+Timothy Wynosky
+For:
+Andrea Mariotti, CTO, Scrybus
+Date:
+December 18, 2025
+Version:
+1.0 - Implementation Ready
+Purpose: Define insertion, deletion, and distance operations on the Prime-Corridor Lattice to enable
+implementation and testing.
+
+Overview
+The AETHOS Prime-Corridor Lattice is a deterministic geometric state machine that provides real-time anomaly
+detection, prediction, and audit compression without storing raw data.
+Core Principles:
+ Deterministic: Same input always produces same lattice position
+ Collision-free: No two different states map to identical coordinates
+ Minimal structure: Expands only when uncertainty/novelty demands it
+ No raw data storage: Stores only paths, correlations, and drift metrics
+ Infinite extensibility: Can add new feature groups without breaking existing structure
+ Real-time operation: Fast insert/query suitable for production systems
+What Makes This Different: Traditional systems store all data and search for patterns. AETHOS maps
+observations to geometric positions, making anomalies appear as natural geometric deviations—no
+training required for detection.
+
+1. Core Geometry
+1.1 Origin and Coordinate System
+All structure originates from a single shared origin:
+O = (0, 0, 0)
+1.2 Eight Directional Spines
+The system uses eight fixed directional vectors (signed 3D diagonals) that serve as independent parallel
+monitoring channels:
+D = {
+  (1, 1, 1),  (1, 1, -1),  (1, -1, 1),  (-1, 1, 1),
+  (-1, -1, 1),  (-1, 1, -1),  (1, -1, -1),  (-1, -1, -1)
+}
+A spine extends infinitely from the origin: Sd(n) = n · d where n ∈ ■
+Why 8 spines? Each spine monitors a different behavioral aspect: trends, volatility, stability, integrity,
+response timing, delayed effects, correlations, and baseline drift. This parallel structure enables
+correlation discovery without explicit correlation modeling.
+1.3 Prime Corridors (Feature Channels)
+Each prime number p defines a corridor (sensor channel). Movement along a corridor represents change in a
+specific feature group:
+C(p, d, k) = k · p · d
+Where:
+ p = prime number (feature group identifier)
+ d = direction vector (which spine)
+ k = step count (magnitude of deviation)
+Orthogonality: Because primes are unique, corridors are mathematically orthogonal—activity in one
+feature cannot corrupt another.
+
+2. Node Addressing (Deterministic Mapping)
+A node address is a sparse set of prime steps that uniquely identifies a system state:
+K = { (pi, di, ki) }
+Node coordinate: X(K) = Σ (ki · pi · di)
+Key Properties:
+ No collisions: Different states produce different coordinates unless encodings are identical
+ Deterministic: Same observation always maps to same position
+ Invertible: Can decode the feature state from coordinates
+ Infinite scalability: Adding new primes (features) doesn't break existing structure
+
+3. INSERTION: Computing the Mapping
+Insertion transforms a raw observation into a deterministic lattice position. This is the core operation that
+enables all subsequent analysis.
+3.1 Feature Grouping
+Given an observation z (event, sensor reading, document action, etc.), partition it into logical feature groups G:
+Example feature groups for document workflow monitoring:
+ Workflow state: Current step, stage progression, completion status
+ Timing features: Latencies, durations, inter-arrival times
+ Device/network: IP address, device fingerprint, ASN, geolocation
+ Identity features: User hashes, participant graphs, role patterns
+ Content patterns: Edit frequency, document type, data volume
+3.2 Prime Assignment
+Each feature group g maps to a unique prime p via a stable dictionary:
+Feature Group
+Prime
+Purpose
+Workflow state
+2
+Document progression tracking
+Device/IP risk
+3
+Security monitoring
+Timing/latency
+5
+Performance tracking
+Content patterns
+7
+Behavior analysis
+Identity graph
+11
+Participant monitoring
+Important: This mapping is append-only. New feature groups get new primes, preserving all existing
+structure.
+3.3 Degree Computation (Quantization)
+For each feature group, compute normalized deviation from baseline:
+ag = (vg − µg) / (σg + ε)
+Then extract:
+ Sign: sg = sign(ag)
+ Bucket: bg = floor(|ag| / Δ)
+ Step count: kg = min(kmax, bg + 1)
+This encoding answers: "How far from the good zone is this feature?" Positive deviations and negative
+deviations map to different directions.
+3.4 Wing/Direction Selection
+
+Choose direction dg from the eight spines using a deterministic rule. Then select one of four branch modes (8
+spines × 4 modes = 32 total wings):
+Spine selection: Use sign pattern of anchor groups (timing, risk, stage)
+Branch mode: Hash stable identifiers (doc_id, event_type) mod 4
+No randomness: Same inputs always produce same direction. This determinism is what makes the
+system reproducible and auditable.
+3.5 Address Construction
+Combine all feature groups into a single node address:
+K(z) = { (pg, dg, kg) for all g ∈ G(z) }
+Coordinate: X(z) = Σ (kg · pg · dg)
+3.6 Update Operations
+On each insertion, update the following data structures:
+ Node counter: N[X(z)] += 1 (how many times we've seen this state)
+ Edge counter: E[X(zt-1), X(zt)] += 1 (state transitions)
+ Per-corridor notebook: EWMA mean, variance, drift slope, anomaly residual
+ Sequence tracking: Last seen timestamp, dwell duration
+Memory footprint: Only statistics are stored—not raw observations. A system with 1M unique states
+might use <100MB of memory.
+
+4. DELETION: Reverse Traversal
+Deletion is the inverse of insertion. Because addressing is deterministic, no search is required—we simply
+recompute the address and decrement counters.
+4.1 Deletion Algorithm
+Given the same observation z:
+1. Recompute X(z) using the insertion mapping
+2. Decrement node count: N[X(z)] -= 1
+3. Decrement edge count: E[X(zt-1), X(z)] -= 1
+4. If N[X(z)] = 0 and no edges remain, prune node (optional garbage collection)
+4.2 Why This Matters
+Deletion enables:
+ Replay correction: Remove erroneous observations from training
+ Sliding windows: Maintain only recent N observations
+ Privacy compliance: Delete user data on request (GDPR)
+ Model pruning: Remove low-frequency states to reduce memory
+
+5. DISTANCE: Multidimensional Metric
+Distance in the lattice is not simple Euclidean distance. It's a multidimensional measure that captures
+geometric, structural, and behavioral similarity.
+5.1 Geometric Distance (Spatial Proximity)
+For nodes x■, x■ in coordinate space:
+dgeom(x■, x■) = ||x■ − x■||2  (L2 norm)
+or
+dgeom(x■, x■) = ||x■ − x■||1  (L1 norm for speed)
+Use this when: You want to find nearby states in coordinate space.
+5.2 Prime/Feature Distance (Interpretable)
+Using prime-step addresses K■, K■:
+dprime(z■, z■) = Σ wg · |kg1 − kg2|
+This directly measures feature-space deviation. For example, if two states differ only in timing features (prime
+p=5), the distance will be proportional to the timing difference.
+Use this when: You need explainable distance ("These states differ mainly in latency").
+5.3 Graph/Behavioral Distance (Transition-Based)
+The edge counts form a weighted directed graph. Define edge cost:
+c(u → v) = −log((E[u,v] + λ) / (Σ E[u,*] + λ|V|))
+Graph distance is shortest-path cost via Dijkstra. This measures: "How surprising is it to transition from state u
+to state v?"
+Use this when: You want to find behaviorally similar states (same transition patterns).
+5.4 Combined Distance (Production Use)
+In practice, use weighted combination:
+d(u,v) = α·dgeom(u,v) + β·dprime(u,v) + γ·dgraph(u,v)
+Default weights: α=0.3, β=0.4, γ=0.3 (tune empirically per use case)
+
+6. First Implementation Use Case
+6.1 Document Workflow Anomaly Detection (Scrybus)
+Goal: Detect problematic document signing workflows early, enabling intervention before stalls,
+disputes, or fraud occur.
+Inputs: Time-stamped events from document workflow system:
+ Document views, edits, signing actions
+ Participant events (added/removed signers)
+ Device/IP changes, location shifts
+ Timing: step durations, latencies, idle periods
+ Content: document type, size, number of pages
+Outputs:
+ Real-time state classification: Green (normal), Yellow (warning), Red (high risk)
+ Anomaly score: Quantitative deviation from normal patterns
+ Nearest resolution path: Similar past workflows that resolved successfully
+ Compressed audit trace: Full workflow history in <1KB per transaction
+6.2 Why This Use Case First
+ Immediate business value: Reducing stalled workflows directly impacts revenue
+ Measurable metrics: Can compare to historical outcomes (completed vs disputed)
+ Available data: Historical workflows can be labeled for validation
+ Clear anomalies: Fraud patterns, geographic mismatches, timing outliers
+ Scrybus domain expertise: Deep understanding of normal vs abnormal workflows
+
+7. Implementation Phases
+Phase 1: Core Lattice (2-3 days)
+Deliverables:
+ Mapping function: map_event_to_node(z) → node_id, coord, prime_steps
+ Data structures: node_counts[node_id], edge_counts[(prev, curr)]
+ Per-corridor notebooks: EWMA statistics for each prime
+ Basic distance: geometric and prime-feature distance
+Phase 2: Scoring & Detection (2-3 days)
+ Anomaly score: At = Σ wj · indicator(zonej is bad)
+ Drift score: Dt = distance(current_distribution, baseline_distribution)
+ Nearest resolution path: Find historical nodes labeled 'resolved-good'
+ Graph distance: Implement shortest-path on transition graph
+Phase 3: Evaluation Harness (3-4 days)
+ Label historical workflows: completed, stalled, disputed, fraud-flagged
+ Metrics: detection lead time, precision, recall, ROC/AUC
+ Compression ratio: raw events vs lattice trace size
+ Benchmark: Compare to traditional ML methods (if available)
+Total timeline: 7-10 days for working prototype with evaluation results.
+
+8. Questions for Andrea
+Before implementation begins, we need clarity on:
+ Use case confirmation: Is document workflow anomaly detection the right first target?
+ Data access: What historical workflow data is available? What format?
+ Labeled outcomes: Can past workflows be labeled (completed/stalled/disputed)?
+ Feature availability: Which events are tracked? Device fingerprints? IP data?
+ Success metrics: What detection lead time is operationally useful? (1 hour? 1 day?)
+ Baseline comparison: Is there an existing anomaly detection system to compare against?
+ Deployment target: Python server? Real-time stream? Batch processing?
+ Timeline: Is 7-10 days acceptable for working prototype?
+Alternative use cases (if document workflow isn't right):
+ Cybersecurity: Network intrusion detection (already validated theoretically)
+ Medical: Patient deterioration early warning
+ Financial: Fraud detection in transactions
+ Industrial: Equipment failure prediction
+
+Appendix A: Technical Notation
+Symbol
+Meaning
+O
+Origin point (0,0,0)
+D
+Set of 8 directional vectors
+p
+Prime number (feature group identifier)
+k
+Step count (deviation magnitude)
+K
+Node address (set of prime steps)
+X(K)
+Node coordinate (sum of prime steps)
+N[x]
+Node visit count
+E[u,v]
+Edge transition count
+z
+Observation (event or sensor reading)
+G
+Feature groups
+a_g
+Normalized deviation for group g
+d_geom
+Geometric distance
+d_prime
+Prime-feature distance
+d_graph
+Graph/behavioral distance
+Appendix B: Key Guarantees
+ Determinism: Same input always produces same output—no randomness anywhere
+ Collision-freedom: Different states cannot map to identical coordinates
+ Invertibility: Can reconstruct feature state from coordinates
+ Scalability: Handles millions of unique states with <100MB memory
+ Real-time: Insert/query operations in O(log n) or better
+ Auditability: Complete trace of all state transitions
+ Extensibility: Can add new features without breaking existing structure
+ — END OF SPECIFICATION —
+ Ready to implement when you give the word.
+ Timothy Wynosky | wynoskytimothy@gmail.com

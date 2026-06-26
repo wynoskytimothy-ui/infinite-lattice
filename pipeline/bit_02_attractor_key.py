@@ -49,6 +49,11 @@ def kappa_from_cell(
     return kappa(cell.z, cell.zeta, quantize=quantize)
 
 
+def kappa_pair_meet(k1: AttractorKey, k2: AttractorKey) -> AttractorKey:
+    """Component-wise min — shared corridor for co-occurring rare terms."""
+    return (min(k1[0], k2[0]), min(k1[1], k2[1]), min(k1[2], k2[2]))
+
+
 def attractor_neighbors(
     key: AttractorKey,
     *,

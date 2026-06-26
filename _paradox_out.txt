@@ -1,0 +1,19 @@
+==========================================================================
+PART 1 — HILBERT'S HOTEL as prime-power (Godel) routing
+==========================================================================
+[A] one new guest  : routed 2000 guests, collisions=0, min image=2 (room 1 free? True)
+    injection holds: True
+[B] countably-inf  : collisions=0, all images even (odds freed)=True
+    injection holds: True
+[C] inf x inf buses: pairs=12000, collisions=0, FTA-decode checked=900 mismatches=0
+    injection holds: True   FTA inverts every code: True
+    largest code used = 847060995673010278712291687093122340846629141143985528774559320351390610735914100047744102865484990959669958583893833963888762157601 for 12000 pairs => density 1.42e-128 (Cantor pairing density ~ O(1)).
+    image is prime-powers only => INJECTION not surjection onto N.
+    (classic Cantor pairing is the true bijection; Godel code wastes N.)
+
+  NAME (honest): prime-power encoding == Godel numbering. Not new;
+  it is the 1931 construction. FTA (sympy factorint) is the inverse.
+
+==========================================================================
+PART 2 — RUSSELL'S PARADOX vs the level-invariant boundary
+==========================================================================

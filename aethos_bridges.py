@@ -44,6 +44,8 @@ class RelevanceBridges:
         self.cooc = defaultdict(Counter)
         self.qt_pairs = Counter()
         self.bridge = {}
+        # (r1, r2) -> [(doc_term, weight)] when gold has r2 but not literal r1
+        self.corridor_bridge: dict[tuple[str, str], list[tuple[str, float]]] = {}
 
     def _idf(self, w):
         p = self.idx.token_prime.get(("w", w))
@@ -94,14 +96,153 @@ class RelevanceBridges:
                 self.bridge[qt] = scored[:self.top_per_term]
         return self
 
+    def learn_rarest_corridors(
+        self,
+        queries,
+        train_qrels,
+        corpus,
+        *,
+        min_pairs: int = 1,
+        companion_idf_gate: float = 2.5,
+        top_per_pair: int | None = None,
+    ) -> RelevanceBridges:
+        """Learn r1->doc-term bridges from gold where r2 is present but r1 is absent.
+
+        Captures the 'company they keep' — rarest-2 anchors the doc; r1 reaches
+        it through learned doc-term partners co-occurring with r2 in train gold.
+        """
+        idf_cache: dict[str, float] = {}
+        top = top_per_pair or self.top_per_term
+
+        def idf(w: str) -> float:
+            v = idf_cache.get(w)
+            if v is None:
+                p = self.idx.token_prime.get(("w", w))
+                v = self.idx._idf(p, self.N) if p else 0.0
+                idf_cache[w] = v
+            return v
+
+        cooc: dict[tuple[str, str], Counter] = defaultdict(Counter)
+        pair_hits: Counter[tuple[str, str]] = Counter()
+        qcache: dict[str, tuple[str, str] | None] = {}
+
+        for qid, rels in train_qrels.items():
+            if qid not in queries:
+                continue
+            pair = qcache.get(qid)
+            if pair is None:
+                uniq = list(dict.fromkeys(
+                    w for w in words(queries[qid]) if w.isalpha() and len(w) >= 3
+                ))
+                if len(uniq) < 2:
+                    qcache[qid] = None
+                    continue
+                ranked = sorted(uniq, key=lambda w: (-idf(w), w))
+                pair = (ranked[0], ranked[1])
+                qcache[qid] = pair
+            if pair is None:
+                continue
+            r1, r2 = pair
+            for cid, sc in rels.items():
+                if sc <= 0 or cid not in corpus:
+                    continue
+                dtoks = set(words(corpus[cid]))
+                if r1 in dtoks or r2 not in dtoks:
+                    continue
+                pair_hits[(r1, r2)] += 1
+                for dt in dtoks:
+                    if dt == r1 or idf(dt) < companion_idf_gate:
+                        continue
+                    cooc[(r1, r2)][dt] += 1
+
+        self.corridor_bridge.clear()
+        for key, partners in cooc.items():
+            np_ = pair_hits[key]
+            if np_ < min_pairs:
+                continue
+            r1, r2 = key
+            scored = [
+                (dt, (c / np_) * idf(dt))
+                for dt, c in partners.items()
+                if c >= min_pairs and dt != r1
+            ]
+            scored.sort(key=lambda x: (-x[1], x[0]))
+            if scored:
+                self.corridor_bridge[key] = scored[:top]
+                # lift r1 solo bridges from corridor evidence
+                merged = dict(self.bridge.get(r1, ()))
+                for dt, w in scored[:top]:
+                    merged[dt] = max(merged.get(dt, 0.0), w * 0.85)
+                if merged:
+                    self.bridge[r1] = sorted(
+                        merged.items(), key=lambda x: (-x[1], x[0]),
+                    )[: self.top_per_term]
+        return self
+
     def stats(self):
-        return len(self.bridge), sum(len(v) for v in self.bridge.values())
+        n_cor = sum(len(v) for v in self.corridor_bridge.values())
+        return len(self.bridge), sum(len(v) for v in self.bridge.values()) + n_cor
 
 
-def bridge_expansion(idx, br, query):
-    """Doc weights from supervised / knowledge term bridges."""
+def rarest_query_pair(query: str, idf) -> tuple[str, str] | None:
+    """Two rarest content words in query (by corpus idf)."""
+    uniq = list(dict.fromkeys(
+        w for w in words(query) if w.isalpha() and len(w) >= 3
+    ))
+    if len(uniq) < 2:
+        return None
+    ranked = sorted(uniq, key=lambda w: (-idf(w), w))
+    return ranked[0], ranked[1]
+
+
+def corridor_bridge_expansion(
+    idx,
+    br: RelevanceBridges,
+    query: str,
+    *,
+    idf,
+    companion_boost: float = 1.35,
+) -> dict[str, float]:
+    """Expand via (r1, r2) corridor when query has both rarest terms."""
+    if not br.corridor_bridge or idf is None:
+        return {}
+    pair = rarest_query_pair(query, idf)
+    if pair is None:
+        return {}
+    r1, r2 = pair
+    partners = br.corridor_bridge.get(pair)
+    if not partners:
+        return {}
+    exp: dict[str, float] = defaultdict(float)
+    r2_prime = idx.token_prime.get(("w", r2))
+    r2_post = idx.postings.get(r2_prime, {}) if r2_prime else {}
+    for dt, w in partners:
+        p = idx.token_prime.get(("w", dt))
+        if p is None:
+            continue
+        for d, tf in idx.postings.get(p, {}).items():
+            if d not in idx.alive:
+                continue
+            boost = companion_boost if d in r2_post else 1.0
+            exp[d] += w * boost * tf / (tf + 1.0)
+    return exp
+
+
+def bridge_expansion(idx, br, query, *, idf=None, hub_idf_gate: float = 0.0, hub_blocklist=None,
+                     use_corridors: bool = True):
+    """Doc weights from supervised / knowledge term bridges.
+
+    hub_idf_gate: skip bridge fan from ultra-common query terms (0 or >=50 = off).
+    hub_blocklist: extra terms to skip (cross-corpus learned hub diluters).
+    """
     exp = defaultdict(float)
+    gate = hub_idf_gate if 0 < hub_idf_gate < 50 else 0.0
+    block = set(hub_blocklist or ())
     for qt in set(words(query)):
+        if qt in block:
+            continue
+        if idf is not None and gate > 0 and idf(qt) < gate:
+            continue
         for dt, w in br.bridge.get(qt, ()):
             p = idx.token_prime.get(("w", dt))
             if p is None:
@@ -109,6 +250,9 @@ def bridge_expansion(idx, br, query):
             for d, tf in idx.postings.get(p, {}).items():
                 if d in idx.alive:
                     exp[d] += w * tf / (tf + 1.0)
+    if use_corridors and idf is not None and getattr(br, "corridor_bridge", None):
+        for d, s in corridor_bridge_expansion(idx, br, query, idf=idf).items():
+            exp[d] += s
     return exp
 
 

@@ -14,14 +14,26 @@ Full lexical doc union (union_lexical) is opt-in — default False.
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 from aethos_promotion import is_stopword
 from aethos_tokenize import tokenize_words
 from pipeline.bit_01_word_cell import DEFAULT_ANCHOR_N, word_to_spacetime_cell
-from pipeline.bit_02_attractor_key import AttractorKey, attractor_neighbors, kappa_from_cell
-from pipeline.bit_03_doc_attractor_set import CorpusAttractorIndex
+from pipeline.bit_02_attractor_key import (
+    AttractorKey,
+    attractor_neighbors,
+    kappa_from_cell,
+    kappa_pair_meet,
+)
+from pipeline.bit_03_doc_attractor_set import (
+    DEFAULT_PAIR_RARE_GATE,
+    CorpusAttractorIndex,
+)
+
+DEFAULT_HUB_IDF_GATE = 2.0
+DEFAULT_PAIR_KEY_QUERY = True
 
 DEFAULT_RADIUS = 1
 DEFAULT_MIN_CANDIDATES = 8
@@ -100,17 +112,45 @@ def query_attractor_keys(
     neighbor_map: dict[str, dict[str, float]] | None = None,
     expand_neighbors: bool = False,
     max_neighbor_words: int = DEFAULT_MAX_NEIGHBOR_WORDS,
+    idf: Callable[[str], float] | None = None,
+    hub_idf_gate: float = DEFAULT_HUB_IDF_GATE,
+    pair_keys: bool = DEFAULT_PAIR_KEY_QUERY,
+    pair_rare_gate: float = DEFAULT_PAIR_RARE_GATE,
+    max_pair_keys: int = 15,
+    hub_compound_keys: bool = True,
+    max_hub_compound_keys: int = 24,
 ) -> set[AttractorKey]:
     """
     Keys for C(q): ⋃ N(κ(cell(w)), r) over query words.
 
-    When expand_neighbors=True, also union κ neighborhoods of top L4–L6
-    correlated neighbors (bucket expansion only — not full inverted index).
+    hub_compound_keys: high-df hubs (cell, cancer) route ONLY as hub+rare
+    pair-meet keys matching ingest — not naked hub κ fan.
     """
     keys: set[AttractorKey] = set()
-    routed = query_words_for_routing(words, min_len=min_len)
-    for w in routed:
-        keys |= _kappa_neighborhood_for_word(registry, w, n=n, radius=radius)
+    all_routed = query_words_for_routing(words, min_len=min_len)
+    rare_routed: list[str] = []
+    hub_routed: list[str] = []
+
+    if idf is not None:
+        gate = hub_idf_gate if 0 < hub_idf_gate < 50 else 0.0
+        for w in all_routed:
+            iv = idf(w)
+            if hub_compound_keys and iv < gate:
+                hub_routed.append(w)
+            elif iv >= gate:
+                rare_routed.append(w)
+    else:
+        rare_routed = list(all_routed)
+
+    word_key: dict[str, AttractorKey] = {}
+    for w in rare_routed:
+        try:
+            nb = _kappa_neighborhood_for_word(registry, w, n=n, radius=radius)
+            keys |= nb
+            cell = word_to_spacetime_cell(registry, w, n=n)
+            word_key[w] = kappa_from_cell(cell, quantize=1.0)
+        except Exception:
+            continue
         if expand_neighbors and neighbor_map:
             nbs = sorted(
                 neighbor_map.get(w, {}).items(),
@@ -123,6 +163,38 @@ def query_attractor_keys(
                     keys |= _kappa_neighborhood_for_word(registry, nb, n=n, radius=radius)
                 except Exception:
                     continue
+
+    hub_keys: dict[str, AttractorKey] = {}
+    for w in hub_routed:
+        try:
+            cell = word_to_spacetime_cell(registry, w, n=n)
+            hub_keys[w] = kappa_from_cell(cell, quantize=1.0)
+        except Exception:
+            continue
+
+    if hub_compound_keys and hub_keys and word_key:
+        n_hc = 0
+        rare_ws = sorted(word_key, key=lambda w: (-idf(w), w) if idf else (0, w))[:6]
+        for hw in hub_keys:
+            for rw in rare_ws:
+                if n_hc >= max_hub_compound_keys:
+                    break
+                keys.add(kappa_pair_meet(hub_keys[hw], word_key[rw]))
+                n_hc += 1
+            if n_hc >= max_hub_compound_keys:
+                break
+
+    if pair_keys and idf is not None and len(word_key) >= 2:
+        rare = sorted(
+            [w for w in word_key if idf(w) >= pair_rare_gate],
+            key=lambda w: (-idf(w), w),
+        )[:6]
+        n_pairs = 0
+        for w1, w2 in itertools.combinations(rare, 2):
+            if n_pairs >= max_pair_keys:
+                break
+            keys.add(kappa_pair_meet(word_key[w1], word_key[w2]))
+            n_pairs += 1
     return keys
 
 
@@ -151,8 +223,13 @@ def candidates_from_attractors(
     neighbor_map: dict[str, dict[str, float]] | None = None,
     expand_neighbors: bool = DEFAULT_EXPAND_NEIGHBOR_KAPPA,
     max_neighbor_words: int = DEFAULT_MAX_NEIGHBOR_WORDS,
+    idf: Callable[[str], float] | None = None,
+    hub_idf_gate: float = DEFAULT_HUB_IDF_GATE,
+    pair_keys: bool = DEFAULT_PAIR_KEY_QUERY,
+    pair_rare_gate: float = DEFAULT_PAIR_RARE_GATE,
+    hub_compound_keys: bool = True,
 ) -> tuple[list[str], frozenset[AttractorKey]]:
-    """Route docs hitting any query κ bucket (optional L4–L6 κ expansion)."""
+    """Route docs hitting any query κ bucket (hub-filtered + optional pair-meet keys)."""
     keys = frozenset(
         query_attractor_keys(
             registry,
@@ -162,6 +239,12 @@ def candidates_from_attractors(
             min_len=min_len,
             neighbor_map=neighbor_map,
             expand_neighbors=expand_neighbors,
+            max_neighbor_words=max_neighbor_words,
+            idf=idf,
+            hub_idf_gate=hub_idf_gate,
+            pair_keys=pair_keys,
+            pair_rare_gate=pair_rare_gate,
+            hub_compound_keys=hub_compound_keys,
         )
     )
     return candidates_from_attractor_keys(keys, index), keys

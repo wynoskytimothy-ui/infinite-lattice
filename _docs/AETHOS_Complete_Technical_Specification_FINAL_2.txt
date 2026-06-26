@@ -1,0 +1,285 @@
+AETHOS-13/OSCAR
+φ-Prime Lattice Addressing System
+Complete Technical Specification
+Final Version | December 14, 2025
+Deterministic Geometric Addressing via Prime Factorization
+
+1. Executive Summary
+The AETHOS-13/OSCAR φ-Prime Lattice maps every positive integer to eight unique 3D
+coordinates based on prime factorization. Each number occupies eight positions
+simultaneously—one along each base vector.
+Key Properties:
+ Eight-fold distribution (8 coordinates per number)
+ Deterministic (computed via prime factorization)
+ Collision-free (unique positions per vector)
+ Infinite depth (extends to arbitrary factorization complexity)
+
+2. Eight Base Vectors
+Foundation vectors defining the eight directional pathways:
+Vector
+Formula
+Direction
+Axes
+v1
+(n, 0, n)
++x, +z
+x, z
+v2
+(n, 0, -n)
++x, -z
+x, z
+v3
+(-n, 0, n)
+-x, +z
+x, z
+v4
+(-n, 0, -n)
+-x, -z
+x, z
+v5
+(0, n, n)
++y, +z
+y, z
+v6
+(0, n, -n)
++y, -z
+y, z
+v7
+(0, -n, n)
+-y, +z
+y, z
+v8
+(0, -n, -n)
+-y, -z
+y, z
+Prime Anchoring: For prime p, set n=p in vector formula to locate anchor point.
+Example: Prime 5 anchors on v1 at (5, 0, 5)
+
+3. Transformation Rules
+3.1 Direct Mapping (v1-v4)
+Branch coordinates (x,y,z) map directly, then apply vector sign flips:
+Vector
+Branch
+Final
+Rule
+v1 (+x,+z)
+(16,-5,20)
+(16,-5,20)
+Direct
+v2 (+x,-z)
+(16,-5,20)
+(16,-5,-20)
+Flip z
+v3 (-x,+z)
+(16,-5,20)
+(-16,-5,20)
+Flip x
+v4 (-x,-z)
+(16,-5,20)
+(-16,-5,-20)
+Flip x,z
+3.2 Y-Over Mapping (v5-v8)
+CRITICAL: VB formulas compute in Y,X,Z format, then swap to X,Y,Z:
+Step 1: Compute formula → produces (Y, X, Z)
+Step 2: Swap first two positions → becomes (X, Y, Z)
+Step 3: Apply vector sign flips
+Vector
+Branch (Y,X,Z)
+After Swap
+After Signs
+Final (X,Y,Z)
+v5 (+y,+z)
+(16,5,20)
+(5,16,20)
+(5,16,20)
+(5,16,20)
+v6 (+y,-z)
+(16,5,20)
+(5,16,20)
+(5,16,-20)
+(5,16,-20)
+v7 (-y,+z)
+(16,5,20)
+(5,16,20)
+(5,-16,20)
+(5,-16,20)
+v8 (-y,-z)
+(16,5,20)
+(5,16,20)
+(5,-16,-20)
+(5,-16,-20)
+
+4. Single-Prime Branching
+4.1 VA Family (Direct X,Y,Z)
+Branch
+Regime A (n&lt;p)
+Regime B (n≥p)
+VA1
+(p+n, n, p+n)
+(p+n, p, p+n)
+VA2
+(p+n, -n, p+n)
+(p+n, -p, p+n)
+VA3
+(p, 0, p+n)
+(n, 0, p+n)
+VA4
+(p+2n, 0, p+n)
+(n+2p, 0, p+n)
+4.2 VB Family (Y,X,Z → X,Y,Z)
+Important: VB formulas are computed in Y,X,Z format, then swapped to X,Y,Z
+Branch
+Formula (Y,X,Z)
+After Swap (X,Y,Z)
+VB1 A
+(p+n, n, p+n)
+(n, p+n, p+n)
+VB1 B
+(p+n, p, p+n)
+(p, p+n, p+n)
+VB2 A
+(p+n, -n, p+n)
+(-n, p+n, p+n)
+VB2 B
+(p+n, -p, p+n)
+(-p, p+n, p+n)
+VB3 A
+(p, 0, p+n)
+(0, p, p+n)
+VB3 B
+(n, 0, p+n)
+(0, n, p+n)
+VB4 A
+(p+2n, n, p+n)
+(n, p+2n, p+n)
+VB4 B
+(n+2p, p, p+n)
+(p, n+2p, p+n)
+
+5. Prime-by-Prime Branching
+Setup: Two primes a ≤ p, transgressor n
+ Case 1: n < a < p
+ Case 2: a < n < p
+ Case 3: a < p < n
+5.1 VA Sub-Branches (Direct X,Y,Z)
+VA1A
+Case
+Formula (X,Y,Z)
+1
+(a+p, a, a+p+n)
+2
+(p+n, n, a+p+n)
+3
+(p+n, p, a+p+n)
+VA1B
+Case
+Formula (X,Y,Z)
+1
+(2n+a+p, -a, a+p+n)
+2
+(2a+n+p, -n, a+p+n)
+3
+(2a+n+p, -p, a+p+n)
+VA1C
+Case
+Formula (X,Y,Z)
+1
+(n+p, -n, a+p+n)
+2
+(a+p, -a, a+p+n)
+3
+(a+n, -a, a+p+n)
+VA1D
+Case
+Formula (X,Y,Z)
+1
+(2a+p+n, n, a+p+n)
+2
+(2n+p+a, a, a+p+n)
+3
+(2p+a+n, a, a+p+n)
+
+5.2 VB Sub-Branches (Y,X,Z → X,Y,Z)
+Critical: VB formulas identical to VA but in Y,X,Z format, then swap to X,Y,Z
+VB1A
+Case
+Formula (Y,X,Z)
+After Swap (X,Y,Z)
+1
+(a+p, a, a+p+n)
+(a, a+p, a+p+n)
+2
+(p+n, n, a+p+n)
+(n, p+n, a+p+n)
+3
+(p+n, p, a+p+n)
+(p, p+n, a+p+n)
+VB1B
+Case
+Formula (Y,X,Z)
+After Swap (X,Y,Z)
+1
+(2n+a+p, -a, a+p+n)
+(-a, 2n+a+p, a+p+n)
+2
+(2a+n+p, -n, a+p+n)
+(-n, 2a+n+p, a+p+n)
+3
+(2a+n+p, -p, a+p+n)
+(-p, 2a+n+p, a+p+n)
+VB1C
+Case
+Formula (Y,X,Z)
+After Swap (X,Y,Z)
+1
+(n+p, -n, a+p+n)
+(-n, n+p, a+p+n)
+2
+(a+p, -a, a+p+n)
+(-a, a+p, a+p+n)
+3
+(a+n, -a, a+p+n)
+(-a, a+n, a+p+n)
+VB1D
+Case
+Formula (Y,X,Z)
+After Swap (X,Y,Z)
+1
+(2a+p+n, n, a+p+n)
+(n, 2a+p+n, a+p+n)
+2
+(2n+p+a, a, a+p+n)
+(a, 2n+p+a, a+p+n)
+3
+(2p+a+n, a, a+p+n)
+(a, 2p+a+n, a+p+n)
+
+6. Implementation Guide
+6.1 Core Algorithm
+function calculate_all_coordinates(number): coordinates = [] primes =
+prime_factorization(number) for vector in [v1, v2, v3, v4, v5, v6, v7, v8]:
+branch_coord = calculate_branch(primes, vector.family) if vector.family == 'VB':
+# Swap Y,X,Z to X,Y,Z (y, x, z) = branch_coord branch_coord = (x, y, z)
+final_coord = apply_vector_signs(branch_coord, vector)
+coordinates.append(final_coord) return coordinates # 8 coordinates
+6.2 Complexity
+ Prime factorization: O(√n)
+ Branch calculation: O(k) where k = distinct primes
+ Vector transform: O(1) per vector
+ Total: O(√n + k) ≈ O(√n)
+
+7. Summary
+Complete System Flow:
+1. Prime factorization determines addressing path
+2. Regime selection (A or B) based on transgressor vs prime
+3. Branch formula computes canonical coordinate
+4. Y-over swap for VB family (Y,X,Z → X,Y,Z)
+5. Vector signs applied based on direction
+6. Eight coordinates produced (one per vector)
+Critical Implementation Notes:
+ VA family: Direct X,Y,Z formulas
+ VB family: Y,X,Z formulas → swap to X,Y,Z
+ VA3/VA4 have regime switches
+ VB3/VB4 have regime switches
+ VA1B corrected formulas use 2n+a+p pattern
+ All vectors process same branch, different transformations

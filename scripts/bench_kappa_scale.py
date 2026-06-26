@@ -81,19 +81,21 @@ def run(name, sizes):
     print(f"\n{'='*86}")
     print(f"  {name.upper()} — kappa-routed scale path vs full scan (gold kept, flooded)")
     print(f"{'='*86}")
-    print(f"{'N docs':>9} {'pool':>6} {'full ms':>8} {'scale ms':>9} {'spdup':>6} "
-          f"{'nDCG full':>10} {'nDCG scale':>11} {'R@10 full':>10} {'R@10 scale':>11}")
+    print(f"{'N docs':>9} {'build s':>8} {'pool':>6} {'full ms':>8} {'scale ms':>9} {'spdup':>6} "
+          f"{'nDCG full':>10} {'nDCG scale':>11} {'R@10 scale':>11}")
 
     for target in sizes:
         c = dict(corpus)
         if target > base_n:
             c.update(distractors(corpus, target - base_n))
 
+        t0 = time.perf_counter()
         brain = MultiCorpusBrain()
-        brain.stack_corpus(name, c, queries=queries, train_qrels=train_q)
+        brain.stack_corpus(name, c, queries=queries, train_qrels=train_q, index_mode="full")
+        build_s = time.perf_counter() - t0
 
         full = lambda q: brain.search(q, corpus=name, k=10)
-        scale = lambda q: brain.scale_search(q, corpus=name, k=10)
+        scale = lambda q: brain.scale_search(q, corpus=name, k=10, use_routed=False)
 
         full_ms = latency(full, qsample)
         scale_ms = latency(scale, qsample)
@@ -102,8 +104,8 @@ def run(name, sizes):
 
         N = brain._corpora[name].n_docs
         spd = full_ms / scale_ms if scale_ms else 0.0
-        print(f"{N:>9,} {pool:>6.0f} {full_ms:>7.2f} {scale_ms:>8.2f} {spd:>5.1f}x "
-              f"{nd_f:>10.4f} {nd_s:>11.4f} {rc_f:>10.4f} {rc_s:>11.4f}")
+        print(f"{N:>9,} {build_s:>7.1f} {pool:>6.0f} {full_ms:>7.2f} {scale_ms:>8.2f} {spd:>5.1f}x "
+              f"{nd_f:>10.4f} {nd_s:>11.4f} {rc_s:>11.4f}")
         del brain, c
 
     print(f"\n  pool = mean candidate set scored by scale_search (flat = N-independent).")

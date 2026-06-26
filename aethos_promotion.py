@@ -185,6 +185,25 @@ class PromotionRegistry:
     fast_ingest: bool = False
     max_contexts_per_word: int = 12
     _l2_candidates: set[str] = field(default_factory=set)
+    _l2_promotion_snap: dict[str, tuple[int, int, bool]] = field(default_factory=dict)
+
+    def _l2_snap(self, sw: str) -> tuple[int, int]:
+        sw = sw.lower()
+        return (
+            self.subword_counts.get(sw, 0),
+            len(self.subword_parent_words.get(sw, set())),
+        )
+
+    def _mark_l2_candidate(self, sw: str) -> None:
+        """Enqueue L2 flush only when subword stats changed — avoid O(corpus) re-checks."""
+        sw = sw.lower()
+        if (LatticeTier.L2_SUBWORD, sw) in self.promoted:
+            return
+        snap = self._l2_snap(sw)
+        prev = self._l2_promotion_snap.get(sw)
+        if prev is not None and prev[0] == snap[0] and prev[1] == snap[1]:
+            return
+        self._l2_candidates.add(sw)
 
     def _alloc_prime(self, lattice_tier: LatticeTier, *, species: bool = False) -> int:
         if lattice_tier == LatticeTier.L2_SUBWORD:
@@ -282,17 +301,25 @@ class PromotionRegistry:
         parents = self.subword_parent_words.get(sw, set())
         if sw in parents and self.word_counts.get(sw, 0) >= self.subword_promote_at:
             return True
-        if len(parents) < self.subword_min_parents:
+        n_parents = len(parents)
+        if n_parents < self.subword_min_parents:
             return False
+        snap = (count, n_parents)
+        cached = self._l2_promotion_snap.get(sw)
+        if cached is not None and cached[0] == snap[0] and cached[1] == snap[1]:
+            return cached[2]
         pmis = [self.subword_pmi(sw, p) for p in parents]
         zs = [self.subword_cohesion_z(sw, p) for p in parents]
         strong_pmi = sum(1 for x in pmis if x >= self.subword_min_pmi)
         strong_z = sum(1 for z in zs if z >= self.subword_min_z)
         if strong_z >= self.subword_min_parents:
-            return True
-        if max(zs, default=0.0) >= self.subword_min_z * 1.5:
-            return True
-        return strong_pmi >= self.subword_min_parents or max(pmis, default=0.0) >= self.subword_min_pmi * 1.5
+            result = True
+        elif max(zs, default=0.0) >= self.subword_min_z * 1.5:
+            result = True
+        else:
+            result = strong_pmi >= self.subword_min_parents or max(pmis, default=0.0) >= self.subword_min_pmi * 1.5
+        self._l2_promotion_snap[sw] = (snap[0], snap[1], result)
+        return result
 
     def observe_word(self, word: str, context: frozenset[str] | None = None) -> None:
         w = word.lower()
@@ -314,7 +341,7 @@ class PromotionRegistry:
                 key = (sw, w)
                 self.subword_parent_pairs[key] = self.subword_parent_pairs.get(key, 0) + 1
                 if self.defer_l2_promotion:
-                    self._l2_candidates.add(sw)
+                    self._mark_l2_candidate(sw)
                 elif self._should_promote_l2(sw):
                     self._promote(LatticeTier.L2_SUBWORD, sw)
         if context is not None:
@@ -350,6 +377,8 @@ class PromotionRegistry:
         pending = self._l2_candidates
         self._l2_candidates = set()
         for sw in pending:
+            if (LatticeTier.L2_SUBWORD, sw) in self.promoted:
+                continue
             if self._should_promote_l2(sw):
                 self._promote(LatticeTier.L2_SUBWORD, sw)
 

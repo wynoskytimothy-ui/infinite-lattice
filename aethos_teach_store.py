@@ -18,6 +18,7 @@ class TeachStore:
         self.max_terms = max_terms_per_doc
         self.edges = defaultdict(Counter)
         self.definitions: dict[str, str] = {}
+        self.edge_only: set[str] = set()
         self._idf = {}
         self.new_symbols = 0
         self.n_taught = 0
@@ -93,6 +94,34 @@ class TeachStore:
             self.edges[term][w] = max(self.edges[term].get(w, 0.0), wt)
         return len(bridges[:per_term])
 
+    def teach_edges(
+        self,
+        term: str,
+        context: str,
+        *,
+        bridge_gate: float = 2.0,
+        per_term: int = 12,
+    ) -> int:
+        """Star edges term -> rare context words without a definition (no rewrite)."""
+        self.n_taught += 1
+        self._ensure_symbol(term)
+        self._idf.clear()
+        bridges: list[tuple[str, float]] = []
+        for w in dict.fromkeys(words(context)):
+            if w == term:
+                continue
+            p = self.idx.token_prime.get(("w", w))
+            if p is None:
+                continue
+            iv = self.idf(w)
+            if iv is not None and iv >= bridge_gate:
+                bridges.append((w, iv))
+        bridges.sort(key=lambda x: -x[1])
+        for w, wt in bridges[:per_term]:
+            self.edges[term][w] = max(self.edges[term].get(w, 0.0), wt)
+        self.edge_only.add(term)
+        return len(bridges[:per_term])
+
     def rewrite_query(
         self,
         query: str,
@@ -140,7 +169,8 @@ class TeachStore:
             if not partners:
                 continue
             iv = self.idf(qt)
-            if qt not in self.definitions and iv is not None and iv < query_term_gate:
+            gate = 3.0 if qt in self.edge_only else query_term_gate
+            if qt not in self.definitions and iv is not None and iv < gate:
                 continue
             for dt, wt in partners.most_common(per_term):
                 p = self.idx.token_prime.get(("w", dt))

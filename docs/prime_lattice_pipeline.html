@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prime-Lattice Pipeline — Mental Map</title>
+<style>
+  :root{
+    --bg:#0a0f1f;
+    --panel:#111933;
+    --panel-2:#0d1429;
+    --ink:#e9edfb;
+    --muted:#8b95bd;
+    --faint:#6f7aa6;
+    --line:rgba(120,142,210,.22);
+    --prime:#56e3cd;
+    --light:#ffd166;
+    --rare:#ff7a8a;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  body{
+    background:
+      radial-gradient(900px 600px at 80% -5%, rgba(86,227,205,.07), transparent 60%),
+      radial-gradient(700px 500px at -10% 30%, rgba(255,209,102,.05), transparent 55%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .wrap{max-width:780px;margin:0 auto;padding:34px 20px 70px;}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--prime);margin:0 0 14px;}
+  h1{font-size:clamp(28px,7vw,42px);line-height:1.05;margin:0 0 12px;font-weight:680;letter-spacing:-.02em;}
+  h1 span{color:var(--prime);}
+  .lede{color:var(--muted);font-size:15.5px;max-width:60ch;margin:0;}
+  .note{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:16px;border-left:2px solid var(--line);padding-left:12px;}
+  .divider{height:1px;background:var(--line);margin:30px 0 6px;}
+  .flow{position:relative;margin-top:18px;}
+  .stage{
+    position:relative;
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 20px 20px 64px;
+    margin:0 0 14px;
+  }
+  .num{
+    position:absolute;left:16px;top:18px;
+    font-family:var(--mono);font-size:13px;font-weight:600;
+    width:32px;height:32px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--prime);background:rgba(86,227,205,.1);
+    border:1px solid rgba(86,227,205,.3);
+  }
+  .stage h2{font-size:17px;margin:0 0 6px;font-weight:620;letter-spacing:-.01em;}
+  .stage p{margin:0;color:var(--muted);font-size:14.5px;}
+  .stage .ex{
+    margin-top:11px;font-family:var(--mono);font-size:12.5px;
+    color:var(--ink);background:rgba(255,255,255,.03);
+    border:1px dashed var(--line);border-radius:9px;padding:9px 11px;
+  }
+  .ex b{color:var(--prime);font-weight:600;}
+  .ex .amber{color:var(--light);}
+  .ex .rare{color:var(--rare);}
+  .arrow{display:flex;justify-content:center;margin:-6px 0 8px;color:var(--line);}
+  .arrow svg{width:18px;height:18px;}
+  .stage.glow{
+    border-color:rgba(255,209,102,.4);
+    background:linear-gradient(180deg,#1a1c33,#12132a);
+    box-shadow:0 0 0 1px rgba(255,209,102,.08),0 0 40px -18px rgba(255,209,102,.5);
+  }
+  .stage.glow .num{color:var(--light);background:rgba(255,209,102,.12);border-color:rgba(255,209,102,.35);}
+  .rails{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:26px;}
+  .rail{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--panel-2);}
+  .rail .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--prime);margin:0 0 8px;}
+  .rail h3{margin:0 0 6px;font-size:15.5px;font-weight:620;}
+  .rail p{margin:0;color:var(--muted);font-size:13.5px;}
+  @media(max-width:560px){.rails{grid-template-columns:1fr;}}
+  .foot{margin-top:30px;font-size:13.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:18px;}
+  .foot b{color:var(--ink);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">φ-Prime Lattice · Retrieval Pipeline</p>
+  <h1>The mental map,<br><span>start to finish.</span></h1>
+  <p class="lede">Symbols become primes, primes intersect, intersections become words, frequency rotates everything into place, and co-occurrence lights up the meaning.</p>
+  <p class="note">// schematic only — numbers come from stage gates in lattice_retriever_v1/BUILD.md</p>
+  <div class="divider"></div>
+  <p class="lede">Open <code>lattice_retriever_v1/BUILD.md</code> for the gated build order. Stages 01–08 map to modules there; do not skip gates.</p>
+</div>
+</body>
+</html>

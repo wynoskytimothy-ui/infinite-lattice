@@ -98,6 +98,9 @@ class AppendOnlyLatticeIndex:
     #   lossless and 2.6-3.6x faster - scripts/bench_fast_query.py. <1.0 enables.)
     dense_tf_dtype: str = "f16"      # finalize() tf storage: f16 (2B, metric-lossless,
     #   default) | f32 (4B, ~1e-7) | f64 (8B). doc-ids are uint16/uint32 by N.
+    index_mode: str = "full"         # "full" | "kappa_primary" — word gear only at
+    #   ingest (no char-trigram/prefix postings). κ buckets + rare-word lists route
+    #   queries; scale_search scores a bounded pool. ~3-4x smaller index footprint.
     token_prime: dict = field(default_factory=dict)     # (view,token) -> prime
     postings: dict = field(default_factory=lambda: defaultdict(dict))  # prime -> {doc: tf}
     df: dict = field(default_factory=lambda: defaultdict(int))         # prime -> live df
@@ -135,7 +138,19 @@ class AppendOnlyLatticeIndex:
         Optimized inline of the GEARS pipeline (must match _v_word/_v_tri/
         _v_prefix): each distinct word's trigram+prefix KEYS are cached in _gc
         and built once, not per occurrence (trigrams are ~80% of the tokens).
-        Output is identical to the gear loop."""
+        Output is identical to the gear loop.
+
+        kappa_primary mode stores only the word gear — trigram/prefix views are
+        omitted at ingest; query routing uses κ buckets + rare-term postings."""
+        if self.index_mode == "kappa_primary":
+            bag = {}
+            bget = bag.get
+            pos_head, pos_boost = self.pos_head, self.pos_boost
+            for i, w in enumerate(words(text)):
+                pos_w = pos_boost if (positional and i < pos_head) else 1.0
+                kw = ("w", w)
+                bag[kw] = bget(kw, 0.0) + _GW * pos_w
+            return bag
         cache = self._gc
         bag = {}
         bget = bag.get
@@ -280,6 +295,7 @@ class AppendOnlyLatticeIndex:
         docs = list(self.alive)
         d2i = {d: i for i, d in enumerate(docs)}
         self._d_docs = docs
+        self._d2i = d2i
         self._d_denom = np.array([A + Bc * self.doc_len[d] for d in docs], dtype=np.float64)
         # compressed dense (lossless, ~3x smaller - scripts/bench_compress_dense.py):
         #   doc-id uint16 when <65536 docs (else uint32); tf float16; and skip the
@@ -357,13 +373,28 @@ class AppendOnlyLatticeIndex:
             return None
         return di, self._d_ptf[prime].astype(np.float64)
 
-    def _search_dense(self, query, k):
-        scores = self._dense_score_array(query)
+    def top_k_dense(self, scores, k):
+        """Top-k doc ids from a dense score vector aligned to ``_d_docs``."""
         kk = min(k, len(self._d_docs))
         part = np.argpartition(scores, -kk)[-kk:]
         part = part[np.argsort(scores[part])[::-1]]
         docs = self._d_docs
         return [docs[i] for i in part if scores[i] > 0.0]
+
+    def pool_scores_dense(self, scores, cand):
+        """BM25 scores for ``cand`` doc ids from a dense vector (same math as _score)."""
+        d2i = self._d2i
+        out = {}
+        for d in cand:
+            i = d2i.get(d)
+            if i is not None:
+                s = float(scores[i])
+                if s > 0.0:
+                    out[d] = s
+        return out
+
+    def _search_dense(self, query, k):
+        return self.top_k_dense(self._dense_score_array(query), k)
 
     def search(self, query, k=10):
         if self._dense_ready:
@@ -435,7 +466,7 @@ class AppendOnlyLatticeIndex:
             indptr.append(indptr[-1] + len(seg))
         cfg = {k: getattr(self, k) for k in
                ("k1", "b", "bm25_delta", "positional", "pos_head", "pos_boost",
-                "containment_bonus", "tri_df_frac", "dense_tf_dtype")}
+                "containment_bonus", "tri_df_frac", "dense_tf_dtype", "index_mode")}
         np.savez_compressed(
             path,
             config=np.frombuffer(json.dumps(cfg).encode(), dtype=np.uint8),

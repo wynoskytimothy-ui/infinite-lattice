@@ -21,7 +21,7 @@ for the method and the honest negative results.
     brain = MultiCorpusBrain()
     brain.stack_corpus("scifact", corpus_a, queries=q, train_qrels=train)
     brain.stack_corpus("nfcorpus", corpus_b)
-    hits = brain.search("query text")          # auto-route corpus
+    hits = brain.search("query text")          # auto-route; κ-primary uses scale_search
     result = brain.search("query", corpus="scifact")
 
     # optional supervised accuracy layer (learned by counting qrels)
@@ -34,6 +34,21 @@ from aethos_bridges import RelevanceBridges, bridge_search, bridge_search_dense,
 from aethos_gap_miner import GapReport, mine_query_gaps
 from aethos_encyclopedia_teacher import (
     TeachGapResult, load_glossary, teach_full_knowledge_for_corpus, teach_gaps_for_corpus,
+)
+from aethos_glass_box_search import (
+    GlassBoxRetriever,
+    GlassBoxSearchConfig,
+    GlassBoxTrace,
+    glass_box_fusion_details,
+    glass_box_search,
+    glass_box_search_dense,
+    glass_box_search_with_trace,
+)
+from aethos_lattice_lexical import (
+    LatticeLexicalScorer,
+    LexicalMode,
+    lattice_lexical_scorer,
+    PLANE_BAND_ROLE,
 )
 from aethos_multi_corpus import (
     CorpusBranch, LearnIteration, LearnSaturationResult, MultiCorpusBrain, SearchResult,
@@ -54,6 +69,11 @@ __all__ = [
     "RelevanceBridges", "bridge_search", "bridge_search_dense", "choose_bridge",
     "ShardedIndex",
     "MultiCorpusBrain", "CorpusBranch", "SearchResult",
+    "GlassBoxRetriever", "GlassBoxSearchConfig", "GlassBoxTrace",
+    "glass_box_search", "glass_box_search_dense", "glass_box_search_with_trace",
+    "glass_box_fusion_details",
+    "LatticeLexicalScorer", "LexicalMode", "lattice_lexical_scorer", "PLANE_BAND_ROLE",
+    "GlassBoxMemory",
     "LearnIteration", "LearnSaturationResult",
     "GapReport", "mine_query_gaps", "TeachGapResult",
     "teach_gaps_for_corpus", "teach_full_knowledge_for_corpus", "load_glossary",

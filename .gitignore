@@ -57,3 +57,17 @@ logs/
 # user photo dumps (large binaries, not source)
 _user_photos/
 _user_photos2/
+
+# session working artifacts (kept locally, not pushed)
+*.out
+*.log
+*.pkl
+*.npz
+*.npy
+text8
+_pdf_extract*.txt
+_aethos_pdf.txt
+_andrea_thread.txt
+_inventory_digest.txt
+_RESEARCH_SURVEY.txt
+_RESEARCH_ASSETS.txt

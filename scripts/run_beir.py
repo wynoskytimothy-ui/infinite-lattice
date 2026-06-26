@@ -19,8 +19,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aethos_append_index import AppendOnlyLatticeIndex
-from scripts.bench_supervised_bridges import load, ndcg10, recall10, RelevanceBridges
-from scripts.bench_active_learning import best_search
+from aethos_bridges import RelevanceBridges, bridge_search
+from aethos_glass_box_search import glass_box_search, GlassBoxSearchConfig
+from aethos_encyclopedia_teacher import load_glossary
+from scripts.bench_supervised_bridges import load, ndcg10, recall10
 
 
 def mrr10(ranked, rels):
@@ -60,11 +62,22 @@ def run(name, min_pairs=2):
     if train_q:
         br = RelevanceBridges(idx, len(idx.alive), min_pairs=min_pairs).learn(
             queries, train_q, corpus)
-        nd1, rc1, mr1 = evaluate(lambda q: best_search(idx, br, q),
+        nd1, rc1, mr1 = evaluate(lambda q: bridge_search(idx, br, q),
                                  queries, test_q, test_ids)
         print(f"  + supervised bridges:  nDCG@10 {nd1:.4f}  Recall@10 {rc1:.4f}  "
               f"MRR@10 {mr1:.4f}  ({nd1-nd0:+.4f} nDCG)")
-        return nd0, nd1
+        gloss = load_glossary(name)
+        br.learn_rarest_corridors(queries, train_q, corpus, min_pairs=min_pairs)
+        target_cfg = GlassBoxSearchConfig.scifact_target()
+        nd2, rc2, mr2 = evaluate(
+            lambda q: glass_box_search(
+                idx, br, q, glossary=gloss, config=target_cfg, corpus=corpus,
+            ),
+            queries, test_q, test_ids,
+        )
+        print(f"  + glass_box (target):  nDCG@10 {nd2:.4f}  Recall@10 {rc2:.4f}  "
+              f"MRR@10 {mr2:.4f}  ({nd2-nd0:+.4f} nDCG vs lexical)")
+        return nd0, nd1, nd2
     else:
         print("  (test-only corpus: no train qrels -> bridges not trainable; lexical only)")
         return nd0, None

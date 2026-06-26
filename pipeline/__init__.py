@@ -27,6 +27,8 @@ from pipeline.bit_03_doc_attractor_set import (
     DocAttractorSet,
     build_attractor_index_from_corpus,
     build_attractor_index_from_hub_signatures,
+    build_attractor_index_fast,
+    assign_doc_kappa_keys,
     doc_attractor_set_from_signature,
     verify_bit03_gate,
 )
@@ -124,6 +126,8 @@ __all__ = [
     "attractor_neighbors",
     "build_attractor_index_from_corpus",
     "build_attractor_index_from_hub_signatures",
+    "build_attractor_index_fast",
+    "assign_doc_kappa_keys",
     "chain_for_lattice_cell",
     "four_branch_cells",
     "doc_attractor_set_from_signature",

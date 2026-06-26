@@ -18,10 +18,12 @@ from __future__ import annotations
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from aethos_append_index import AppendOnlyLatticeIndex, words
 from aethos_hub_signature import build_all_hub_signatures
 from aethos_promotion import PromotionRegistry
+from aethos_glass_box_metrics import GlassBoxMemory, _rarest_terms, run_corpus_audit
 from aethos_gap_miner import GapReport, mine_query_gaps
 from aethos_encyclopedia_teacher import TeachGapResult, teach_gaps_for_corpus
 from aethos_symbol_subjects import subjects_for_dataset, vote_query_chambers
@@ -29,9 +31,12 @@ from aethos_teach_store import TeachStore
 from aethos_bridges import RelevanceBridges
 from aethos_vocab_gap_router import GapSignal, choose_expansion_mode, routed_search
 from core.primes import chain_primes
+from pipeline.bit_02_attractor_key import AttractorKey
 from pipeline.bit_03_doc_attractor_set import (
     CorpusAttractorIndex,
+    assign_doc_kappa_keys,
     build_attractor_index_from_hub_signatures,
+    build_attractor_index_fast,
 )
 from pipeline.bit_04_candidate_router import (
     candidates_from_attractors,
@@ -108,6 +113,7 @@ class CorpusBranch:
     attractor: WordAttractorIndex
     pair_bridges: RelevanceBridges | None = None
     kappa_index: CorpusAttractorIndex | None = None
+    index_mode: str = "kappa_primary"
     route_labels: set[str] = field(default_factory=set)
     expansion_mode: str = "strict"
     subjects: frozenset[int] = field(default_factory=frozenset)
@@ -235,6 +241,16 @@ class MultiCorpusBrain:
 
     KAPPA_LAM = 0.12
     KAPPA_TOP_K = 10
+    HUB_IDF_GATE = 2.0       # exclude ultra-common terms from κ fan + bridge qt
+    PAIR_RARE_GATE = 3.0     # rare-pair κ keys for compound corridors
+    ENABLE_PAIR_KEYS = True
+    ENABLE_HUB_COMPOUNDS = True  # hub×rare pair-meet at ingest + query (not solo hub κ)
+    ENABLE_RARE_CORRIDORS = True  # r1->doc bridges from gold with r2 but not r1
+    ENABLE_MISS_R1_TEACH = True   # TeachStore glossary from miss-r1 train gold
+    # SciFact glass-box audit: high-df bridge noise → bind to doc rare terms at ingest
+    HUB_COMPOUND_WORDS = frozenset({
+        "cells", "cell", "cancer", "risk", "patients", "expression",
+    })
 
     def __init__(self, *, prime_pool: int = 200_000):
         self._tp: dict = {}
@@ -242,6 +258,7 @@ class MultiCorpusBrain:
         self._corpora: dict[str, CorpusBranch] = {}
         self._rare_doc_cache: dict[str, dict] = {}
         self._registry = PromotionRegistry(fast_ingest=True, defer_l2_promotion=True)
+        self.glass_box = GlassBoxMemory()
 
     @property
     def registry(self) -> PromotionRegistry:
@@ -266,10 +283,11 @@ class MultiCorpusBrain:
         self._tp[key] = p
         return p
 
-    def _make_slice(self) -> AppendOnlyLatticeIndex:
+    def _make_slice(self, index_mode: str = "kappa_primary") -> AppendOnlyLatticeIndex:
         return AppendOnlyLatticeIndex(
             token_prime=self._tp,
             _primes=self._primes,
+            index_mode=index_mode,
         )
 
     @staticmethod
@@ -314,7 +332,8 @@ class MultiCorpusBrain:
         scored.sort(reverse=True)
         return {w for _, w in scored[:top_n]}
 
-    def _build_kappa_index(self, branch: CorpusBranch) -> CorpusAttractorIndex | None:
+    def _build_kappa_index_hub(self, branch: CorpusBranch) -> CorpusAttractorIndex | None:
+        """Legacy hub-signature κ index (accurate but slow at scale)."""
         if not branch.texts:
             return None
         doc_ids = [branch.global_id(k) for k in branch.texts]
@@ -334,6 +353,62 @@ class MultiCorpusBrain:
         except Exception:
             return None
 
+    def _learned_hub_words(self) -> frozenset[str] | None:
+        """Hubs that get compound κ (hub+rare) instead of solo buckets."""
+        if not self.ENABLE_HUB_COMPOUNDS:
+            return None
+        if self.glass_box.enabled:
+            learned = frozenset(
+                w for w, c in self.glass_box.hub_diluters.items()
+                if c >= self.glass_box.hub_min_queries
+            )
+            if learned:
+                return learned
+        return self.HUB_COMPOUND_WORDS
+
+    def _ingest_kappa_keys(
+        self,
+        branch: CorpusBranch,
+        doc_texts: dict[str, str],
+        idf,
+    ) -> None:
+        """Assign κ buckets for newly ingested docs — O(top_k) per document."""
+        if not doc_texts:
+            return
+        if branch.kappa_index is None:
+            branch.kappa_index = CorpusAttractorIndex()
+        for local_id, text in doc_texts.items():
+            gid = branch.global_id(local_id)
+            assign_doc_kappa_keys(
+                branch.kappa_index,
+                self._registry,
+                gid,
+                text,
+                idf,
+                top_k=self.KAPPA_TOP_K,
+                pair_rare_gate=self.PAIR_RARE_GATE,
+                pair_keys=self.ENABLE_PAIR_KEYS,
+                hub_compound_keys=self.ENABLE_HUB_COMPOUNDS,
+                hub_idf_gate=self.HUB_IDF_GATE,
+                learned_hub_words=self._learned_hub_words(),
+            )
+
+    def _build_kappa_index(self, branch: CorpusBranch) -> CorpusAttractorIndex | None:
+        """Full-corpus fast κ build (used when index missing)."""
+        if not branch.texts:
+            return None
+        idf = IdfCache(branch.idx, branch.n_docs)
+        global_texts = {branch.global_id(k): v for k, v in branch.texts.items()}
+        return build_attractor_index_fast(
+            self._registry, global_texts, idf,
+            top_k=self.KAPPA_TOP_K,
+            pair_rare_gate=self.PAIR_RARE_GATE,
+            pair_keys=self.ENABLE_PAIR_KEYS,
+            hub_compound_keys=self.ENABLE_HUB_COMPOUNDS,
+            hub_idf_gate=self.HUB_IDF_GATE,
+            learned_hub_words=self._learned_hub_words(),
+        )
+
     def stack_corpus(
         self,
         name: str,
@@ -345,14 +420,22 @@ class MultiCorpusBrain:
         route_labels: set[str] | frozenset[str] | None = None,
         finalize: bool = True,
         build_kappa: bool = True,
+        kappa_mode: str = "fast",
+        index_mode: str = "kappa_primary",
     ) -> CorpusBranch:
-        """Append a corpus branch (additive — never erases prior corpora)."""
+        """Append a corpus branch (additive — never erases prior corpora).
+
+        index_mode:
+          ``kappa_primary`` (default) — word postings only; κ inverted index +
+          scale_search path. Smallest footprint, N-independent query pool.
+          ``full`` — legacy multi-view (word + trigram + prefix) postings.
+        """
         if name in self._corpora:
             branch = self._corpora[name]
             idx = branch.idx
         else:
             root = self._alloc_corpus_prime(name)
-            idx = self._make_slice()
+            idx = self._make_slice(index_mode=index_mode)
             branch = CorpusBranch(
                 name=name,
                 root_prime=root,
@@ -360,6 +443,7 @@ class MultiCorpusBrain:
                 texts={},
                 teach=TeachStore(idx, 0),
                 attractor=WordAttractorIndex(),
+                index_mode=index_mode,
                 subjects=subjects or subjects_for_dataset(name),
             )
             self._corpora[name] = branch
@@ -371,8 +455,8 @@ class MultiCorpusBrain:
             if gid not in idx.alive:
                 idx.add(gid, text)
                 self._registry.observe_text(text)
-            new_texts[local_id] = text
-        branch.texts.update(new_texts)
+                new_texts[local_id] = text
+        branch.texts.update(corpus)
 
         n = len(idx.alive)
         if branch.n_docs == 0 or branch.teach.N != n:
@@ -397,6 +481,18 @@ class MultiCorpusBrain:
             branch.pair_bridges = RelevanceBridges(
                 idx, n, min_pairs=mp,
             ).learn(queries, global_qrels, global_texts)
+            if self.ENABLE_RARE_CORRIDORS:
+                branch.pair_bridges.learn_rarest_corridors(
+                    queries, global_qrels, global_texts,
+                    min_pairs=1 if name == "scifact" else 2,
+                )
+            if self.ENABLE_MISS_R1_TEACH:
+                from aethos_miss_r1_teach import learn_miss_r1_glossary
+                learn_miss_r1_glossary(
+                    branch.teach, idx, n,
+                    queries, global_qrels, global_texts,
+                    min_gold_hits=1 if name == "scifact" else 2,
+                )
 
         labels: set[str] = set(route_labels or ())
         if queries and train_qrels:
@@ -406,7 +502,12 @@ class MultiCorpusBrain:
 
         branch.attractor.build(global_texts, idf)
         if build_kappa:
-            branch.kappa_index = self._build_kappa_index(branch)
+            if kappa_mode == "hub":
+                branch.kappa_index = self._build_kappa_index_hub(branch)
+            elif branch.kappa_index is None and branch.texts:
+                branch.kappa_index = self._build_kappa_index(branch)
+            else:
+                self._ingest_kappa_keys(branch, new_texts, idf)
 
         if finalize and n > 0:
             idx.finalize()
@@ -454,6 +555,80 @@ class MultiCorpusBrain:
             rank_fn=rank_fn,
             **kwargs,
         )
+
+    def learn_top100_noise_rules(
+        self,
+        corpus_name: str,
+        queries: dict[str, str],
+        qrels: dict[str, dict[str, int]],
+        *,
+        qids: list[str] | None = None,
+        persist: str | Path | None = None,
+    ) -> dict:
+        """Audit top-100 noise, learn polluter docs + demotion rules into glass_box."""
+        from scripts.audit_scifact_top100_noise import (
+            audit_query_top100,
+            derive_rules,
+            find_polluter_docs,
+        )
+
+        branch = self._corpora[corpus_name]
+        if qids is None:
+            qids = [q for q in qrels if q in queries]
+
+        rows = []
+        for qid in qids:
+            from aethos_multi_corpus import IdfCache
+            idf = IdfCache(branch.idx, branch.n_docs)
+            rows.append(audit_query_top100(
+                self, branch, qid, queries[qid], qrels[qid], idf=idf,
+            ))
+
+        all_gold = [p for r in rows for p in r["gold_profiles"]]
+        all_false = [p for r in rows for p in r["false_above_gold"]]
+        rules = derive_rules(all_gold, all_false)
+        polluters = find_polluter_docs(rows)
+
+        self.glass_box.ingest_polluters(polluters)
+        self.glass_box.ingest_demotion_rules(rules)
+
+        summary = {
+            "corpus": corpus_name,
+            "queries": len(rows),
+            "polluter_docs": polluters[:20],
+            "rules": rules[:12],
+        }
+        if persist:
+            self.glass_box.save(persist)
+        return summary
+
+    def learn_glass_box_metrics(
+        self,
+        corpus_name: str,
+        queries: dict[str, str],
+        qrels: dict[str, dict[str, int]],
+        *,
+        qids: list[str] | None = None,
+        persist: str | Path | None = None,
+    ) -> dict:
+        """Run glass-box audit on a corpus and merge metrics into shared memory.
+
+        Metrics accumulate across corpora on the same brain — hub diluters,
+        bucket priors, and bridge patterns learned on one dataset apply when
+        searching any other stacked corpus (shared prime vocab, no reindex).
+        """
+        rows, summary = run_corpus_audit(
+            self, corpus_name, queries, qrels, qids=qids,
+        )
+        self.glass_box.ingest_summary(corpus_name, summary, rows)
+        summary["corpus"] = corpus_name
+        summary["learned_hubs"] = [
+            w for w, c in self.glass_box.hub_diluters.most_common(20)
+            if c >= self.glass_box.hub_min_queries
+        ]
+        if persist:
+            self.glass_box.save(persist)
+        return summary
 
     def evaluate(
         self,
@@ -669,10 +844,41 @@ class MultiCorpusBrain:
         qws = query_words_for_routing(words(query))
         if not qws:
             return 0.0, 0, 0
-        kdocs, keys = candidates_from_attractors(
-            qws, self._registry, branch.kappa_index,
-        )
+        kdocs, keys = self._attractor_route(branch, qws)
         return 0.3 * len(kdocs) + 1.5 * len(keys), len(kdocs), len(keys)
+
+    def _learned_hub_blocklist(self) -> frozenset[str]:
+        if not self.glass_box.enabled:
+            return frozenset()
+        return frozenset(
+            w for w, c in self.glass_box.hub_diluters.items()
+            if c >= self.glass_box.hub_min_queries
+        )
+
+    def _attractor_route(
+        self,
+        branch: CorpusBranch,
+        query_words: list[str],
+    ) -> tuple[list[str], frozenset[AttractorKey]]:
+        """κ candidate route with hub penalty + pair-meet keys + learned hubs."""
+        idf = IdfCache(branch.idx, branch.n_docs)
+        routed = query_words_for_routing(query_words) if query_words else []
+        routed = self.glass_box.filter_routing_words(routed, idf=idf)
+        # Hubs stay in routed when compounds enabled — bit_04 binds hub+rare, not solo hub κ
+        if self.HUB_IDF_GATE < 50 and not self.ENABLE_HUB_COMPOUNDS:
+            routed = [w for w in routed if idf(w) >= self.HUB_IDF_GATE]
+        if not routed:
+            routed = query_words_for_routing(query_words)
+        return candidates_from_attractors(
+            routed,
+            self._registry,
+            branch.kappa_index,
+            idf=idf,
+            hub_idf_gate=self.HUB_IDF_GATE if self.HUB_IDF_GATE < 50 else 0.0,
+            pair_keys=self.ENABLE_PAIR_KEYS,
+            pair_rare_gate=self.PAIR_RARE_GATE,
+            hub_compound_keys=self.ENABLE_HUB_COMPOUNDS,
+        )
 
     def route_corpus(self, query: str) -> tuple[str, dict[str, float]]:
         """Pick corpus: route labels + κ lighting + subjects + lexical probe."""
@@ -722,15 +928,13 @@ class MultiCorpusBrain:
         qws = query_words_for_routing(words(query))
         if not qws:
             return lex, 0, 0
-        kdocs, keys = candidates_from_attractors(
-            qws, self._registry, branch.kappa_index,
-        )
+        kdocs, keys = self._attractor_route(branch, qws)
         if not keys:
             return lex, len(kdocs), 0
         fused = dict(lex)
         lmax = max(fused.values()) if fused else 1.0
         for doc_id in kdocs[:120]:
-            ov = branch.kappa_index.score_doc_overlap(keys, doc_id)
+            ov = branch.kappa_index.score_doc_overlap(keys, doc_id, query_words=qws)
             if ov <= 0:
                 continue
             boost = self.KAPPA_LAM * ov * lmax
@@ -784,6 +988,8 @@ class MultiCorpusBrain:
             chosen, route_scores = self.route_corpus(query)
 
         branch = self._corpora[chosen]
+        if branch.index_mode == "kappa_primary":
+            return self.scale_search(query, corpus=chosen, k=k, lam=lam)
         ranked, sig, n_kdocs, n_keys = self.search_branch(
             branch, query, k=k, lam=lam,
         )
@@ -808,6 +1014,8 @@ class MultiCorpusBrain:
         rare_df_cap: int = 256,
         use_bridges: bool = True,
         use_teach: bool = True,
+        use_routed: bool = True,
+        lam: float = 0.3,
     ) -> SearchResult:
         """N-independent search: kappa-route candidates + rare-term exact recall,
         then score only the bounded pool.
@@ -824,17 +1032,17 @@ class MultiCorpusBrain:
             raise KeyError(f"unknown corpus {chosen!r}")
         branch = self._corpora[chosen]
         idx = branch.idx
+        idf = IdfCache(branch.idx, branch.n_docs)
+        hub_blk = self._learned_hub_blocklist()
 
         qws = query_words_for_routing(words(query))
         pool: set[str] = set()
         keys = frozenset()
         n_kdocs = 0
 
-        # 1. geometric candidates (kappa buckets) — bounded by max_candidates
+        # 1. geometric candidates (kappa buckets) — hub-filtered + pair-meet keys
         if branch.kappa_index is not None and qws:
-            kdocs, keys = candidates_from_attractors(
-                qws, self._registry, branch.kappa_index,
-            )
+            kdocs, keys = self._attractor_route(branch, qws)
             n_kdocs = len(kdocs)
             pool.update(kdocs[:max_candidates])
 
@@ -858,33 +1066,66 @@ class MultiCorpusBrain:
         # 4. kappa overlap fusion on the pool
         if keys and branch.kappa_index is not None and scores:
             lmax = max(scores.values()) or 1.0
+            klam = self.KAPPA_LAM * self.glass_box.kappa_lam_scale(query, idf)
             for d in pool:
-                ov = branch.kappa_index.score_doc_overlap(keys, d)
+                ov = branch.kappa_index.score_doc_overlap(keys, d, query_words=qws)
                 if ov > 0:
-                    scores[d] = scores.get(d, 0.0) + self.KAPPA_LAM * ov * lmax
+                    scores[d] = scores.get(d, 0.0) + klam * ov * lmax
 
-        # 5. supervised-bridge + teach rerank, restricted to the pool
-        if use_bridges and branch.pair_bridges is not None and scores:
-            from aethos_bridges import bridge_expansion
-            exp = bridge_expansion(idx, branch.pair_bridges, query)
-            if exp:
-                emax = max(exp.values()) or 1.0
-                smax = max(scores.values()) or 1.0
-                for d, e in exp.items():
-                    if d in scores:
-                        scores[d] += 0.25 * smax * (e / emax)
-        if use_teach and branch.teach is not None and scores:
-            rq = branch.teach.rewrite_query(query)
-            if rq != query:
-                for d, s in score_candidates(idx, rq, pool).items():
-                    scores[d] = max(scores.get(d, 0.0), s)
+        pool_frozen = frozenset(pool)
 
-        ranked = sorted(scores, key=scores.get, reverse=True)[:k]
+        def _restricted(q: str) -> dict[str, float]:
+            return score_candidates(idx, q, pool_frozen)
+
+        if use_routed:
+            texts = self._global_texts(branch)
+            idf = IdfCache(branch.idx, branch.n_docs)
+            cache = self._rare_doc_cache.setdefault(branch.name, {})
+            ranked, sig = routed_search(
+                idx,
+                texts,
+                idf,
+                query,
+                scores,
+                branch.teach if use_teach else None,
+                lam=lam,
+                k=k,
+                rare_doc_cache=cache,
+                mode=branch.expansion_mode,
+                pair_bridges=branch.pair_bridges if use_bridges else None,
+                restricted_score=_restricted,
+                bridge_idf=idf,
+                hub_idf_gate=self.HUB_IDF_GATE if self.HUB_IDF_GATE < 50 else 0.0,
+                hub_blocklist=hub_blk,
+            )
+        else:
+            sig = None
+            if use_bridges and branch.pair_bridges is not None and scores:
+                from aethos_bridges import bridge_expansion
+                exp = bridge_expansion(
+                    idx, branch.pair_bridges, query,
+                    idf=idf,
+                    hub_idf_gate=self.HUB_IDF_GATE if self.HUB_IDF_GATE < 50 else 0.0,
+                    hub_blocklist=hub_blk,
+                )
+                if exp:
+                    emax = max(exp.values()) or 1.0
+                    smax = max(scores.values()) or 1.0
+                    for d, e in exp.items():
+                        if d in scores:
+                            scores[d] += 0.25 * smax * (e / emax)
+            if use_teach and branch.teach is not None and scores:
+                rq = branch.teach.rewrite_query(query)
+                if rq != query:
+                    for d, s in score_candidates(idx, rq, pool_frozen).items():
+                        scores[d] = max(scores.get(d, 0.0), s)
+            ranked = sorted(scores, key=scores.get, reverse=True)[:k]
+
         local = [d.split("/", 1)[1] for d in ranked if "/" in d]
         return SearchResult(
             corpus=chosen,
             ranked=ranked,
-            signal=None,
+            signal=sig,
             route_scores={chosen: 1.0},
             local_ids=local,
             kappa_candidates=len(pool),
@@ -899,6 +1140,8 @@ class MultiCorpusBrain:
                 name: {
                     "root_prime": b.root_prime,
                     "n_docs": b.n_docs,
+                    "index_mode": b.index_mode,
+                    "postings": sum(len(p) for p in b.idx.postings.values()),
                     "expansion_mode": b.expansion_mode,
                     "subjects": sorted(b.subjects),
                     "route_labels": len(b.route_labels),

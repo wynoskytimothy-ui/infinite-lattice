@@ -1,0 +1,181 @@
+﻿========================================================================
+PARTICLE PLAYGROUND ΓÇö honest metaphor probe with numbers
+========================================================================
+
+========================================================================
+Q1 ΓÇö MEET NODE AS PARTICLE: (z position, zeta depth, arg(z) phase)
+========================================================================
+
+  [Layer 0] imaginary_start ΓÇö n-rail as particle birth
+    n=0  z=0+0i  zeta=0  |z|=0.00  arg=0.0deg
+    n=1  z=1+1i  zeta=1  |z|=1.41  arg=45.0deg
+    n=2  z=2+2i  zeta=2  |z|=2.83  arg=45.0deg
+    n=3  z=3+3i  zeta=3  |z|=4.24  arg=45.0deg
+    n=4  z=4+4i  zeta=4  |z|=5.66  arg=45.0deg
+    n=5  z=5+5i  zeta=5  |z|=7.07  arg=45.0deg
+    n=6  z=6+6i  zeta=6  |z|=8.49  arg=45.0deg
+    n=7  z=7+7i  zeta=7  |z|=9.90  arg=45.0deg
+  => Layer-0 phase LOCK: arg(z) std=0.0000 deg (~0 = fixed phase)
+
+  [Meet crossing] swap_meet(3,11) ΓÇö two banks, same node
+    bank(3)@n=11: z=14+3i  zeta=14  arg=12.1deg
+    bank(11)@n=3:  z=14+3i  zeta=14  arg=12.1deg
+    nodes COLLIDE: True  |╬öz|=0.000000  ╬özeta=0.000000
+
+  [Triple meet] (3,5,7) -- 3 rails => 1 node @ n in [7, 5, 3]
+    ap@n=7: z=12+5i  zeta=15
+    aq@n=5: z=12+5i  zeta=15
+    pq@n=3: z=12+5i  zeta=15
+  => 3 distinct transgressor momenta (n=7,5,3) land SAME (X,Y,zeta): True
+  => BUT path labels differ: ['ap', 'aq', 'pq'] ΓÇö same position, different history (metaphor: same energy level, different decay channel)
+
+========================================================================
+Q2 ΓÇö SPRING PLANE ╬¿=(z,zeta) vs 3D LATTICE COORD
+========================================================================
+
+  Single prime p=5, L01 (VA1├ùv1), n=0..10:
+    n= 0  lattice(X,Y,Z)=(5, 0, 5)  Psi z=5+0i zeta=5  regime=A
+    n= 1  lattice(X,Y,Z)=(6, 1, 6)  Psi z=6+1i zeta=6  regime=A
+    n= 2  lattice(X,Y,Z)=(7, 2, 7)  Psi z=7+2i zeta=7  regime=A
+    n= 3  lattice(X,Y,Z)=(8, 3, 8)  Psi z=8+3i zeta=8  regime=A
+    n= 4  lattice(X,Y,Z)=(9, 4, 9)  Psi z=9+4i zeta=9  regime=A
+    n= 5  lattice(X,Y,Z)=(10, 5, 10)  Psi z=10+5i zeta=10  regime=B
+    n= 6  lattice(X,Y,Z)=(11, 5, 11)  Psi z=11+5i zeta=11  regime=B
+    n= 7  lattice(X,Y,Z)=(12, 5, 12)  Psi z=12+5i zeta=12  regime=B
+    n= 8  lattice(X,Y,Z)=(13, 5, 13)  Psi z=13+5i zeta=13  regime=B
+    n= 9  lattice(X,Y,Z)=(14, 5, 14)  Psi z=14+5i zeta=14  regime=B
+    n=10  lattice(X,Y,Z)=(15, 5, 15)  Psi z=15+5i zeta=15  regime=B
+
+  => lattice Z == zeta for 11/11 steps (VA1 single-prime)
+
+  [Velocity boundary n=p=5]
+    n=4: Y=4  =>  n=5: Y=5  =>  n=6: Y=5
+    ╬öY across boundary: before=1  after=0  (regime switch = 'velocity change')
+
+  3D footprint n=0..10: ╬öX=10  ╬öZ(zeta)=10  ╬ö|z|=10.81
+  => z=X+iY lives IN the spring plane (complex 2D); zeta=Z is depth rail (real 1D)
+
+========================================================================
+Q3 ΓÇö VA1..VA4 AS POLARIZATION / ORIENTATION FAN
+========================================================================
+
+  chain (3, 5, 7) @ n=5, wing=1 ΓÇö 4 branch 'polarizations':
+    VA1: z=12+5i  zeta=15  |z|=13.00  arg=22.6deg
+    VA2: z=18-5i  zeta=15  |z|=18.68  arg=-15.5deg
+    VA3: z=10-3i  zeta=15  |z|=10.44  arg=-16.7deg
+    VA4: z=20+3i  zeta=15  |z|=20.22  arg=8.5deg
+
+  => zeta INVARIANT across 4 branches: True (all zeta=15.0)
+  => (X,Y) DISTINCT: 4/4 orientations in spring plane
+  => |z| values: [13.0, 18.682, 10.44, 20.224]  (same modulus: False)
+  => arg(z) spread: -16.7deg .. 22.6deg  (╬ö=39.3deg)
+
+  32 chambers (pair 3,5) @ n=5: 32 unique lattice coords / 32
+  => Full orientation space: 4 phase fans ├ù 8 vector mirrors = 32 'polarization chambers'
+
+  [Stage03 rotation] same pair, different frequency => different branch:
+    profile (1, 1) (equal): quadrant=3 => wing=3 branch=VA1
+    profile (5, 1) (left-heavy): quadrant=4 => wing=4 branch=VA1
+    profile (1, 5) (right-heavy): quadrant=5 => wing=5 branch=VA1
+
+========================================================================
+Q4 ΓÇö ELECTRON 4 STATES: membrane├ùspring encoding
+========================================================================
+
+  CoinState bit layout (membrane<<1 | spring):
+    WS=00  membrane=0 spring=0  metaphor=|0Γƒ⌐ soft
+    WH=01  membrane=0 spring=1  metaphor=|0Γƒ⌐ hard
+    BS=10  membrane=1 spring=0  metaphor=|1Γƒ⌐ soft
+    BH=11  membrane=1 spring=1  metaphor=|1Γƒ⌐ hard
+
+  wing_case_to_coin: 3 cases ├ù 32 wings => 4 coins
+    case 1: {'WS': 16, 'BS': 16}  (spring=case-1 mod 2 => 0)
+    case 2: {'WH': 16, 'BH': 16}  (spring=case-1 mod 2 => 1)
+    case 3: {'WS': 16, 'BS': 16}  (spring=case-1 mod 2 => 0)
+
+  => membrane bit = wing&1: WS+WH=48  BS+BH=48  (50/50)
+  => spring bit = (case-1)&1: soft=64  hard=32
+
+  'abab' entangle: imag=8  opposite_membrane=True
+  => Entanglement = shared imag coordinate (8) + opposite membrane bit
+
+  [Wild conjecture] 2-bit => quaternion heuristic norms: [1.0, 1.414, 1.414, 1.414]
+  => NOT unit quaternions (norms vary) ΓÇö 4 states fit 2-bit code, not SU(2) double cover
+
+========================================================================
+Q5 ΓÇö N-RAIL TRANSGRESSION: wave pattern as n=>Γê₧
+========================================================================
+
+  Single prime p=7, VA1 wing=1, n=1..50
+  Regime boundary at n=7: A(n<7) => B(nΓëÑ7)
+  Y(n) pre-boundary:  n=1..6 => Y = n  (linear imaginary walk)
+  Y(n) post-boundary: nΓëÑ7 => Y = 7  (velocity LOCK at anchor)
+
+  arg(z) pre-lock:  [7.1, 12.5, 16.7, 20.0, 22.6, 24.8]...
+  arg(z) post-lock: [26.6, 25.0, 23.6, 22.4, 21.3, 20.2]...
+  |z| local minima (wells) in 1..50: n=[] (0 total)
+
+  Pair corridor (3,11) case sequence n=1..50:
+    case runs: [(1, 2), (2, 8), (3, 40)]...
+    case distribution: {1: 2, 2: 8, 3: 40}
+    => 3-case FSM = piecewise constant 'phase sectors' on rail
+
+  Post-lock Y unique values: 1 (expect 1 = flat 'standing wave')
+  zeta slope post-lock: ╬özeta/╬ön = 1.0 (linear depth march)
+
+  |z| rail sketch (n=1..30, scaled):
+    n= 1  ####
+    n= 2  ####
+    n= 3  #####
+    n= 4  ######
+    n= 5  ######
+    n= 6  #######
+    n= 7| ########
+    n= 8  ########
+    n= 9  #########
+    n=10  #########
+    n=11  ##########
+    n=12  ##########
+    n=13  ###########
+    n=14  ###########
+    n=15  ############
+    n=16  ############
+    n=17  #############
+    n=18  #############
+    n=19  ##############
+    n=20  ##############
+    n=21  ###############
+    n=22  ###############
+    n=23  ################
+    n=24  ################
+    n=25  #################
+    n=26  #################
+    n=27  ##################
+    n=28  ##################
+    n=29  ###################
+    n=30  ####################
+
+========================================================================
+BONUS ΓÇö CROSS-BANK MEET: 3<->11 particle collisions
+========================================================================
+  swap (3,11): 32/32 chambers collide at reciprocal n
+  => Every polarization chamber has a mirror meet (proven in demo())
+
+========================================================================
+SUMMARY METRICS
+========================================================================
+  layer0_phase_deg: 45.0
+  swap_meet_match: True
+  triple_rails: 3
+  triple_unique_coords: 1
+  zeta_match_rate: 1.0
+  velocity_boundary_p: 5
+  dy_flip: 0.0
+  zeta_invariant: True
+  xy_orientations: 4
+  chambers_unique: 32
+  membrane_50_50: True
+  n_coin_states: 4
+  boundary_n: 7
+  wells_count: 0
+  case_sectors: 3

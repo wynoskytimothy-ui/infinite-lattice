@@ -1,0 +1,289 @@
+﻿============================================================
+EXP 1: Synthetic cat/pet/purr chain
+============================================================
+{
+  "chain": {
+    "cat": {
+      "term": "cat",
+      "letters": {
+        "c": 7,
+        "a": 3,
+        "t": 73
+      },
+      "promoted_subwords": [
+        {
+          "subword": "cat",
+          "prime": 109
+        },
+        {
+          "subword": "cat",
+          "prime": 109
+        }
+      ],
+      "word_prime": 109,
+      "corridor_pins": [
+        109
+      ],
+      "k_meet_unified": false,
+      "k_meet_k": 1
+    },
+    "pet": {
+      "term": "pet",
+      "letters": {
+        "p": 59,
+        "e": 13,
+        "t": 73
+      },
+      "promoted_subwords": [
+        {
+          "subword": "pet",
+          "prime": 113
+        },
+        {
+          "subword": "pet",
+          "prime": 113
+        }
+      ],
+      "word_prime": 113,
+      "corridor_pins": [
+        113
+      ],
+      "k_meet_unified": false,
+      "k_meet_k": 1
+    },
+    "purr": {
+      "term": "purr",
+      "letters": {
+        "p": 59,
+        "u": 79,
+        "r": 67
+      },
+      "promoted_subwords": [
+        {
+          "subword": "pu",
+          "prime": 139
+        },
+        {
+          "subword": "rr",
+          "prime": 127
+        },
+        {
+          "subword": "pur",
+          "prime": 151
+        },
+        {
+          "subword": "urr",
+          "prime": 149
+        },
+        {
+          "subword": "purr",
+          "prime": 131
+        },
+        {
+          "subword": "purr",
+          "prime": 131
+        }
+      ],
+      "word_prime": 131,
+      "corridor_pins": [
+        127,
+        131,
+        139,
+        149,
+        151
+      ],
+      "k_meet_unified": true,
+      "k_meet_k": 3
+    },
+    "dog": {
+      "term": "dog",
+      "letters": {
+        "d": 11,
+        "o": 53,
+        "g": 19
+      },
+      "promoted_subwords": [],
+      "word_prime": 11077,
+      "corridor_pins": [
+        11077
+      ],
+      "k_meet_unified": false,
+      "k_meet_k": 1
+    }
+  },
+  "cages": [
+    {
+      "triple": "cat|pet|purr",
+      "anchor_composite": 1613527,
+      "anchor_primes": [
+        109,
+        113,
+        131
+      ],
+      "neighbors": [],
+      "cat_purr_touch": 6.854232711280291,
+      "dog_touch": 0.0
+    },
+    {
+      "triple": "cat|purrs|loudly",
+      "anchor_composite": 460934938816342441,
+      "anchor_primes": [
+        109,
+        22172377,
+        190722037
+      ],
+      "neighbors": [
+        "cat",
+        "loudly",
+        "purrs"
+      ],
+      "cat_purr_touch": 1.5108256237659907,
+      "dog_touch": 0.0
+    },
+    {
+      "triple": "pet|purrs|softly",
+      "anchor_composite": 48450908864214721303,
+      "anchor_primes": [
+        113,
+        22172377,
+        19337985503
+      ],
+      "neighbors": [
+        "pet",
+        "purrs",
+        "softly"
+      ],
+      "cat_purr_touch": 0.0,
+      "dog_touch": 0.0
+    }
+  ],
+  "unique_pair_keys_in_corpus": 9,
+  "unique_triple_keys_in_corpus": 5,
+  "pairwise_cat_purr_links": [
+    [
+      "cat",
+      "purr",
+      2
+    ]
+  ],
+  "triple_cage_links_cat_and_purr": false,
+  "triple_score_cat_purr": 6.854232711280291,
+  "pair_adjacent_only_misses": true
+}
+
+============================================================
+SEMANTIC PROOF: pairwise vs 3-way (mitochondria/atp)
+============================================================
+SciFact loaded: 5183 docs
+{
+  "query": [
+    "mitochondria",
+    "atp"
+  ],
+  "pair_routing_hit_docs": [],
+  "triple_cage_hit_docs": [
+    2
+  ],
+  "triple_finds_semantic_link_pair_misses": true,
+  "mito_cage_bridge_terms": [
+    "atp",
+    "mitochondria"
+  ],
+  "doc0_words": [
+    "mitochondria",
+    "produces",
+    "energy",
+    "in",
+    "cells"
+  ],
+  "mitochondria_atp_adjacent_in_any_doc": false
+}
+
+============================================================
+EXP 2: Co-occur rare terms -> shared anchor_composite
+============================================================
+{
+  "n_docs": 5183,
+  "unique_triple_anchors_global": 19089,
+  "unique_oriented_pair_keys_global": 414258,
+  "compression_ratio_pair_to_triple": 21.701398711299703,
+  "doc_pairs_with_2plus_shared_rare": 27,
+  "fraction_with_shared_triple_anchor": 0.0,
+  "fraction_with_shared_pair_key": 1.0,
+  "triple_only_links": -27
+}
+examples: [
+  {
+    "d1": "143251",
+    "d2": "213017",
+    "shared_rare": [
+      "apb",
+      "apbs"
+    ],
+    "shared_triple_anchors": 0,
+    "shared_pair_keys": 20,
+    "sample_triple": null
+  },
+  {
+    "d1": "1022115",
+    "d2": "1265945",
+    "shared_rare": [
+      "ibd",
+      "ulcerative"
+    ],
+    "shared_triple_anchors": 0,
+    "shared_pair_keys": 13,
+    "sample_triple": null
+  },
+  {
+    "d1": "1507222",
+    "d2": "1568684",
+    "shared_rare": [
+      "bat",
+      "uncoupling"
+    ],
+    "shared_triple_anchors": 0,
+    "shared_pair_keys": 8,
+    "sample_triple": null
+  },
+  {
+    "d1": "2831620",
+    "d2": "3052213",
+    "shared_rare": [
+      "acetyltransferases",
+      "deacetylases"
+    ],
+    "shared_triple_anchors": 0,
+    "shared_pair_keys": 4,
+    "sample_triple": null
+  }
+]
+
+============================================================
+EXP 3: Minimal doc repr (prime + triple keys)
+============================================================
+python : Traceback (most recent call last):
+At C:\Users\wynos\AppData\Local\Temp\ps-script-a7536ec4-0ece-45f0-9956-f325ca8d04c1.ps1:84 char:37
++ ... older (3)"; python _playground_3way_compression_probe.py 2>&1 | Out-F ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\wynos\New folder (3)\_playground_3way_compression_probe.py", line 545, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\wynos\New folder (3)\_playground_3way_compression_probe.py", line 508, in main
+    e3 = exp3_minimal_doc_repr(corpus_for_scale, reg_scale)
+  File "C:\Users\wynos\New folder (3)\_playground_3way_compression_probe.py", line 296, in exp3_minimal_doc_repr
+    comp, _, _ = _cage_composite_for_triple(sem, *triple)
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\wynos\New folder (3)\lattice_retriever_v1\doc_lattice_codec.py", line 99, in 
+_cage_composite_for_triple
+    p1, p2, p3 = sem._prime_for_term(w1), sem._prime_for_term(w2), sem._prime_for_term(w3)
+                                                                   ~~~~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\wynos\New folder (3)\lattice_retriever_v1\stage07_semantic_light.py", line 183, in _prime_for_term
+    distinct = sorted({letter_to_prime(c) for c in t if c.isalpha()})
+                       ~~~~~~~~~~~~~~~^^^
+  File "C:\Users\wynos\New folder (3)\aethos_words.py", line 43, in letter_to_prime
+    raise ValueError(f"single character required: {c!r}")
+ValueError: single character required: 'fi'

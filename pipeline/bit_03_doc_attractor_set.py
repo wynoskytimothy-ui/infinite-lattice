@@ -10,20 +10,29 @@ Uses BIT 1 word_to_spacetime_cell (hub-aligned chain), not coord-only rebuild.
 
 from __future__ import annotations
 
+import itertools
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 from aethos_hub_signature import LatticeHubSignature, build_all_hub_signatures
 from aethos_physics import SpacetimeCell
+from aethos_append_index import words
+from aethos_promotion import is_stopword
 from pipeline.bit_01_word_cell import DEFAULT_ANCHOR_N, word_to_spacetime_cell
 from pipeline.bit_02_attractor_key import (
     AttractorKey,
     DEFAULT_QUANTIZE,
     attractor_neighbors,
     kappa_from_cell,
+    kappa_pair_meet,
 )
+
+DEFAULT_PAIR_RARE_GATE = 3.0
+DEFAULT_MAX_PAIR_KEYS = 15
+DEFAULT_HUB_IDF_GATE = 2.0
+DEFAULT_MAX_HUB_COMPOUND_KEYS = 24
 
 
 @dataclass(frozen=True)
@@ -118,14 +127,29 @@ class CorpusAttractorIndex:
         self,
         query_keys: Iterable[AttractorKey],
         doc_id: str,
+        *,
+        query_words: Iterable[str] | None = None,
     ) -> float:
         q = set(query_keys)
         d = self.doc_keys.get(doc_id, set())
         if not q or not d:
             return 0.0
-        inter = len(q & d)
+        inter = q & d
         union = len(q | d)
-        return inter / union if union else 0.0
+        base = len(inter) / union if union else 0.0
+        if not query_words:
+            return base
+        qws = set(query_words)
+        witnesses = self.doc_witnesses.get(doc_id, {})
+        bonus = 0.0
+        for k in inter:
+            w = witnesses.get(k, "")
+            if "+" not in w:
+                continue
+            hub, rare = w.split("+", 1)
+            if hub in qws and rare in qws:
+                bonus += 0.35
+        return base + bonus
 
     def rank_docs_by_overlap(
         self,
@@ -211,6 +235,129 @@ def build_attractor_index_from_hub_signatures(
             word = doc_set.witnesses.get(key, "")
             strength = doc_set.strengths.get(key, 0.0)
             idx.add(doc_id, key, word, strength=strength)
+    return idx
+
+
+def assign_doc_kappa_keys(
+    index: CorpusAttractorIndex,
+    registry,
+    doc_id: str,
+    text: str,
+    idf: Callable[[str], float],
+    *,
+    rare_gate: float = 2.5,
+    top_k: int = 10,
+    min_len: int = 3,
+    pair_keys: bool = True,
+    pair_rare_gate: float = DEFAULT_PAIR_RARE_GATE,
+    max_pair_keys: int = DEFAULT_MAX_PAIR_KEYS,
+    hub_compound_keys: bool = True,
+    hub_idf_gate: float = DEFAULT_HUB_IDF_GATE,
+    max_hub_compound_keys: int = DEFAULT_MAX_HUB_COMPOUND_KEYS,
+    skip_hub_singleton_kappa: bool = True,
+    learned_hub_words: frozenset[str] | None = None,
+) -> int:
+    """O(top_k) per doc: rare words → spring cell → κ bucket (ingest-time path).
+
+    hub_compound_keys: bind high-df hub terms (cell, cancer, …) to THIS doc's
+    rare terms via pair-meet κ — proper correlation, not naked hub bridges.
+    skip_hub_singleton_kappa: hubs never get solo κ buckets (noise at scale).
+    """
+    rare: list[tuple[str, float]] = []
+    hubs_in_doc: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    word_keys: dict[str, AttractorKey] = {}
+    for w in words(text):
+        if w in seen or not w.isalpha() or len(w) < min_len or is_stopword(w):
+            continue
+        seen.add(w)
+        iv = idf(w)
+        if iv >= rare_gate:
+            rare.append((w, iv))
+        elif hub_compound_keys and iv < hub_idf_gate:
+            if learned_hub_words is None or w in learned_hub_words:
+                hubs_in_doc.append((w, iv))
+    rare.sort(key=lambda x: -x[1])
+    added = 0
+    for w, iv in rare[:top_k]:
+        try:
+            cell = word_to_spacetime_cell(registry, w, n=index.anchor_n)
+            key = kappa_from_cell(cell, quantize=index.quantize)
+            index.add(doc_id, key, w, strength=iv)
+            word_keys[w] = key
+            added += 1
+        except Exception:
+            continue
+
+    # hub × rare compounds — anchor hub noise to doc-specific rare context
+    if hub_compound_keys and word_keys and hubs_in_doc:
+        hubs_in_doc.sort(key=lambda x: x[1])
+        rare_w = [w for w, _ in rare[:top_k] if w in word_keys]
+        n_hub_pairs = 0
+        for hw, hiv in hubs_in_doc[:8]:
+            try:
+                hcell = word_to_spacetime_cell(registry, hw, n=index.anchor_n)
+                hkey = kappa_from_cell(hcell, quantize=index.quantize)
+            except Exception:
+                continue
+            for rw in rare_w[:6]:
+                if n_hub_pairs >= max_hub_compound_keys:
+                    break
+                pk = kappa_pair_meet(hkey, word_keys[rw])
+                index.add(
+                    doc_id, pk, f"{hw}+{rw}",
+                    strength=(3.0 - hiv) + idf(rw),
+                )
+                added += 1
+                n_hub_pairs += 1
+            if n_hub_pairs >= max_hub_compound_keys:
+                break
+
+    if pair_keys and len(word_keys) >= 2:
+        pair_rare = [w for w, iv in rare if iv >= pair_rare_gate and w in word_keys]
+        pair_rare = pair_rare[:6]
+        n_pairs = 0
+        for w1, w2 in itertools.combinations(pair_rare, 2):
+            if n_pairs >= max_pair_keys:
+                break
+            pk = kappa_pair_meet(word_keys[w1], word_keys[w2])
+            index.add(doc_id, pk, f"{w1}+{w2}", strength=idf(w1) + idf(w2))
+            added += 1
+            n_pairs += 1
+    return added
+
+
+def build_attractor_index_fast(
+    registry,
+    doc_texts: dict[str, str],
+    idf: Callable[[str], float],
+    *,
+    rare_gate: float = 2.5,
+    top_k: int = 10,
+    n: int = DEFAULT_ANCHOR_N,
+    quantize: float = DEFAULT_QUANTIZE,
+    pair_keys: bool = True,
+    pair_rare_gate: float = DEFAULT_PAIR_RARE_GATE,
+    max_pair_keys: int = DEFAULT_MAX_PAIR_KEYS,
+    hub_compound_keys: bool = True,
+    hub_idf_gate: float = DEFAULT_HUB_IDF_GATE,
+    max_hub_compound_keys: int = DEFAULT_MAX_HUB_COMPOUND_KEYS,
+    learned_hub_words: frozenset[str] | None = None,
+) -> CorpusAttractorIndex:
+    """Build κ inverted index at ingest speed — one O(top_k) pass per document."""
+    idx = CorpusAttractorIndex(quantize=quantize, anchor_n=n)
+    for doc_id, text in doc_texts.items():
+        assign_doc_kappa_keys(
+            idx, registry, doc_id, text, idf,
+            rare_gate=rare_gate, top_k=top_k,
+            pair_keys=pair_keys,
+            pair_rare_gate=pair_rare_gate,
+            max_pair_keys=max_pair_keys,
+            hub_compound_keys=hub_compound_keys,
+            hub_idf_gate=hub_idf_gate,
+            max_hub_compound_keys=max_hub_compound_keys,
+            learned_hub_words=learned_hub_words,
+        )
     return idx
 
 
