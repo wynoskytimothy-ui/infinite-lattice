@@ -1,0 +1,14 @@
+
+scifact: 5,183 docs | test 300 q | DFCAP=60
+  meet graph: 15,609 rare words -> 2,824,730 edges, build 0.2s
+  config                  nDCG@10    R@10   MRR@10
+  base (alpha=0)           0.7023  0.8274   0.6680  base
+  1hop a=0.1 2hop b=0      0.7030  0.8274   0.6688  (+0.0007)
+  1hop a=0.2 2hop b=0      0.7035  0.8274   0.6694  (+0.0012)
+  1hop a=0.3 2hop b=0      0.7039  0.8274   0.6702  (+0.0016)
+  1hop a=0.5 2hop b=0      0.7029  0.8241   0.6698  (+0.0006)
+  1hop a=0.2 2hop b=0.1    0.7035  0.8274   0.6694  (+0.0012)
+  1hop a=0.3 2hop b=0.2    0.7037  0.8274   0.6699  (+0.0013)
+  1hop a=0.5 2hop b=0.3    0.7024  0.8241   0.6692  (+0.0001)
+
+  reference: base 0.7023 | +SUPERVISED bridges 0.7375 | +glass_box 0.7645
