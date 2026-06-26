@@ -20,7 +20,7 @@ engine**: one complex operator `M_β = -(1/β)log Σ a_k e^{-βc_k+iφ_k}` is th
 tropical meet) and the **wave** (warm = π-roots interference) — verified. APPLICATIONS proven this session:
 (a) retrieval — the lattice SERVES learned-sparse (SPLADE) at **SOTA + small + fast across corpora**, while its
 own symbolic scoring ties BM25 (an *algebraic* wall: tropical = path, not additive evidence); (b) compression —
-FOR 0.428 GB / chamber 6.2× on full MARCO; (c) the **algebraic corpus** (corpus = one big number, decode=factor,
+FOR 0.428 GB (4.97× lossless; the "6.2×" in earlier drafts was unbacked — real chamber-on-gaps ~1.5×, see MEASUREMENTS.md); (c) the **algebraic corpus** (corpus = one big number, decode=factor,
 add=multiply, correlations free); (d) erasure codes, set-reconciliation (Minisketch), Merkle provenance,
 exact DFT/interferometer, GCD/continued-fractions, Sierpinski. Also: IMS bearing fault monitor (4h early),
 a Γ-ODE LLM mixer, a proven VSA/Hebbian net. The lattice is an EXACT addressing/integrity/optimization
@@ -59,7 +59,7 @@ For each capability: the repos that tackled it, the BEST measured result, and wh
 | Capability | Best version / repo | Measured result | Notes |
 |---|---|---|---|
 | Retrieval (SOTA) | New folder (3): SPLADE-on-lattice | BEIR scifact 0.70 / nfcorpus 0.35 / fiqa 0.35, 0.2-2.6ms, 1-20MB | matches SPLADE++; MARCO native encode running |
-| Compression | New folder (3): FOR + chamber | MARCO 0.428 GB / 0.347 GB (6.2×) | persisted |
+| Compression | New folder (3): FOR + chamber | MARCO FOR 0.428 GB = 4.97× lossless (chamber-on-gaps ~1.5×; "6.2×" was unbacked) | persisted |
 | Algebraic corpus | New folder (3): aethos_algebraic_corpus | corpus = 2.64M-digit number, decode=factor | scoring ties BM25 |
 | Lattice math (tropical/octant/measure) | New folder (3) memories | all verified | see §0 |
 | Two-temperature / fused operator | New folder (3): aethos_fused_meet | particle+wave in one M_β | frontier closed |
@@ -99,7 +99,7 @@ scoring ties/loses to BM25, the wall is algebraic").
 JUNE-2026 SESSION ADVANCES (New folder (3), NOT in the April map — the new frontier):
 - SPLADE-on-lattice = SOTA+small+fast across BEIR (scifact 0.70/nfcorpus 0.35/fiqa 0.35, 0.2-2.6ms, 1-20MB,
   no CE) [[sota-via-learned-sparse-on-lattice]]; native MARCO encode running.
-- Algebraic corpus (corpus = one number) [[aethos-algebraic-corpus]]; FOR/chamber compression 0.428GB/6.2×.
+- Algebraic corpus (corpus = one number) [[aethos-algebraic-corpus]]; FOR compression 0.428GB = 4.97× lossless (not 6.2×; see MEASUREMENTS.md).
 - The math IS classical structures (tropical/Legendre/Euclid/Sierpinski) [[aethos-formulas-are-classical-structures]];
   two-temperature particle/wave engine + the fused complex operator [[aethos-two-temperature-engine]].
 - The exact coordinate formula verified [[aethos-coordinate-formula]]; honest scorecard [[honest-headline-scorecard]].
@@ -127,7 +127,7 @@ unified build should live there, importing the best-of-each:
    - April "V27 numpy-scatter BM25" (217× speedup, np.add.at) ≡ June "fast presence-meet" (scatter tf, gather
      candidates, 18×). Same vectorized-meet optimization.
    - April "Markov-path codec" (Timothy's "every doc is a PATH/Markov chain" → per-state Huffman, 49-219 B/doc
-     lossless) ≡ June "chamber codec" on the posting-gap stream (8.91 bits/posting, 6.2×). Same lossless
+     lossless) ≡ June "chamber codec" on the posting-gap stream (measured ~1.5× chamber-on-gaps, FOR 4.97×; the "6.2×" was unbacked — see MEASUREMENTS.md). Same lossless
      path-stream compression; the chamber/context-mixer is the stronger coder, the Markov codec the simpler.
    - April "no single architecture wins all 3 corpora; per-dataset routing is the honest answer" ≡ June measured
      BEIR per-corpus behavior (CE helps fiqa +11pp, HURTS scifact). Same honest finding.

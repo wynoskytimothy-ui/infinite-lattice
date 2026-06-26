@@ -1,0 +1,32 @@
+
+  ROUTE 1  BEIR  lattice recall pool -> CE rerank, depth sweep (no per-corpus tuning)
+
+  scifact: 5183 docs | test 300 q | pool cap 1000
+    lattice-only nDCG@10 (BM25 order, no CE): 0.7023
+     depth   recall@D   nDCG@10  CE ms/q(med)   e2e ms/q(med)
+       100     91.93%    0.6786         113.3           114.5
+       200     94.83%    0.6778         226.6           227.8
+       500     96.83%    0.6768         566.4           567.6
+      1000     98.17%    0.6744        1132.8          1134.0
+
+  nfcorpus: 3633 docs | test 323 q | pool cap 1000
+    lattice-only nDCG@10 (BM25 order, no CE): 0.3203
+     depth   recall@D   nDCG@10  CE ms/q(med)   e2e ms/q(med)
+       100     25.79%    0.3469         114.2           114.7
+       200     30.84%    0.3489         228.5           228.9
+       500     40.37%    0.3484         571.1           571.6
+      1000     50.73%    0.3477        1142.3          1142.8
+
+  fiqa: 57638 docs | test 648 q | pool cap 1000
+    lattice-only nDCG@10 (BM25 order, no CE): 0.2392
+     depth   recall@D   nDCG@10  CE ms/q(med)   e2e ms/q(med)
+       100     52.93%    0.3304         127.5           132.1
+       200     59.96%    0.3374         255.1           259.6
+       500     68.30%    0.3441         637.6           642.2
+      1000     75.41%    0.3522        1275.3          1279.8
+
+  ===== BEIR ROUTE 1 SUMMARY =====
+  scifact   : lattice-only 0.7023  ->  +CE best nDCG@10 0.6786 @ depth 100
+  nfcorpus  : lattice-only 0.3203  ->  +CE best nDCG@10 0.3489 @ depth 200
+  fiqa      : lattice-only 0.2392  ->  +CE best nDCG@10 0.3522 @ depth 1000
+  3-corpus avg best nDCG@10: 0.4599   (BEIR zero-shot SOTA avg ~0.50)

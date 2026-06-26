@@ -1,0 +1,14 @@
+  [serve full] loading FOR index
+    loaded 27,715 terms, 1,059,501,065 postings, 8,841,823 present docs (96s)
+    dev-small queries=200; with gold in this index=200
+
+  ===== native SPLADE-on-lattice, dev-small (NO pool, NO CE) full =====
+    queries scored        : 200  (gold-in-index 200)
+    serve latency (meet)  : median 3234.31 ms  p90 4336.22 ms
+    recall@100 (all q)    : 92.00%   <- capped by 50k-slice gold coverage
+    MRR@10 (all q)        : 0.3989
+    recall@100 (gold-in-ix): 92.00%   <- the codec/serve correctness signal
+    MRR@10 (gold-in-ix)   : 0.3989   <- OPTIMISTIC (gold competes vs ~50k
+                            distractors, not 8.8M); proves ranking works, not the headline
+
+RESULT nq=200 mrr_all=0.3989 recall@100=92.00% lat_med=3234.31ms lat_p90=4336.22ms wall=1412s
