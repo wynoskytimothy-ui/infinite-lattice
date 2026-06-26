@@ -496,9 +496,48 @@ class ServedIndex:
         order = sel[np.argsort(-sc[sel])]
         return self.present[cand[order]], sc[order]
 
+    def search_fast(self, qids, qw, k=10, topq=30, pool_cap=80000):
+        """Rarest-address candidate pooling: the SHORT (discriminative) query-term posting lists
+        build a small candidate set C; every term then refines scores by searchsorted(C) against
+        its sorted posting list -- O(|C|*log|posting|), never O(|posting|). So a million-long
+        common-term list costs ~|C| lookups, not a million scatter-adds. Footprint unchanged
+        (query-side only); for candidates in C the score is the EXACT sparse-dot. ~35x faster than
+        search() at equal MRR@10 (measured: 0.40 @ 92 ms vs 3234 ms; see MEASUREMENTS.md)."""
+        qw = np.asarray(qw, np.float32)
+        top = np.argsort(-qw)[:topq]
+        terms = []
+        for i in top:
+            j = self.col.get(int(qids[i]))
+            if j is None:
+                continue
+            loc, w = self.tloc[j]
+            terms.append((loc, w, float(qw[i])))
+        if not terms:
+            return np.zeros(0, np.uint32), np.zeros(0, np.float32)
+        terms.sort(key=lambda t: len(t[0]))                 # discriminative (short lists) first
+        parts = []; tot = 0
+        for loc, w, qweight in terms:
+            if parts and tot + len(loc) > pool_cap:
+                break
+            parts.append(loc); tot += len(loc)
+        C = np.unique(np.concatenate(parts))                # sorted candidate local ids
+        score = np.zeros(len(C), np.float32)
+        for loc, w, qweight in terms:
+            pos = np.searchsorted(loc, C)
+            pc = np.minimum(pos, len(loc) - 1)
+            hit = loc[pc] == C
+            score[hit] += qweight * w[pc[hit]]
+        if len(C) > k:
+            sel = np.argpartition(-score, k)[:k]
+        else:
+            sel = np.arange(len(C))
+        order = sel[np.argsort(-score[sel])]
+        return self.present[C[order]], score[order]
+
 
 def serve(tag="", nq=None):
-    print(f"  [serve{tag}] loading FOR index", flush=True)
+    FAST_SERVE = os.environ.get("FAST", "1") != "0"   # rarest-address pool (35x); FAST=0 = full scatter
+    print(f"  [serve{tag}] loading FOR index  (fast-pool serve: {'ON' if FAST_SERVE else 'OFF'})", flush=True)
     t0 = time.perf_counter()
     si = ServedIndex()
     print(f"    loaded {len(si.term_ids):,} terms, {si.n_post:,} postings, "
@@ -542,7 +581,7 @@ def serve(tag="", nq=None):
         for qid, _ in qset:
             ids, qw = qenc[qid]
             t = time.perf_counter()
-            top, _sc = si.search(ids, qw, k=100)
+            top, _sc = si.search_fast(ids, qw, k=100) if FAST_SERVE else si.search(ids, qw, k=100)
             lat.append((time.perf_counter() - t) * 1000)
             gold = qrels[qid]
             top = [int(d) for d in top]

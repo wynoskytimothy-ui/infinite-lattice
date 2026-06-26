@@ -1,0 +1,12 @@
+  250 queries, same set for both methods
+
+  running search_fast (rarest-address pool)...
+    FAST : MRR@10 0.3909  recall@100 88.40%  median 88.29 ms  p90 114.52 ms
+  running full search() (this is the slow ~3.2 s/q baseline, please wait)...
+    FULL : MRR@10 0.3977  recall@100 91.60%  median 3144.05 ms  p90 4259.49 ms
+
+  ===== HEAD-TO-HEAD (same 250 queries) =====
+    MRR@10   : fast 0.3909  vs  full 0.3977   (delta -0.0068)
+    speedup  : 36x  (3144 ms -> 88.3 ms median)
+    top-10 overlap (fast vs full): 92.0%
+    footprint: 286.9 B/doc UNCHANGED (search_fast is query-side only)

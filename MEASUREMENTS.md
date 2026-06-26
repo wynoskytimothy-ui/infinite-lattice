@@ -62,3 +62,22 @@ BM25 scifact 0.665 / nfcorpus 0.325 / fiqa 0.236 — matches the BEIR/Anserini t
 ColBERT fiqa 0.317 — matches BEIR Table 2 (fair). ColBERT nfcorpus "0.344" was **dropped** — the
 BEIR zero-shot ColBERT(v1) nfcorpus is ≈0.305, so the old "+0.005 win" rested on a bad baseline.
 MARCO dense ~0.34, SPLADE++/ColBERT 0.37–0.40 — accurate bands.
+
+## 6. SPEED FIX — rarest-address candidate pooling (`_serve_verify.log`, head-to-head, same 250 q)
+
+The 3.2 s/query came from scatter-adding the FULL posting lists of a few high-DF SPLADE query terms.
+Fix (`ServedIndex.search_fast`, query-side only — index UNCHANGED at 286.9 B/doc): the short
+(discriminative) query-term posting lists build a small candidate set C; every term then refines via
+`searchsorted(C)` against its sorted posting list — O(|C|·log|posting|), never O(|posting|).
+
+Head-to-head on the SAME 250 dev-small queries (shipped `search()` vs `search_fast()`):
+```
+FAST : MRR@10 0.3909   recall@100 88.40%   median   88 ms   p90  115 ms
+FULL : MRR@10 0.3977   recall@100 91.60%   median 3144 ms   p90 4259 ms
+  speedup 36x  |  delta MRR -0.0068  |  top-10 overlap 92.0%  |  footprint 286.9 B/doc unchanged
+```
+Honest: a **small real accuracy cost (-0.0068 MRR, -3.2 pts recall@100)** bought for a **36x speedup**
+(3.1 s -> 88 ms). The cost is pool coverage (gold docs matching only common terms); it is a **dial** —
+larger `pool_cap` recovers accuracy at higher latency (sweep `_serve_fast.log`: pool 150k → MRR ~0.403
+at ~209 ms). Default config topq=30 / pool_cap=80k. Sub-100 ms = production band; all three targets
+(small + accurate + fast) now met on one index. Enabled by default in `serve --full` (`FAST=0` reverts).

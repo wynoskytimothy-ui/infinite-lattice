@@ -1,0 +1,12 @@
+  index loaded (89s); 27,715 terms
+  300 queries encoded
+
+  config (TOPQ,POOL)       MRR@10  recall@100   med ms   p90 ms   med |C|
+  TOPQ=20  POOL=20000       0.3731      80.33%    49.99    75.24     16376
+  TOPQ=30  POOL=40000       0.3922      84.33%    74.07   103.07     26517
+  TOPQ=30  POOL=80000       0.4012      87.00%    91.92   119.36     52460
+  TOPQ=45  POOL=80000       0.4008      86.67%   121.44   174.26     53627
+  TOPQ=45  POOL=150000      0.4030      89.33%   209.40   291.42    103921
+
+  baseline (full scatter, _serve_sample.log): MRR 0.3989, median 3234 ms, footprint 286.9 B/doc
+  footprint UNCHANGED (candidate pooling is query-side; index not modified).

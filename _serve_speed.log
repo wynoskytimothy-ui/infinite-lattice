@@ -1,0 +1,6 @@
+  index loaded (92s); 27,715 terms, 1,059,501,065 postings
+  300 dev-small queries; encoding (full SPLADE) once...
+  query term counts: median 45, max 95
+
+  K (top query terms)      MRR@10  recall@100  median ms   p90 ms
+  K=10                     0.3939      90.67%    1114.78  1346.63
