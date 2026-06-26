@@ -1,0 +1,18 @@
+  index loaded (91s)
+    chunk 10/45  docs=1,999,900  postings=23,971,346  (46s)
+    chunk 20/45  docs=3,999,788  postings=47,946,629  (93s)
+    chunk 30/45  docs=5,999,692  postings=71,918,576  (139s)
+    chunk 40/45  docs=7,999,582  postings=95,886,591  (186s)
+  saved composite layer -> composites.npz
+
+  COMPOSITE LAYER: 31,012,635 composites, 105,977,022 postings, 8,841,368 docs covered
+  added footprint: 47.9 B/doc raw (FOR-packed ~28.2); total ~315 B/doc  (budget 500)
+
+  method                         MRR@10  recall@100   med ms   p90 ms   med|C|
+  shipped rarest-union 80k       0.3909      88.40%    93.78   121.20    52800
+  composites + floor=0           0.2931      65.60%    14.00    80.94      661
+  composites + floor=1           0.3775      83.60%    71.92    99.98    13639
+  composites + floor=2           0.3893      90.00%    87.81   177.50    43740
+
+  reference: full scatter 0.3977 / 3144 ms (ceiling) ; composite-meet on-fly 0.398 / 127 ms
+  base footprint 286.9 B/doc ; composite layer +~28 B/doc -> ~315 B/doc (budget 500)

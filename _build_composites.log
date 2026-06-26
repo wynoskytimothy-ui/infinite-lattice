@@ -1,0 +1,14 @@
+  index loaded (90s)
+    chunk 10/45  docs=1,999,900  postings=23,971,346  (46s)
+    chunk 20/45  docs=3,999,788  postings=47,946,629  (92s)
+    chunk 30/45  docs=5,999,692  postings=71,918,576  (138s)
+    chunk 40/45  docs=7,999,582  postings=95,886,591  (184s)
+
+  COMPOSITE LAYER: 31,012,635 composites, 105,977,022 postings, 8,841,368 docs covered
+  added footprint: 47.9 B/doc raw (FOR-packed ~28.2); total ~315 B/doc  (budget 500)
+
+  method                         MRR@10  recall@100   med ms   p90 ms   med|C|
+  shipped rarest-union 80k       0.3909      88.40%    94.23   120.89    52800
+  STORED composites (curated)    0.3674      81.60%    44.91   116.21     3955
+
+  reference: full scatter 0.3977 / 3144 ms ; base footprint 286.9 B/doc

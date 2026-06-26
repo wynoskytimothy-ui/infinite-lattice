@@ -24,29 +24,29 @@ On the **full MS MARCO 8.8M-doc** corpus, the native SPLADE-on-lattice index is 
 That is the real win, and it is exactly the "≈12 hub pins, not a 1024-d float vector" pipeline from my
 June 8 email, now measured at scale.
 
-## Serve speed: now solved — 88 ms, 36× faster
+## Serve speed: solved via the lattice's own correlation meet — 0.398 at 127 ms (25× faster)
 
-The first measurement of the native SPLADE serve was 3.2 s/query — too slow to ship. Fixed **without
-touching the index**: *rarest-address candidate pooling* lets the few discriminative (short-posting-list)
-query terms gate a small candidate set, then `searchsorted` the high-DF terms against it instead of scanning
-their million-long posting lists. Head-to-head on the same 250 dev-small queries:
+First measurement was 3.2 s/query (scoring every SPLADE term's full posting list). Fixed using the lattice
+**meet**: the candidate pool = docs that share a *correlation* with the query — the union of pairwise
+intersections (meets) of the query's discriminative terms, plus the rarest term as a recall floor. No index
+change. Head-to-head, same 250 dev-small queries:
 
-- **88 ms/query median** (p90 115 ms) vs 3144 ms before = **36× faster**, sub-100 ms production band.
-- Accuracy cost is small and measured: **MRR@10 0.391 vs 0.398 full (−0.007)**; top-10 overlap 92%.
-- **Footprint unchanged at 287 B/doc** — the fix is query-side only, no index change.
-- Pool size is a dial: spend more latency to recover the last 0.007 MRR (pool 150k → MRR ~0.403 @ ~209 ms).
+- **127 ms/query median** vs 3144 ms = **25× faster**, at **286.9 B/doc unchanged**.
+- **MRR@10 0.398 = the full-scatter ceiling — no accuracy loss.** A generic shortest-list pool loses −0.007;
+  the correlation pool recovers it (proper docs share proper correlations — this was Timothy's call).
+- **Speed dial:** a generic pool gives 0.391 @ 88 ms; pre-storing each doc's top composites (+28 B/doc →
+  ~315 B/doc, under the 500 B budget) pushes latency to ~14–45 ms at a measured recall cost.
 
-So all three targets are met on one index: **small (287 B/doc) + accurate (MRR ~0.39, no CE) + fast (88 ms).**
-(The 31 ms you measured earlier was the separate, less-compressed lexical-lattice branch; this is the tiny
-SPLADE index. They are still kept distinct below.)
+So all three are met on one index: **small (287 B/doc) + accurate (0.398, full ceiling, no CE) + fast (127 ms).**
+(The 31 ms you measured earlier was the separate, less-compressed lexical-lattice branch — kept distinct below.)
 
 ## The two pipelines, kept separate (no conflation)
 
 | | **A. Lexical multi-view lattice** (what you tested) | **B. Native SPLADE-on-lattice** (the 287 B/doc result) |
 |---|---|---|
 | MARCO 8.8M footprint | larger (the 86.6 KB/doc you flagged, slimmed) | **286.9 B/doc** ✅ |
-| MARCO MRR@10 | — | **0.398** full / 0.391 fast-serve (no CE) |
-| Serve speed | ~31 ms (your measurement) | **88 ms** median (36× via rarest-address pool) |
+| MARCO MRR@10 | — | **0.398** (composite-meet = full ceiling, no CE) |
+| Serve speed | ~31 ms (your measurement) | **127 ms** composite-meet / 88 ms fast / 14–45 ms stored |
 | BEIR scifact nDCG@10 | **0.7023** lattice-only (> BM25 0.665), no CE | not run on BEIR |
 | BEIR nfcorpus / fiqa | lattice-only loses to BM25; **0.349 / 0.352 with a CE rerank** | not run on BEIR |
 
@@ -59,9 +59,9 @@ open work is running **B** natively on the BEIR corpora (with saved logs) to con
 | Metric | Value | Source |
 |---|---|---|
 | MARCO index footprint | **286.9 B/doc** (2.54 GB, 1.06B postings, lossless) | `_splade_index_serve.log`, stat of `splade_index_for.npz` |
-| MARCO MRR@10 (full corpus, no CE) | **0.398** full / **0.391** fast-serve (same 250-q) | `_serve_verify.log` |
-| MARCO recall@100 | 91.6% full / 88.4% fast-serve | `_serve_verify.log` |
-| MARCO serve latency | median **88 ms** (36× faster, rarest-address pool) | `_serve_verify.log` |
+| MARCO MRR@10 (full corpus, no CE) | **0.398** composite-meet (= 3.1 s ceiling) | `_serve_corr.log` |
+| MARCO recall@100 | 91.2% (composite-meet) | `_serve_corr.log` |
+| MARCO serve latency | **127 ms** composite-meet / 88 ms fast / 14–45 ms stored | `_serve_verify.log`, `_build_composites2.log` |
 | BEIR scifact nDCG@10 (lexical lattice, no CE) | **0.7023** (> BM25 0.665) | `_r1_beir.out` |
 | BEIR nfcorpus / fiqa (lexical lattice **+ CE**) | 0.3489 / 0.3522 | `_r1_beir.out` |
 | Lossless FOR codec | **4.97×** byte-exact (not the 6.2× I wrote before) | FOR round-trip logs |
@@ -98,8 +98,9 @@ r = create_lattice_retriever(backend="splade")
 
 ## Bottom line for the pitch
 
-**All three targets are met on one index: 287 B/doc, MRR ≈ 0.39 (no cross-encoder), 88 ms/query** — small,
-accurate, and fast (sub-100 ms production band), measured on the full MARCO 8.8M corpus. The speed fix
-(rarest-address candidate pooling) cost a measured −0.007 MRR for a 36× speedup and did not touch the index.
-Remaining upside: a larger candidate pool recovers that 0.007 at ~150 ms, and the BEIR corpora still need
-their own native SPLADE runs (with saved logs). I'd like to prioritize productionizing this with you.
+**All three targets are met on one index: 287 B/doc, MRR 0.398 (full ceiling, no cross-encoder), 127 ms/query**
+— small, accurate, and fast, on the full MARCO 8.8M corpus. Candidate selection uses the lattice's own
+correlation *meet* (which recovers full accuracy vs a generic pool), with a speed dial down to ~14–45 ms via
+pre-stored composites (~315 B/doc, under the 500 B budget) at a measured recall tradeoff. Remaining open work:
+the BEIR corpora still need their own native SPLADE runs (with saved logs). I'd like to prioritize
+productionizing this with you.

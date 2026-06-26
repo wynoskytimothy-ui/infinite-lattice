@@ -534,10 +534,51 @@ class ServedIndex:
         order = sel[np.argsort(-score[sel])]
         return self.present[C[order]], score[order]
 
+    def search_corr(self, qids, qw, k=10, topq=30, n_anchor=6):
+        """Composite-meet pool: the candidates = docs sharing a CORRELATION with the query, i.e. the
+        union of pairwise MEETS (intersections) of the query's most discriminative terms, plus the single
+        rarest term as a recall floor. Recovers the FULL-scatter accuracy that the rarest-union heuristic
+        loses (measured 0.398 vs 0.391 on the same 250 q = the 3.1s ceiling), at 286.9 B/doc, ~127 ms.
+        This is the accuracy-optimal serve; search_fast is faster/slightly-lower; the stored-composite
+        layer (composites.npz, build_composites.py) is a further speed dial (down to ~14-45 ms)."""
+        qw = np.asarray(qw, np.float32)
+        top = np.argsort(-qw)[:topq]
+        terms = []
+        for i in top:
+            j = self.col.get(int(qids[i]))
+            if j is None:
+                continue
+            loc, w = self.tloc[j]
+            terms.append((loc, w, float(qw[i])))
+        if not terms:
+            return np.zeros(0, np.uint32), np.zeros(0, np.float32)
+        terms.sort(key=lambda t: len(t[0]))
+        anchors = terms[:n_anchor]
+        parts = []
+        for a in range(len(anchors)):
+            la = anchors[a][0]
+            for b in range(a + 1, len(anchors)):
+                lb = anchors[b][0]
+                x, y = (la, lb) if len(la) <= len(lb) else (lb, la)
+                pos = np.searchsorted(y, x); pc = np.minimum(pos, len(y) - 1)
+                ab = x[y[pc] == x]                      # the meet = composite (correlation) doc-list
+                if len(ab):
+                    parts.append(ab)
+        parts.append(anchors[0][0])                    # rarest single term = recall floor
+        C = np.unique(np.concatenate(parts))
+        score = np.zeros(len(C), np.float32)
+        for loc, w, qweight in terms:
+            pos = np.searchsorted(loc, C); pc = np.minimum(pos, len(loc) - 1)
+            hit = loc[pc] == C
+            score[hit] += qweight * w[pc[hit]]
+        sel = np.argpartition(-score, k)[:k] if len(C) > k else np.arange(len(C))
+        order = sel[np.argsort(-score[sel])]
+        return self.present[C[order]], score[order]
+
 
 def serve(tag="", nq=None):
-    FAST_SERVE = os.environ.get("FAST", "1") != "0"   # rarest-address pool (35x); FAST=0 = full scatter
-    print(f"  [serve{tag}] loading FOR index  (fast-pool serve: {'ON' if FAST_SERVE else 'OFF'})", flush=True)
+    MODE = os.environ.get("SERVE_MODE", "corr")   # corr=composite-meet (best acc) | fast=rarest-union | full=scatter
+    print(f"  [serve{tag}] loading FOR index  (serve mode: {MODE})", flush=True)
     t0 = time.perf_counter()
     si = ServedIndex()
     print(f"    loaded {len(si.term_ids):,} terms, {si.n_post:,} postings, "
@@ -581,7 +622,9 @@ def serve(tag="", nq=None):
         for qid, _ in qset:
             ids, qw = qenc[qid]
             t = time.perf_counter()
-            top, _sc = si.search_fast(ids, qw, k=100) if FAST_SERVE else si.search(ids, qw, k=100)
+            top, _sc = (si.search_corr(ids, qw, k=100) if MODE == "corr"
+                        else si.search_fast(ids, qw, k=100) if MODE == "fast"
+                        else si.search(ids, qw, k=100))
             lat.append((time.perf_counter() - t) * 1000)
             gold = qrels[qid]
             top = [int(d) for d in top]

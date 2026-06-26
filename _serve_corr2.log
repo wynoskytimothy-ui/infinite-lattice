@@ -1,0 +1,8 @@
+  250 queries
+
+  method                       MRR@10  recall@100   med ms   p90 ms   med|C|
+  corr2 df_cap=10000           0.3909      88.00%    92.34   118.54    51538
+  corr2 df_cap=25000           0.3880      87.60%    88.85   119.36    43045
+  corr2 df_cap=50000           0.3764      84.40%    71.63   114.36    16607
+
+  reference: shipped rarest-union 0.3909 / 92 ms ; full scatter 0.3977 / 3144 ms ; footprint 286.9 B/doc

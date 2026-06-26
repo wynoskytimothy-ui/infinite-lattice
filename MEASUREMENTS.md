@@ -79,5 +79,30 @@ FULL : MRR@10 0.3977   recall@100 91.60%   median 3144 ms   p90 4259 ms
 Honest: a **small real accuracy cost (-0.0068 MRR, -3.2 pts recall@100)** bought for a **36x speedup**
 (3.1 s -> 88 ms). The cost is pool coverage (gold docs matching only common terms); it is a **dial** —
 larger `pool_cap` recovers accuracy at higher latency (sweep `_serve_fast.log`: pool 150k → MRR ~0.403
-at ~209 ms). Default config topq=30 / pool_cap=80k. Sub-100 ms = production band; all three targets
-(small + accurate + fast) now met on one index. Enabled by default in `serve --full` (`FAST=0` reverts).
+at ~209 ms). Default config topq=30 / pool_cap=80k. Sub-100 ms = production band.
+
+## 7. COMPOSITE / CORRELATION pooling — the lattice meet (`_serve_corr*.log`, `_build_composites2.log`)
+
+Using the lattice's correlation structure for pool selection instead of the generic shortest-list union.
+A composite (upper prime) = a term-pair; its doc-list is the MEET (intersection) of the constituents'
+postings. Same 250 dev-small queries:
+
+| pool method | MRR@10 | recall@100 | median | footprint |
+|---|---|---|---|---|
+| full scatter (ceiling) | 0.3977 | 91.6% | 3144 ms | 287 B |
+| **composite-meet on-the-fly** (intersect 6 discriminative terms + rarest floor) | **0.3982** | 91.2% | 127 ms | **287 B** |
+| rarest-union (the generic heuristic) | 0.3909 | 88.4% | 94 ms | 287 B |
+| stored composites + recall floor=2 | 0.3893 | 90.0% | 88 ms | 315 B |
+| stored composites, floor=0 (pure) | 0.2931 | 65.6% | **14 ms** | 315 B |
+
+Findings (honest):
+- The composite-meet **recovers the full-scatter accuracy** (0.398 = ceiling) that the generic union loses
+  (0.391) — correlations select *proper* docs. Confirmed. At 287 B/doc, ~127 ms. = accuracy-optimal serve.
+- Pre-stored composites (`build_composites.py` → 31M composites, 106M postings, **+28 B/doc FOR-packed →
+  ~315 B/doc**, under the 500 B budget) give a real **speed dial down to 14 ms**, but pure composites are
+  too narrow (recall 65.6%); a recall floor restores accuracy but brings latency back to ~the union's.
+- Net: the correlation layer **matches/slightly-beats** the simple method and shifts the speed/accuracy
+  frontier; it does not simultaneously dominate on both. No breakthrough claimed. DF-gating and
+  weight-prefix "curation" variants were measured and underperformed (`_serve_corr2/3.log`).
+- Shipped default `SERVE_MODE=corr` (accuracy-optimal 0.398/127ms/287B); `fast`=rarest-union 0.391/88ms;
+  `full`=scatter. Stored-composite speed dial available via `composites.npz`.

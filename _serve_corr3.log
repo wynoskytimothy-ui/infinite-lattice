@@ -1,0 +1,9 @@
+  250 queries
+
+  method                           MRR@10  recall@100   med ms   p90 ms   med|C|
+  shipped rarest-union 80k         0.3909      88.40%    84.99   110.02    52800
+  curated-meet top_t=1000          0.3734      82.00%    83.52   109.01    49421
+  curated-meet top_t=2000          0.3669      79.20%    73.67   108.41    37131
+  curated-meet top_t=4000          0.3407      75.20%    43.36   103.98     2734
+
+  footprint 286.9 B/doc unchanged (curated meet uses stored weights; no rebuild).
