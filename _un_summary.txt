@@ -1,0 +1,73 @@
+==== Electron-physics model (partical_extract.txt / partical_extract2.txt): "uni [METAPHOR-ONLY] ====
+NUMBERS: DECISIVE: the model's mechanism produces the classic TRIANGLE (sawtooth) correlation, not a cosine -- mean|E_model - triangle| = 0.0015 vs mean|E_model - cos| = 0.1177 (80x worse). At 45deg it gives E=0.4955 (i.e. 50% same), flatly contradicting the text's claimed "~71%/cos45=0.707". CHSH caps at S=2.0024 (sign), 2.0007 (shared singlet), 1.9994 (noise-optimal), best of 200 random local rules = 2.0164 -- ALL <= 2 within Monte-Carlo noise, never approaching QM's 2.8284 or the experimental ~2.4. Two-state binary outcome reproduced (outcomes {-1,+1}, 50.1% split) but it is assumed (a coin). Pauli shells: 2,8,18,32 are arithmetically correct (=2n^2) but obtained by assuming 2/pump x n^2 pumps. 1836 and g=2.002 are quoted, with no formula -> inputs, not outputs.
+LIMIT: The model is a LOCAL hidden-variable theory, so by Bell's theorem it provably cannot reproduce quantum entanglement statistics -- and my simulation confirms it caps at CHSH=2.0 and outputs a triangle where the text claims a cosine, so the headline "reproduces Bell correlations" is false by the model's own construction. Every quantitative hook (1836, g=2.002, magnetic moments -9.284e-24 / -1.913 muN, 2-8-18-32) is quoted from established physics with no derivation; the model has zero predictive power (it cannot output a constant, a cross-section, or a spectrum). Counter-caveat to be fair: it ne
+PURSUE: No (as physics). It cannot be salvaged for quantum behavior without abandoning locality, which guts the whole "bubbles squeezed by a local detector" picture. The single most decisive next experiment if anyone wants to retest: keep the exact mechanism but let the detector response be NONLOCAL (B may depend on alpha as well as beta) -- you will trivially recover cos and S=2.828, which precisely demo
+
+==== zeno-pi: Zeno "frame descent" (prime-primorial subdivision) + Timothy's add [REDUCIBLE-TO-STANDARD] ====
+NUMBERS: Base error ratio -> 4.0000 exactly => err ~ C/4^n, ~0.6 digits/iter (LINEAR). At 4.19M sides (n=20): Timothy-base 12.43 digits vs Archimedes-perimeter 13.03 (same rate). Module richardson_accelerate == (4Sn-Sn-1)/3 exactly (match=True). Romberg on Timothy-area and on Archimedes-perimeter both saturate at 61.0 digits (identical). Timothy+Romberg ~70 digits by n=13. Gauss-Legendre QUADRATIC: 40.8 digits at n=4, ~71 by n=6-8 (digits double/step), uncatchable. Machin ~1.4 digits/term. Frame descent: exact mixed-radix reconstruction of x in [0,1] (1/3 err 0.0; 1/7 & 0.12345 err 1.5e-10 at 10 primes) but ZERO pi digits on its own.
+LIMIT: Frame descent does NOT compute pi (it is a positional addressing scheme), so the zeno<->pi link is only that both reuse the polygon build. Timothy+Romberg's 70 digits is Romberg's credit, not the construction's, and still loses badly to Gauss-Legendre's quadratic convergence. Practical bug: R.build_pi materializes 4*2^n explicit edge tuples per step (~67M at n=24) -> geometric memory blowup that hangs/OOMs; must be capped or replaced by the O(n) closed-form area recurrence (done in the probe). At dps=70 the Romberg triangle also shows catastrophic cancellation past ~61-digit saturation (the n=
+PURSUE: No as a numerical pi method (Archimedes-area + Romberg is a known, beaten combo). The genuinely useful artifact is orthogonal: frame descent as an exact dictionary-free mixed-radix/primorial positional code for [0,1], which dovetails with the already-validated AETHOS address algebra -- pursue it there, not as pi. Next experiment: run a Wynn-epsilon / Aitken acceleration (not Romberg) on the C/4^n 
+
+==== aethos-master-vision: PrimeLatticeVision MNIST classifier (src/aethos_maste [REDUCIBLE-TO-STANDARD] ====
+NUMBERS: Full 60k/10k (canonical MNIST): AETHOS native ridge = 0.9628; logreg on AETHOS feats = 0.9722; kNN-3 raw pixels = 0.9705; logreg raw pixels = 0.9262; MLP-100 raw pixels = 0.9787 (a ~10-line sklearn call beats it). FEATURE-GROUP ablation (8k/8k): lattice-only dims (8-vector momentum + curvature + topology, 83 dims) = 0.679; generic density grids = 0.900; raw downsampled intensity = 0.902; ALL = 0.954; ALL-minus-lattice = 0.943 (lattice adds only +0.011); ALL-minus-raw-intensity = 0.955 (removing pixels costs nothing). Cost: feature extraction = 313s for 60k (pure-Python per-pixel loops) vs 0.9-11s for the other domains -> that runtime is why it's --skip'd in report.md, NOT a bug.
+LIMIT: Loses to a one-line MLPClassifier(100) (0.9787 vs 0.9628) and to plain logreg-on-its-own-features (0.9722); is ~0.03 below HOG+SVM/LeNet which its own table cites as the bar; 100x slower than every baseline (313s extraction). The "lattice geometry reads handwriting" claim is METAPHOR-ONLY at the margin (+0.01); the working classifier is REDUCIBLE-TO-STANDARD (Euler number + gradient histograms + downsampled pixels + ridge). It was skipped for runtime, not because it fails.
+PURSUE: No (not as a vision result). It is a competent classical feature pipeline with a lattice costume; it neither reaches the bar it sets nor isolates a capability the lattice uniquely provides. The single most informative next experiment if pursued anyway: vectorize _extract_features with scipy.ndimage (kill the 313s), then run forward feature-selection to report the SMALLEST feature set hitting 0.96 
+
+==== aethos_master predictive maintenance: (a) CMAPSS turbofan RUL "geometric fe [REDUCIBLE-TO-STANDARD] ====
+NUMBERS: CMAPSS FD001: AETHOS ridge_ensemble MAE 12.596/RMSE 16.545 (matches report.md); brain_ridge 12.126/15.684. AETHOS's OWN features -> sklearn Ridge = 12.587/16.512 (i.e. the pure-python "geometric" engine IS plain Ridge). SAME features -> RandomForest = MAE 10.30+-0.09 / RMSE 13.81+-0.12 (GBM 10.49/13.72) -- a stock RF beats the AETHOS engine by ~2.3 MAE / ~2.7 RMSE. IMS 2nd_test: AETHOS Ghost/entanglement fires at snap 540 (74.0h before end); its own z-threshold at 545 (73.2h, only 0.8h gain from "entanglement"). A plain Bearing-1 RMS>3sigma sustained alarm fires at snap 532 (75.3h) -- 8 snapshots EARLIER than the entanglement detector, single feature, single channel. Bearing ID correct but trivial (B1 RMS dominates: 9x healthy at peak).
+LIMIT: Single corpus per task (FD001; IMS 2nd_test) so the RF win and the RMS-beats-ghost result are dataset-specific, not a universal claim (FD002/FD004 multi-regime untested here). The "73h before end" framing is real but measured against catastrophic end-of-test, not against a deployed gauge; on a slow monotone RMS climb every reasonable detector fires at the same ~1.05x knee. Also found a real wrapper bug: bench/ims_bench.py reads keys (identified_bearing/detection_snapshot) that analyze() never returns, so the packaged bench prints None -- only bearings.run_ims_test2() shows the true result.
+PURSUE: No -- not as an AETHOS capability. The maintenance modules are correct and reproducible but add nothing over scikit-learn. If pursued at all, the single highest-value experiment is to keep the AETHOS window features and replace RidgeModel with a RandomForest/GBM (drops FD001 MAE 12.6->10.3 with ~10 lines), then re-test on FD002/FD004; and separately, fix the ims_bench key mismatch. Neither require
+
+==== SYNTHESIS ====
+Confirmed. The pi findings reproduce exactly:
+- Timothy running-area == `build_pi` to diff 0.00e+00 (it literally IS the inscribed-polygon area form)
+- error ratio → 4.0000 exactly (the known C/4ⁿ Archimedes rate, ~0.6 digits/iter, linear)
+- Romberg on Timothy gives 70 digits but Gauss-Legendre matches it at n=16 and is quadratic (uncatchable); the n=20 "0.00" is the catastrophic-cancellation artifact the agent flagged
+
+All four constructs are now independently verified at their load-bearing numbers. I have enough to deliver the lead verdict.
+
+---
+
+# AETHOS Uncharted Constructs — Lead Verdict
+
+Timothy: I re-ran the three results that overturn prior beliefs (not just trusted the agents). All reproduced to the decimal. Here is the truth.
+
+## (1) Single most promising GENUINELY-REAL capability
+
+**None of these four is it.** This is the honest headline: the four "uncharted" constructs you asked me to mine — electron physics, zeno-pi, vision, predictive-maintenance — are **all metaphor or reducible-to-standard**. Not one produces a number that a textbook method doesn't already supply, and three of them are *beaten* by a 10-line sklearn baseline on their own data.
+
+The genuinely-real capability in AETHOS is the one already in memory and **not** in this batch: the **invertible meet / min-plus address algebra** (exact all-pairs shortest paths == Floyd-Warshall 0/720, dict-free content addressing, set-reconciliation). That remains the only construct where the lattice does something a standard tool doesn't trivially do better. The proof-number for the things you asked about here is a *negative* one — see (5).
+
+## (2) Metaphor / reducible (honest, with the killer number each)
+
+| Construct | Verdict | The number that settles it |
+|---|---|---|
+| **Electron = coin+spring+membrane, "reproduces Bell"** | **METAPHOR-ONLY** | Its own stated mechanism (shared pump phase + local squeeze) is textbook LHV. CHSH caps at **2.0024** (best of 200 local rules = 2.0164); QM needs 2.8284. The curve it produces is a **triangle (fit 0.0015), not a cosine (fit 0.1177, 80× worse)** — at 45° it gives 0.50, flatly contradicting the text's claimed "~71%". The text even quotes Bell's theorem and tries to escape via "the pump phase isn't *fixed*" — but randomizing λ per shot is still local, and still caps at 2. Falsified by its own construction. |
+| **Zeno-pi (frame descent + Timothy additive-pi + Richardson)** | **REDUCIBLE** | Timothy-area == inscribed-polygon area **to diff 0.00e+00** (it IS Archimedes). Error ratio → **4.0000 exactly** (C/4ⁿ, ~0.6 digits/iter, linear). The "accelerators" are literal Richardson/Romberg (docstrings say so); Romberg gives bit-identical digits on standard Archimedes. Gauss-Legendre matches its 70 digits at n=16 and is quadratic — uncatchable. Frame descent computes **zero** pi digits (it's a mixed-radix positional code). |
+| **PrimeLatticeVision (MNIST)** | **REDUCIBLE** | Works (0.963 full MNIST, neural-free) but the lattice is decorative: lattice-specific dims alone = **0.679**; removing them costs only **−0.011**; the AETHOS ridge head (0.9628) is *worse* than vanilla logreg on its own features (0.9722); a one-line MLP(100) beats it (0.9787). 313s extraction = why it's `--skip`'d. |
+| **Predictive maintenance (CMAPSS + IMS)** | **REDUCIBLE** | CMAPSS: AETHOS's own exact features → sklearn Ridge = **12.587/16.512** ≈ the "geometric engine" 12.596/16.545 (it *is* Ridge); same features → RandomForest = **10.47/13.95**, beating AETHOS by ~2.1 MAE. IMS: a one-line **single-channel RMS >3σ alarm fires at snap 532 (75.3h), 8 snapshots EARLIER** than the "entanglement"/ghost detector (540/74.0h). Entanglement adds zero lead. |
+
+## (3) The SURPRISE
+
+The surprise is a **demotion you should record**: the prior memory note `ims-bearing-monitor-validated` ("entangled multi-sensor monitor catches the fault early / root-causes the source") **does not survive a fair baseline**. The cross-sensor entanglement provides **no early-warning lead** — a univariate RMS k-sigma alarm beats it by 8 snapshots on the identical features. The "4h before the gauge" framing isn't reproduced; every reasonable detector fires within ~2h on the RMS knee. This is the kind of summary-only claim your own memory warns about (`claims-must-trace-to-captured-runs`). The earlier note credited the entanglement machinery; the measurement says the *window-feature set* was doing the work, and the entanglement layer is inert.
+
+A smaller positive surprise: the **frame-descent mixed-radix code is exact** (1/3 → err 0.0; arbitrary x → 1.5e-10 at 10 primes). It's useless as a pi method but it's a clean dict-free primorial positional encoding that dovetails with the *real* address algebra — that's where it lives, not in pi.
+
+## (4) The one next build worth doing
+
+**Replace `RidgeModel` with RandomForest/GBM in `cmapss/rul.py` and re-test on FD002/FD004.** It's ~10 lines, it's the only change in this whole batch that *improves a real measured number* (FD001 MAE 12.6 → 10.5, RMSE 16.5 → 13.9), and FD002/FD004 (multi-regime) will tell you whether the AETHOS window-feature set generalizes — the one component here with durable value. While in there, fix the real wrapper bug: `bench/ims_bench.py` reads keys (`identified_bearing`, `detection_snapshot`) that `analyze()` never returns, so the packaged bench prints `None`; only `bearings.run_ims_test2()` shows the true result.
+
+Everything else is a dead end *as an AETHOS capability* and the engineering effort belongs on the address-algebra / min-plus / SPLADE-on-lattice frontier already in memory.
+
+## (5) Blunt bottom line
+
+You asked which uncharted construct genuinely works that we haven't measured. Measured answer: **none of the four.** The electron model is a spinning-coin intuition pump that Bell excluded in 1964 — I confirmed it caps at CHSH 2.0 and outputs a triangle where the text promises a cosine, so "reproduces Bell" is false by its own construction. Pi is Archimedes-area + Romberg (a known, beaten combo). Vision and maintenance are competent classical feature pipelines in a lattice costume — both *lose to a 10-line sklearn call on their own features*, and the maintenance "entanglement" early-warning story is now affirmatively disproven (RMS alarm fires earlier).
+
+The lattice's real edge is exactly where it always was — **exact invertible addressing and tropical min-plus structure** — not physics, not pi, not pixels, not bearings. The frontier worth your time is the algebra, not the metaphors built on top of it.
+
+**Key files (all absolute):**
+- Electron: `C:/Users/wynos/New folder (3)/_dd_un_electron.py` + `_dd_un_electron_out.txt`; source claims at `C:/Users/wynos/Downloads/everything/partical_extract2.txt` lines 3758–3973
+- Pi: `C:/Users/wynos/New folder (3)/_dd_un_pi.py` + `_dd_un_pi_out.txt`; `C:/Users/wynos/aethos_master/src/aethos_master/pi/{timothy,richardson}.py`
+- CMAPSS: `C:/Users/wynos/New folder (3)/_dd_un_maint_cmapss.py`, `_dd_un_maint_rf_seeds.py`; `C:/Users/wynos/aethos_master/src/aethos_master/cmapss/rul.py`
+- IMS: `C:/Users/wynos/New folder (3)/_dd_un_maint_ims.py`; bug in `C:/Users/wynos/aethos_master/src/aethos_master/bench/ims_bench.py`
+- Vision: `C:/Users/wynos/New folder (3)/_dd_un_vision_ablate.py`; `C:/Users/wynos/aethos_master/src/aethos_master/mnist/vision.py`

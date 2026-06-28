@@ -1,0 +1,10 @@
+
+scifact: 5,183 docs | train 809 | test 300
+  lexical (order-0):           nDCG@10 0.7023
+  shell order     nDCG@10  vs lexical  #conjunctions
+  order 1 (a=0.5)        0.6578     -0.0445          2,014   (43s)
+  order 2 (a=0.5)        0.6552     -0.0471          8,732   (34s)
+  order 3 (a=0.5)        0.6540     -0.0483         17,249   (30s)
+
+  reference: BM25 0.665 | order-2 bridges 0.7375 | glass_box 0.7645 | SPLADE-scifact ~0.70
+  read: if order-3 > order-2, the deeper free hidden-layer shells lift retrieval (no GPU).

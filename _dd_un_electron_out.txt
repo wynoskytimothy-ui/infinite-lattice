@@ -1,0 +1,54 @@
+==========================================================================
+TEST A: Two-state quantization (Stern-Gerlach binary outcome)
+==========================================================================
+  unique outcomes of a squeeze: [-1, 1]  (binary as claimed)
+  raw 50/50 split for unsorted beam: P(+1)=0.501
+  VERDICT: two-state binary is reproduced -- but it is ASSUMED (a coin), not derived.
+
+==========================================================================
+TEST B: The decisive Bell/CHSH test (model's headline claim)
+==========================================================================
+Model claims local 'pump phase' mechanism reproduces QM cos correlation.
+
+  angle |  E_model(LHV) |  E_QM=cos |  triangle
+      0 |        1.0000 |    1.0000 |    1.0000
+     15 |        0.8316 |    0.9659 |    0.8333
+     30 |        0.6688 |    0.8660 |    0.6667
+     45 |        0.4955 |    0.7071 |    0.5000
+     60 |        0.3321 |    0.5000 |    0.3333
+     75 |        0.1653 |    0.2588 |    0.1667
+     90 |       -0.0012 |    0.0000 |    0.0000
+    120 |       -0.3354 |   -0.5000 |   -0.3333
+    135 |       -0.5003 |   -0.7071 |   -0.5000
+    180 |       -1.0000 |   -1.0000 |   -1.0000
+
+  CHSH  S (model LHV sign rule) = 2.0024
+  CHSH  S (QM cos curve)        = 2.8284   <-- Tsirelson 2*sqrt2 = 2.8284
+  CHSH  classical/LHV bound     = 2.0000
+
+  If S_model <= 2.000 the model CANNOT reproduce QM Bell correlations,
+  falsifying the 'reproduces Bell' claim by its own construction.
+
+==========================================================================
+TEST C: Does the model's mechanism even give a COSINE, or a triangle?
+==========================================================================
+  mean|E_model - cos|      = 0.1177
+  mean|E_model - triangle| = 0.0015
+  -> the model's actual curve is a TRIANGLE (classical LHV),
+     NOT the quantum cosine. The 'cos' in the text is ASSERTED, not produced.
+
+==========================================================================
+TEST D: Quantitative constants -- are they PREDICTED or quoted?
+==========================================================================
+  proton/electron mass ratio: model says 'spring mechanical range = 1836'.
+    real value = 1836.1527. Model gives NO formula -> 1836 is INPUT, not OUTPUT.
+  electron g-factor: model quotes ~2.002. real = 2.00231930436.
+    QED predicts 2(1+a), a=alpha/2pi+... to 12 digits. Model: no derivation.
+  -> Constants are QUOTED from known physics, not derived. No predictive power.
+
+==========================================================================
+TEST E: Strongest charitable form -- can ANY local pump rule beat S=2?
+==========================================================================
+  best |CHSH| over 200 random LOCAL pump rules = 2.0164
+  QM needs 2.828. Local pump mechanism is CAPPED at 2.0 (Bell). Gap is fundamental.
+==========================================================================
