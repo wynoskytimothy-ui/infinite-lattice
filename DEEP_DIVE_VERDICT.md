@@ -41,12 +41,14 @@ row (d=1), but the no-dictionary property is genuinely Minisketch-lacking. Niche
 symmetric difference ≤ 1; for symdiff > 1 it collapses to textbook PinSketch/Minisketch (2d power sums +
 Berlekamp-Massey + rooting over a shared universe), and over-capacity decoding fails SILENTLY.
 
-## Real bug found (fix it)
+## Real bug found — FIXED (commit follows)
 `aethos_address_store.AddressStore`: the `ComplexPlane3D.zeta` float path inherits the IEEE-754 2^53 wall.
-Worse, in the band ~2^52.5 .. 2^53 `get()` returns WRONG values (incl. negatives: 7→6, 2→−1) with NO
-exception; only at ≥2^53 does it hard-fail. Default store (base=2^20, band=2^20) is safe for the first
-~2.86B axes, but that's a float-budget convention, not an algebraic guarantee. FIX: assert band_size < 2^52
-(or store ζ as int).
+In the band ~2^52.5 .. 2^53 `get()` returned WRONG values (incl. negatives: 7→6, 2→−1) with NO exception;
+only at ≥2^53 did it hard-fail.
+**FIX (verified by `_dd_bugfix_verify.py`):** (1) `TripleNode.value` now decodes from the EXACT integer
+anchors `a+p+q`, not the float `zeta` readout — so recovery is exact regardless of the float wall;
+(2) `make_triple` raises a clear `ValueError` when `a+p+q >= 2^53`, so the silent-corruption zone is
+unreachable (it now errors explicitly instead of returning wrong values). Normal range unchanged; demo passes.
 
 ## What this does NOT change
 The earlier MEASURED engineering wins are separate and still real: native MARCO SPLADE-on-lattice at

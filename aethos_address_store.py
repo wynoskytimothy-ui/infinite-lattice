@@ -54,6 +54,14 @@ from aethos_complex_plane import (
 from aethos_lattice import BranchKind
 
 
+# float64 represents integers EXACTLY only up to 2**53. The lattice meet stores
+# zeta (= a+p+q) and the X readout (= p+q) as float, so any triple whose depth
+# reaches this wall aliases and SILENTLY corrupts (a band in ~[2**52.5, 2**53)
+# made get() return wrong/negative values with no exception). Guard strictly
+# below it; value decode below uses the exact integer anchors, never the float.
+_FLOAT_SAFE_DEPTH = 1 << 53
+
+
 # ---------------------------------------------------------------------------
 # The triple atom: one axis-coordinate, encoded + self-checking.
 # ---------------------------------------------------------------------------
@@ -80,9 +88,15 @@ class TripleNode:
 
     @property
     def value(self) -> int:
-        """Recover the coordinate value from the conserved depth (sum-based)."""
-        # zeta = a + p + q = band + (band+1) + (band+2+v) = 3*band + 3 + v
-        return int(round(self.zeta)) - (3 * self.band + 3)
+        """Recover the coordinate value from the EXACT integer anchors.
+
+        zeta = a + p + q = 3*band + 3 + value. We decode from the integer
+        anchors a, p, q (Python ints), NOT the float `zeta` readout, so recovery
+        stays correct right up to the float-safe wall instead of silently
+        corrupting near IEEE-754 2**53. `zeta` is a float lattice readout kept
+        only for the erasure self-check (guarded < 2**53 at construction).
+        """
+        return (self.a + self.p + self.q) - (3 * self.band + 3)
 
 
 def _meet(a: int, p: int, q: int,
@@ -103,6 +117,13 @@ def make_triple(axis_id: int, band: int, value: int,
     if value < 0:
         raise ValueError("coordinate value must be >= 0")
     a, p, q = band, band + 1, band + 2 + value
+    if a + p + q >= _FLOAT_SAFE_DEPTH:
+        raise ValueError(
+            f"triple depth zeta={a + p + q} reaches the float-safe wall (>= 2**53): "
+            f"the lattice meet stores zeta/X as float64 and would silently corrupt "
+            f"past this point (axis_id={axis_id}, band={band}, value={value}). "
+            f"Lower base/band_size/axis_id/value so a+p+q < 2**53."
+        )
     psi = _meet(a, p, q, branch=branch, wing=wing)
     return TripleNode(axis_id=axis_id, band=band, a=a, p=p, q=q,
                       z=psi.z, zeta=psi.zeta)
