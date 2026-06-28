@@ -1,0 +1,16 @@
+baseline B/doc=272.3 (di 151.0 + wt 121.3)
+baseline MRR@10=0.9240 rec@100=99.77%
+di flat   B/doc = 151.0
+di chamber-blocked B/doc = 200.9   (hierarchy on the DI stream)
+
+  weight-requant-ONLY frontier (no chambers, no base):
+   wbits    B/doc  shrink   MRR@10   ret%
+    base    272.3    1.00   0.9240  100.0
+       8    272.3    1.00   0.9240  100.0
+   +cham    322.2    0.85   0.9240  100.0
+       4    211.7    1.29   0.9226   99.8
+   +cham    261.6    1.04   0.9226   99.8
+       3    196.5    1.39   0.9187   99.4
+   +cham    246.4    1.11   0.9187   99.4
+       2    181.3    1.50   0.8977   97.2
+   +cham    231.2    1.18   0.8977   97.2

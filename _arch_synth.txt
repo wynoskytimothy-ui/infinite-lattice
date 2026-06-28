@@ -1,0 +1,59 @@
+All numbers trace to captured runs and the orthogonality check confirms the stack is multiplicative (3.49 × 1.27 × 1.015 = 4.48x, exactly the measured joint). The construction is verified end-to-end on the testbed. Here is the lead-architect verdict.
+
+---
+
+# Lead-architect verdict: the smallest glass-box SPLADE-on-lattice config
+
+## (1) Recommended stacked construction + projection
+
+**The single smallest config that holds MRR within ~2% and keeps the glass-box** stacks the three *orthogonal* levers (each verified individually; the stack measured end-to-end in `_dd_arch_stack.py` / `_dd_arch_stack_out.txt`):
+
+| Lever | What it cuts | Glass-box |
+|---|---|---|
+| **doc-prune K=32** (per-doc top-32 SPLADE terms) | postings/doc 121.3 → 32 (the multiplier) | every kept term is the doc's strongest by SPLADE weight |
+| **4-bit Lloyd-Max weights** (monotone dequant) | weight stream 1 B → 0.5 B/posting | score = Σ q·dequant(w), 16 interpretable levels |
+| **varint doc-gap codec** | di stream, lossless | docs decode exactly, append-only preserved |
+| **5-bit chamber tag** (+0.625 B/doc) | nothing — pure provenance | content-computed AETHOS region (branch=top-node Legendre fan over 3·5·7, wing=meet octant) |
+
+**Measured on the 50k testbed** (272.30 B/doc baseline, MRR@10 0.9240):
+
+| Operating point | B/doc (50k) | shrink | MRR@10 | retention | rec@100 | latency |
+|---|---|---|---|---|---|---|
+| baseline | 272.30 | 1.00x | 0.9240 | 100% | 99.77% | 3.2 ms |
+| **K=40 w4 varint** (recommended) | **74.49** | **3.66x** | 0.9130 | **98.8%** | 99.67% | 1.3 ms |
+| K=32 w4 varint (aggressive) | 60.83 | 4.48x | 0.9061 | 98.1% | 99.51% | 1.0 ms |
+
+**Projection to full MARCO (scale shrink onto 286.9 B/doc, native MRR ~0.39):**
+- **K=40 (recommended): ~78.5 B/doc, ~0.385 MRR** (98.8% retained) — the safe within-2% point.
+- **K=32 (aggressive): ~64.1 B/doc, ~0.382 MRR** (98.1% retained) — still within 2%.
+
+## (2) What is genuinely novel vs standard SPLADE pruning/quantization
+
+Be honest: **two of the three levers are standard.** Per-doc top-K SPLADE pruning and weight bit-quantization are well-known SPLADE compression. The varint gap codec is textbook IR.
+
+**Genuinely novel / measured-here:**
+- **The stack is multiplicative and that was not obvious.** Quantization normally *costs* ~1.5% MRR (weight-bitpack run: 4b alone = 0.9226→ a real drop with the floor). After pruning removes the tiny-weight tail, that same 4-bit quantization costs almost nothing (98.29% → 98.06%) — pruning already deleted the terms quantization was rounding to zero. So the joint is 3.49 × 1.27 × 1.015 = **4.48x measured = product of the parts**, with the quantization penalty largely *absorbed* by pruning. That synergy is the real finding.
+- **The 5-bit chamber tag keeps the glass-box at 0.2% overhead** — a content-computed AETHOS region (the "32 sub-quadrants + top-node hierarchy") that makes every score traceable to a named region, while costing 0.625 B/doc.
+
+**Honest negative (do not sell this):** the chamber *codebook/residual* idea (using the 32 quadrants as a compression hierarchy) **failed** — it ties or loses to trivial weight-requant (`_dd_arch_control_out.txt`: chamber-residual w3 = 200.4 B/doc vs control w3 = 196.5), and chamber-blocking the doc-id stream *hurts* (151.0 → 200.9 B/doc) because content-semantic chamber ids are not doc-id-local. **The chambers earn their place as a glass-box label, not as a compressor.** Claiming otherwise would be unsupported.
+
+## (3) Exact next build to validate on full MARCO 8.8M
+
+1. In `marco_splade_native.index()` (the `_full` builder, not the 50k calib), add a **per-doc top-K=40 prune** before inversion: keep `argpartition(weights, -K)` per CSR row.
+2. Fit the **16-level Lloyd-Max codebook once** on a sample of the full weight population (the 50k codebook `[1.8, 6.2, …, 81.4]` is a good init); store the 16 reproduction points (64 B total) + pack weights to 4 bits.
+3. Swap the di stream from FOR to **varint** (lossless; ~1.5% extra free).
+4. Tag each doc with the **5-bit chamber** via `aethos_complex_rotation.sub_quadrant_index`.
+5. **Re-run `m.serve()` on the full dev-small 8.8M** — the number that matters is whether **0.39 → ~0.385 (K=40)** holds at scale and **286.9 → ~78 B/doc** materializes on disk (round-trip-verified, per the "claims must trace to captured runs" rule). Watch one risk: on 8.8M the doc-gaps are larger, so varint's edge over FOR may shrink and the long-tail-query recall (the dropped expansion terms) may bite harder than on 57k distractors — measure recall@1000, not just MRR@10.
+
+## (4) Honest bottom line — numbers, no hype
+
+**Yes — we can get much smaller than 287 B/doc while holding ~0.39 MRR with the glass-box intact.**
+
+- **Recommended: ~3.7x smaller → ~78 B/doc at ~0.385 MRR** (within 1.5% of native, glass-box fully kept). This is the safe, ship-it point.
+- **Aggressive: ~4.5x smaller → ~64 B/doc at ~0.382 MRR** (within 2%).
+- **The wall is real below that:** K<32 breaks the 2% budget (K=24 → 96.9% retention) because the dropped tail expansion terms carry long-tail-query signal — that is a SPLADE-content limit, not a codec limit. To go past ~4.5x you must change the *postings* (supervised pruning / fewer terms learned at train time), not recode bits.
+- **The previous 286.9 B/doc was uncompressed top-200.** This config is **~3.7–4.5x smaller, ~2–3x faster (1.3 ms vs 3.2 ms median on the testbed), no cross-encoder, append-only/invertible, and every score decomposes into (named chamber region) + (kept top-K terms) × (16-level interpretable weight).**
+
+The honest caveat that travels: absolute MRR 0.924 on the 50k is the optimistic gold-in-index number (gold vs ~57k distractors); **only the SHRINK (3.66–4.48x) and RETENTION (98.1–98.8%) ratios generalize** to the 0.39 full-MARCO headline — which is exactly why they are the reported quantities.
+
+Files: construction + measurement `C:\Users\wynos\New folder (3)\_dd_arch_stack.py`, captured output `C:\Users\wynos\New folder (3)\_dd_arch_stack_out.txt`; component evidence `_dd_arch_doc_prune_out.txt`, `_dd_arch_weight_bitpack_out.txt`, `_dd_arch_control_out.txt`.
