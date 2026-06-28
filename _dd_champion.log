@@ -1,0 +1,14 @@
+  index loaded (90s); 27,715 terms, 1,059,501,065 postings
+  champion prefixes built (3s)
+
+  250 queries encoded
+
+  champion M   MRR@10  recall@100   med ms   p90 ms    postings    B/doc
+  M=128      0.0327      22.40%     0.37     0.44        3.5M      1.0
+  M=256      0.0423      25.60%     0.68     0.84        6.9M      1.9
+  M=512      0.0875      32.00%     1.35     1.70       13.5M      3.7
+  M=1024     0.1293      42.40%     3.13     3.67       25.7M      7.0
+  M=2048     0.1858      54.00%     6.98     7.60       47.5M     12.9
+
+  baseline (full, no champion): MRR 0.391 / 88 ms / 1059.5M postings / 287 B/doc (from MEASUREMENTS.md)
+  GOAL: an M that is FASTER (<88ms) and SMALLER (<287 B/doc) at MRR ~0.39.

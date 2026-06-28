@@ -1,0 +1,10 @@
+  index+champ ready (96s); 27,715 terms
+
+  config                   MRR@10  recall@100   med ms   p90 ms
+  dfcap=50000   M=8192     0.2585      76.80%    56.06    65.86
+  dfcap=50000   M=2048     0.1863      60.40%    14.33    24.70
+  dfcap=20000   M=8192     0.2560      76.80%    51.91    56.82
+  dfcap=20000   M=2048     0.1809      55.60%     9.63    11.64
+  dfcap=100000  M=4096     0.2382      72.00%    43.99    80.16
+
+  baseline (full): MRR 0.391 / 88 ms / 287 B/doc.  Goal: hold ~0.39 at <88ms.
