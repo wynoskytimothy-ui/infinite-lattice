@@ -57,3 +57,32 @@
 | **O(1) content-address** | invertible, **0 collisions on 10M keys at 0 bits/key**, coordination-free (200k/200k) | the meet (det=−1) IS a perfect hash a hash-table can't match (invert + 0-collision + no shared table) | `_o1_content_address.py` |
 - **WAND is exact but not the fast path**: the lattice's own rarest-address/meet pooling already beats textbook WAND ~7×. Pitch the 123 ms pooled serve; keep WAND only for "provably-exact top-k" (compliance).
 - **Dead ends (don't pitch / don't rebuild)**: corpus-as-a-number is NOT compression; chamber routing has no recall-safe candidate reduction; chamber-as-PQ-codebook only ties k-means.
+
+---
+
+## 2026-06-29 session — pipeline speed, monitoring engine, capability map (all measured, committed)
+
+### Faster + smaller RAG (full 8.8M, CPU, no GPU)
+| claim | number | reproduce |
+|---|---|---|
+| **Serve 2× faster, accuracy identical** | 123 → **61 ms** (p99 493→120), MRR 0.3986 + recall 91.2% *bit-identical* | `_o1_serve_binary.py` / `_o1_serve_numba.py` |
+| via the lattice's own geometry | binary reader (count where spines intersect) + sorted-merge — not generic search | — |
+| Footprint | **165 B/doc** (EF doc-ids + 3-bit weights, −0.0014) · 153 at 2-bit | `_o1_bitplane_weight_quant.py` |
+| Query (lexical, no-GPU) | 0.55 ms/query, 0.7023 nDCG > BM25 | `_prove_retrieval_cpu.py` |
+
+### Monitoring engine — the lattice's native product (`aethos_monitor.py`)
+| claim | number | reproduce |
+|---|---|---|
+| **Ingest throughput** | **230 M events/s** placement · **2.5–3.3 BILLION/s** count-core (memory-bound, exact across threads) | `_o1_monitor_parallel.py` |
+| Packaged end-to-end | 55 M events/s (route + count + streaming RCA, O(1) mem) | `aethos_monitor.py` |
+| **Whitebox RCA** | 100% top-1 channel naming (glass-box slope attribution) | `_o1_monitor_engine.py` |
+| **Fault-tolerant** | corrupt-wing detect + exact reconstruct (32-orbit conserved sum) | `_o1_monitor_engine.py` |
+| **Zeno halt/resume** | ~0-cost checkpointed frames → infinite-stream safe, resumable | `aethos_monitor.py` |
+
+### Capability map — 50 measured across CS (`CAPABILITY_MATRIX.md`)
+**40 PROVEN · 8 PARTIAL · 2 FAILED.** The patent's claim 5 (exact set-algebra) proven 8 ways (PSI, dedup,
+homomorphic, reconciliation, coprimality, accumulator, join, membership). Min-plus graph algebra
+(APSP/SSSP/scheduling/union-find/closure from ONE operator). Plus: Leapfrog-Triejoin WCOJ, Zeno-stride
+vector clocks, deletable membership, tamper-evident log, append-only time-travel, Reed-Solomon erasure.
+**Honest walls:** raw compression (entropy floor — gzip wins), forecasting (ties last-value), zero-shot
+semantics (geometry is by-value). Meta-pattern: **exact addressing/algebra wins; space + meaning are the walls.**
