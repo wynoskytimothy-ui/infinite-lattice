@@ -64,14 +64,30 @@ forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, d
 | 29 | knowledge-graph | transitive multi-hop reachability (meet-closure) | PROVEN | closure == BFS (this IS the +47 multi-hop) |
 | 30 | reversible | bijective meet = reversible op (no erasure) | PROVEN | forward∘inverse=identity on 500k (Landauer-reversible) |
 
-## ░░ CAMPAIGN TALLY — 30 capabilities measured (waves 1-3) ░░
-**24 PROVEN · 4 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
-(PSI/dedup/homomorphic/reconciliation/coprimality — the patent's claim 5, proven 8 ways), min-plus graph
-algebra (APSP/scheduling/KG-reachability from ONE operator), VSA nonlinear classifier (1.000 vs linear 0.546),
-O(d) set reconciliation (14 B vs 6 KB), whitebox RCA (500/500). Honest losses: raw compression (gzip wins),
-forecasting (ties last-value), space-vs-exactness PARTIALs (sketching, membership, cardinality). Next: waves
-4+ go DEEPER per domain + remaining frontiers (succinct DS, automata, SAT, type-theory, computational geometry,
-homomorphic compute, federated merge).
+## WAVE 4 — domains 31-40 (`_cap_probe_wave4.py`, 2026-06-29) — 8 PROVEN, 2 PARTIAL
+| # | domain | capability | verdict | measured |
+|---|---|---|---|---|
+| 31 | succinct | rank/select on sorted lattice order | PROVEN | rank exact, 160 ns O(log N), select O(1) |
+| 32 | automata | prime-state DFA exact acceptance | PROVEN | 3000/3000 vs python re |
+| 33 | distributed | vector clocks / causality via prime-strides (Zeno) | PARTIAL | 2999/3000 happens-before == divisibility |
+| 34 | databases | worst-case-optimal triangle join (3-way meet) | PROVEN | 20494==ref, no pairwise blowup (Leapfrog-Triejoin) |
+| 35 | streaming | exact heavy-hitters vs Misra-Gries | PARTIAL | lattice EXACT; MG approx recovers 14/20 |
+| 36 | geometry | range/interval counting (sorted order) | PROVEN | 2000/2000 exact, O(log N) |
+| 37 | graph | union-find connected components | PROVEN | 254 == scipy |
+| 38 | temporal | versioned time-travel (append-only history) | PROVEN | 1000/1000 as-of, audit-complete |
+| 39 | data-structures | DELETABLE approximate membership (quotient) | PROVEN | 0 FN after 2500 deletes (Bloom can't delete) |
+| 40 | security | verifiable tamper-evident append log | PROVEN | edit at #5000 detected at exactly #5000 |
+
+## ░░ CAMPAIGN TALLY — 40 capabilities measured (waves 1-4) ░░
+**32 PROVEN · 6 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
+(PSI/dedup/homomorphic/reconciliation/coprimality — patent claim 5, proven 8 ways), min-plus graph algebra
+(APSP/scheduling/KG-reachability/union-find from ONE operator), VSA nonlinear classifier (1.000 vs linear
+0.546), O(d) set reconciliation (14 B vs 6 KB), whitebox RCA (500/500), Leapfrog-Triejoin WCOJ, Zeno
+prime-stride vector clocks, deletable membership + tamper-evident log + append-only time-travel.
+**Plus the MONITORING ENGINE: 230 M events/s placement / 3.29 B/s count-core, 100% RCA, fault-reconstruct.**
+Honest losses: raw compression (gzip wins, entropy floor), forecasting (ties last-value), space-vs-exactness
+PARTIALs (sketching/membership/cardinality/heavy-hitters — exact but not space-optimal). Next: waves 5+
+(SAT/type-theory/computational-geometry deeper, federated merge, more succinct DS).
 
 ## Carried-forward PROVEN (from earlier this session — measured, reproducible)
 | domain | capability | measured | file |
