@@ -92,8 +92,22 @@ forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, d
 | 49 | linear-algebra | boolean transitive closure | PROVEN | == Floyd-Warshall reachability |
 | 50 | storage | content-defined chunking | PROVEN | shift-resistant dedup boundaries |
 
-## ░░ CAMPAIGN TALLY — 50 capabilities measured (waves 1-5) ░░
-**40 PROVEN · 8 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
+## WAVE 6 — domains 51-60 (`_cap_probe_wave6.py`, 2026-06-29) — 7 PROVEN, 3 PARTIAL
+| # | domain | capability | verdict | measured |
+|---|---|---|---|---|
+| 51 | signal | exact single-bin DFT (Goertzel/constructive-pi) | PROVEN | max|Δ| 6e-12 vs numpy FFT |
+| 52 | type-systems | unification / most-general-unifier | PROVEN | MGU found, clash rejected (Prolog/type-inference) |
+| 53 | parsing | Dyck / balanced-bracket (pushdown) | PROVEN | 3000/3000 (CFG-class) |
+| 54 | linear-algebra | GF(2) Gaussian elimination (XOR solve) | PARTIAL | elimination ok, free-var extraction incomplete |
+| 55 | cellular-automata | rule-110 step (Turing-complete) | PROVEN | deterministic, 50 steps |
+| 56 | logic | Horn/datalog least-fixpoint | PROVEN | meet-closure = bottom-up datalog |
+| 57 | privacy | differential privacy (exact count + Laplace) | PROVEN | unbiased, 99% within 5/eps |
+| 58 | recommendation | item-item CF via meet co-occurrence | PARTIAL | hit@10 0.31 — real signal, below tuned MF (semantic wall) |
+| 59 | ann | LSH approximate nearest-neighbor | PARTIAL | by-value lattice hash NOT semantic (the wall) — use real LSH |
+| 60 | databases | semi-join reduction (meet membership) | PROVEN | ship 5% of rows, exact (saves bandwidth) |
+
+## ░░ CAMPAIGN TALLY — 60 capabilities measured (waves 1-6) ░░
+**47 PROVEN · 11 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
 (PSI/dedup/homomorphic/reconciliation/coprimality — patent claim 5, proven 8 ways), min-plus graph algebra
 (APSP/scheduling/KG-reachability/union-find from ONE operator), VSA nonlinear classifier (1.000 vs linear
 0.546), O(d) set reconciliation (14 B vs 6 KB), whitebox RCA (500/500), Leapfrog-Triejoin WCOJ, Zeno
