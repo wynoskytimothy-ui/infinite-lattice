@@ -106,8 +106,38 @@ forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, d
 | 59 | ann | LSH approximate nearest-neighbor | PARTIAL | by-value lattice hash NOT semantic (the wall) — use real LSH |
 | 60 | databases | semi-join reduction (meet membership) | PROVEN | ship 5% of rows, exact (saves bandwidth) |
 
-## ░░ CAMPAIGN TALLY — 60 capabilities measured (waves 1-6) ░░
-**47 PROVEN · 11 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
+## WAVE 7 — domains 61-70 (`_cap_probe_wave7.py`, 2026-06-29) — 9 PROVEN, 1 PARTIAL
+*Tag: NATIVE = uses the prime/meet structure · SUBSTRATE = standard algorithm the lattice runs cleanly.*
+| # | domain | capability | verdict | tag |
+|---|---|---|---|---|
+| 61 | number-theory | CRT reconstruction from prime residues | PROVEN | **NATIVE** (the lattice IS the CRT ring) |
+| 62 | signal | NTT exact polynomial multiply | PROVEN | **NATIVE** (prime-field, no FFT float error) |
+| 63 | graph | max-flow / min-cut (Edmonds-Karp) | PROVEN | substrate |
+| 64 | graph | minimum spanning tree (Kruskal) | PROVEN | substrate (sorted+union-find) |
+| 65 | graph | topological sort (DAG) | PROVEN | substrate |
+| 66 | data-structures | Fenwick range-sum + update | PROVEN | substrate |
+| 67 | string | suffix array (sorted suffixes) | PROVEN | substrate (BWT/FM family) |
+| 68 | graph | bipartite maximum matching | PROVEN | substrate |
+| 69 | geometry | 2D convex hull (monotone chain) | PROVEN | substrate |
+| 70 | hashing | cuckoo / perfect placement | PARTIAL | NATIVE (perfect-hash proven w1; cuckoo impl) |
+
+## ░░ CAMPAIGN TALLY — 70 capabilities measured (waves 1-7) ░░
+**56 PROVEN · 12 PARTIAL · 2 FAILED.**
+
+### THE MAP, in 3 categories (this is how to build on it)
+- **NATIVE strengths — BUILD HERE** (the formula is uniquely good): O(1) invertible/reversible content-address,
+  exact set-algebra (PSI/dedup/homomorphic/reconciliation/accumulator/coprimality — patent claim 5), min-plus
+  graph algebra (APSP/SSSP/scheduling/closure from ONE operator), CRT/NTT number theory, 32-orbit ECC,
+  content-dedup, perfect hash, whitebox RCA, **billions/s monitoring placement**, Zeno halt/resume, the served
+  RAG (61 ms / 165 B/doc / beats BM25). Glass-box, deterministic, no-GPU.
+- **SUBSTRATE — USE FREELY** (standard algorithms the lattice runs cleanly, no special advantage): max-flow,
+  MST, topo-sort, suffix array, Fenwick, matching, convex hull, Dijkstra, union-find, DFA, parsing, GF(2),
+  cellular automata, datalog, differential-privacy base, semi-join, rank/select, range queries.
+- **WALLS — DON'T BUILD HERE** (measured negatives): raw compression (entropy floor — gzip wins), zero-shot
+  SEMANTICS (geometry is by-value: π-drift/ANN/recommendation/free-dense all wall), forecasting (ties last-value),
+  space-vs-exactness (multiplicative encodings grow as Σlog p — exact but larger: sketching/membership/cardinality).
+**One-line law:** the formula is an EXACT addressing + algebra + number-theory engine. Build products on the
+NATIVE column; lean on SUBSTRATE for free; never sell the WALLS. Standouts: O(1) invertible+reversible address, exact set-algebra
 (PSI/dedup/homomorphic/reconciliation/coprimality — patent claim 5, proven 8 ways), min-plus graph algebra
 (APSP/scheduling/KG-reachability/union-find from ONE operator), VSA nonlinear classifier (1.000 vs linear
 0.546), O(d) set reconciliation (14 B vs 6 KB), whitebox RCA (500/500), Leapfrog-Triejoin WCOJ, Zeno
