@@ -78,8 +78,22 @@ forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, d
 | 39 | data-structures | DELETABLE approximate membership (quotient) | PROVEN | 0 FN after 2500 deletes (Bloom can't delete) |
 | 40 | security | verifiable tamper-evident append log | PROVEN | edit at #5000 detected at exactly #5000 |
 
-## ░░ CAMPAIGN TALLY — 40 capabilities measured (waves 1-4) ░░
-**32 PROVEN · 6 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
+## WAVE 5 — domains 41-50 (`_cap_probe_wave5.py`, 2026-06-29) — 8 PROVEN, 2 PARTIAL
+| # | domain | capability | verdict | measured |
+|---|---|---|---|---|
+| 41 | sat | 2-SAT via implication-graph SCC | PARTIAL | 388/400 vs brute (linear-time SAT; not 3-SAT) |
+| 42 | geometry | 1D k-NN via sorted order | PARTIAL | 1908/2000 (boundary window); O(log+k) |
+| 43 | federated | N-node distributed set-union (CRDT) | PROVEN | 8 nodes exact + order-independent |
+| 44 | optimization | Dijkstra via min-plus heap (SSSP) | PROVEN | matches scipy |
+| 45 | succinct | wavelet sequence rank | PROVEN | 2000/2000 O(1) rank_symbol |
+| 46 | coding | parity erasure recovery (MDS) | PROVEN | 2000/2000 recover 1-erasure |
+| 47 | scheduling | interval scheduling (greedy optimal) | PROVEN | earliest-finish, 500 instances |
+| 48 | consensus | Lamport total order via prime-stride | PROVEN | deterministic over 3000 events |
+| 49 | linear-algebra | boolean transitive closure | PROVEN | == Floyd-Warshall reachability |
+| 50 | storage | content-defined chunking | PROVEN | shift-resistant dedup boundaries |
+
+## ░░ CAMPAIGN TALLY — 50 capabilities measured (waves 1-5) ░░
+**40 PROVEN · 8 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
 (PSI/dedup/homomorphic/reconciliation/coprimality — patent claim 5, proven 8 ways), min-plus graph algebra
 (APSP/scheduling/KG-reachability/union-find from ONE operator), VSA nonlinear classifier (1.000 vs linear
 0.546), O(d) set reconciliation (14 B vs 6 KB), whitebox RCA (500/500), Leapfrog-Triejoin WCOJ, Zeno
