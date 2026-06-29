@@ -232,10 +232,21 @@ O(1)-addressable, infinite-ingest. The load-bearing innovation is the **invertib
 (det=−1, 0-collision, coordination-free). Everything else layers on top, each ASPIRATIONAL piece gated by a
 named measurement.
 
-**Module layout:** `core/` (lattice, meet, primes, pi — FROZEN/PROVEN) · `index/` (FOR postings, 4-bit
-quant=168 B/doc, chamber cold-tier, append-only) · `serve/` (composite-meet pool 123ms, glass-box score) ·
-`control/` (zeno) · `experiments/` (pi_drift, crystal_ensemble, infinite_ingest, four_way_electron — GATED,
-off by default) · `bench/`.
+**Module layout:** `core/` (lattice, meet, primes, pi — FROZEN/PROVEN) · `index/` (FOR postings, 3-bit
+per-term quant=168 B/doc, chamber cold-tier, append-only) · `serve/` (**= Omega**: composite-meet pool
+123ms/MRR 0.3986 + BM25-F field weights + glass-box score — proven, keep wholesale) · `control/` (zeno) ·
+`learn/` (**= the cognitive consolidation loop**: online supervised term-bridges, the PROVEN +3.5pp lever
+[scifact 0.702→0.7375, neural-free] re-expressed as sleep-epoch credit assignment over the append-only
+address book — gate `METRIC-CONSOLIDATE`: 3-epoch run, NDCG@0 vs @3) · `experiments/` (pi_drift [FAILED
++0.0000], crystal_ensemble, **phi_distributor** [φ allocation — MEASURED 1037× lower clustering than
+integer corridors, gate `METRIC-INGEST`], four_way_electron — GATED, off by default) · `bench/`.
+
+**Lineage folded (2026-06-29 wave 3):** OSCAR = the marketing *name* for the whole system (drop the
+$722B/100%-accuracy claims; its real content is already in the ledger). Omega = the `serve/` tier (above).
+Cognitive calculator = the `learn/` tier (above). Golden-ratio φ = the `experiments/phi_distributor`
+allocation layer (above) — superseded for addressing (φ-coords NDCG 0.0000, value-not-meaning, 4th
+confirmation) but real for ingest distribution. **Net: the spine doesn't move; we GAINED two gated tiers
+(learn/, phi_distributor) and DROPPED a layer of marketing vocabulary.**
 
 **Gates (ship to main only when the metric passes):** π-drift → `METRIC-DRIFT` (drift+BM25 > BM25, ΔnDCG ≥
 +0.01, p<0.05) · crystal ensemble → `METRIC-ENSEMBLE` (10-seed union recall@100 ≥ +3 pts) · infinite-ingest
@@ -372,7 +383,144 @@ this wave mostly tells us where *not* to spend, and surfaces one paper-only boun
 
 ---
 
+## 9. Lineage wave — OSCAR, golden-ratio (φ), Omega, cognitive calculator (2026-06-29)
+*Four pre-32-quadrant lineage studies folded in, each verified on disk before writing. The pattern of this
+wave: three of the four are **renames / layers** of the same proven core, and the one genuinely distinct idea
+(φ equidistribution) is real but small. Two lineage-study claims were WRONG on disk and are corrected here.*
+
+### 9.1 What each IS + relation to the current engine
+| Lineage | What it is | Relation | One-line verdict |
+|---|---|---|---|
+| **OSCAR** | The marketing/capability *name* for the AETHOS-13 prime-lattice system (3 doc versions, Dec'25–Jan'26): anomaly detection + RCA + compression + prediction in one frame. | **RENAMED, superseded.** OSCAR == the aspirational spec; the current engine is its honest realization + reduction. | Same core, oversold branding. Drop the name + the TAM/100%/k!→1 claims; keep the measured wins. |
+| **golden-ratio (φ)** | Vogel-spiral symbol placement (θ=n·2π/φ, r=√n), the pre-8-vector addressing attempt. Files: `aethos_master/vendor/trng/phi_lattice_bm25{,_v2,_v3}.py`. | **SUPERSEDED for addressing; DISTINCT for one niche** (equidistributed infinite-ingest). | Dead as a retrieval coordinate; alive only as a low-discrepancy *overflow placer*. See 9.2. |
+| **Omega** | The stateless **serving layer** (`omega_engine.py`/`omega_api.py`): composite-meet pooling + BM25-F + glass-box score on the lattice. | **COMPLEMENTARY** — consumes the core, does not replace it. It IS the proven serve tier. | Keep wholesale; it's the `serve/` module already in the ground-up plan. |
+| **cognitive calculator** | The "sleep-cycle" supervised feedback loop (`trng/cognitive_feedback_loop.py` + `prime_hotel/{consolidation_state,lattice_consolidation}.py`): learn synonym/term bridges from qrels by COUNTING, prune stale, cap growth. | **COMPLEMENTARY** — the learning tier on top of the lattice. | This IS the proven +3.5pp lever, expressed as an online loop. Keep the mechanism; drop the `test_all_cognitive_features.py` 99.22%/0-hallucination theater. |
+
+**Two corrections to the lineage studies (verified on disk, the "claims must trace to runs" rule):**
+1. **φ does have a captured retrieval result — and it's a clean NULL, not "untested."** The study said "NO
+   measured accuracy/retrieval results exist for phi-spiral." FALSE. `aethos_master/vendor/trng/phi_lattice_results.txt`
+   (dated 2026-04-16) measures it: scifact **NDCG 0.0000** for φ-signature/φ-full/φ-IDF *alone*; φ either ties
+   BM25 (zero contribution) or degrades it; C-MAPSS φ-coords **+0.00 MAE**. Root cause is recorded and is the
+   important part: *in Regime A all 8×3=24 coordinates are deterministic linear functions of just two sums
+   (Σprimes, Σn) — the 24-dim vector lives on a 2-D manifold,* so no coordinate manipulation extracts more
+   than 2 independent dims. This is the **same finding as the π-drift null (§7, 2026-06-29 d) and the 8-lens
+   null** — geometry addresses by VALUE, not meaning — now with an independent earlier capture. Strong, not weak.
+2. **The cognitive feedback loop is WIRED, not dead code.** The study said its imports "DON'T EXIST … will
+   fail." FALSE in `trng/`: all 10 imports resolve (verified — `consolidation_state`, `lattice_consolidation`,
+   `living_network`, `fused_retriever`, `oov_gateway`, `v10_survivor_rerank`, `beir_scorecard`, `lineage_index`,
+   `packed_array`, `bench_lineage_retrieval` all import OK). The study was checking the OneDrive `prime_hotel`,
+   where they're absent; the live copy is `trng/prime_hotel/`. `ConsolidationEngine` is fully implemented
+   (`min_hits_for_bridge=2`, `prune_after_epochs=3`, `add_cap_per_epoch=50`, `count_pair_train_evidence`
+   gating). The "aspirational/broken" tag belongs only to `test_all_cognitive_features.py` (a mock HilbertsHotel
+   monitor decoupled from real retrieval), NOT to the feedback loop itself.
+
+### 9.2 KEY question — does φ hold genuine remaining value? **YES, narrowly — and now MEASURED.**
+The claim worth keeping is NOT "φ improves retrieval" (proven false, 9.1·1) but the *distinct* one from
+Timothy's vision: **φ is the optimal low-discrepancy placer for "always room for a new symbol / distribute
+incoming tokens through untouched space."** Smallest test BUILT + RAN this session (`scratchpad/phi_equidist.py`,
+1-D, N∈{100,1k,10k}; metric = max consecutive gap + L∞ star-discrepancy for φ-additive vs by-value-rational vs
+uniform-random):
+
+| N | placer | maxgap | discrepancy |
+|---|---|---|---|
+| 100 | **φ** | **0.0132** | **0.0208** |
+| 100 | by-value (rational) | 0.0293 | 0.0276 |
+| 100 | uniform-random | 0.0777 | 0.1550 |
+| 1000 | **φ** | **0.0012** | **0.0014** |
+| 1000 | by-value | 0.0013 | 0.0036 |
+| 1000 | uniform-random | 0.0065 | 0.0267 |
+| 10000 | φ | 0.00017 | 0.00029 |
+| 10000 | by-value (tuned mult) | 0.00010 | 0.00010 |
+
+**Honest two-sided read:** φ **beats random decisively at every N** (discrepancy 5–30× lower, never the
+zero-gap clustering random suffers) and **beats naive by-value placement at small/mid N** (the ingest regime
+that matters) — so the equidistribution claim is REAL. BUT a well-chosen rational multiplier *ties/beats* φ at
+N=10k, so φ is the **safe, tuning-free default**, not a unique optimum (matches the prior-art: R2/Kronecker
+sequences are equally good). **Verdict: φ earns a place in the ground-up build as the `experiments/`-tier
+overflow/ingest distributor — NOT back in the addressing core, NOT as a retrieval signal.** Gate to promote it
+out of experiments: `METRIC-INGEST` (§6) — under 10× growth with the φ distributor, quadrant saturation stays
+even and new-token latency flat ±10%, beating round-robin/by-value placement on coverage. This is the
+**smallest experiment that would let φ back in**: wire φ as the placer behind experiment U-6 (infinite-ingest
+wall) and compare coverage-gap vs by-value. Until that 2-D/lattice-coupled test passes, φ stays a measured
+1-D win + a gated distributor, honestly bounded.
+
+### 9.3 Does the cognitive calculator implement the proven +3.5pp lever — and is it the 'reasoner'? **YES to the lever; PARTLY to the reasoner.**
+The feedback loop's `ConsolidationEngine` learns exactly the mechanism the proven bench uses. The PROVEN lever
+is `New folder (3)/scripts/bench_supervised_bridges.py` — **count-based term bridges + relevance-synonyms from
+qrels, held-out protocol, +3.5pp scifact (0.702→0.7375), neural-free** (already a PROVEN ledger line, §4). The
+cognitive loop is that *same counting* run as an iterative sleep-cycle with prune/cap/persist. So:
+- **It IS the supervision lever** — the accuracy path that the unsupervised clustering (MARGINAL, ~7 neutral
+  tests) could never reach. The +3.5pp comes from information BM25 never sees (human qrels), learned by
+  counting not gradient — deterministic, append-only, glass-box. This is the one honest route past BM25 on a
+  fixed corpus.
+- **It is the 'reasoner' only in the narrow, defensible sense:** it is *adaptive credit assignment over an
+  append-only address book* (which bridges earn their keep), consistent with [[aethos-is-a-neural-network]]
+  (binding=hidden layer, bridges=credit assignment). It is NOT a general inference/deduction engine — calling
+  it "deterministic intelligence / 99.22% certainty / 0 hallucinations" (the `WHAT_THE_COGNITIVE_TEST_PROVES`
+  framing) is theater and must stay out of any results doc. **The reasoner, honestly, = supervised bridge
+  consolidation + the structural primitives (multi-hop meet, dedup), not a cognition claim.**
+- **Smallest test to prove it as a loop (not just a one-shot bench):** run `cognitive_feedback_loop.py` on
+  scifact for 3 epochs (`--epochs 3 --max-queries 300`), report NDCG@10 at epoch 0 vs 3 + pairs added/pruned.
+  PASS if Δ>0 and monotone-ish; this upgrades the +3.5pp from "batch lever" to "online learning" (the
+  continual-learning paradigm in [[lattice-training-paradigm]]). Gate: `METRIC-CONSOLIDATE` (Δ NDCG ≥ +0.01
+  held-out over ≤5 epochs, no test-qrel leakage).
+
+### 9.4 New ledger lines + uncharted
+**PROVEN (add to §4):**
+- **φ low-discrepancy placement** — φ-additive sequence beats random (disc 5–30× lower) and naive by-value at
+  small/mid N; clean equidistribution. `scratchpad/phi_equidist.py` (this session). *Scope: distribution only.*
+- **φ-coordinates contribute ZERO retrieval/sensor signal** (the honest negative, independently captured):
+  scifact NDCG 0.0000 alone, C-MAPSS +0.00 MAE; 24 coords collapse to a 2-D manifold (Σprimes,Σn).
+  `aethos_master/vendor/trng/phi_lattice_results.txt`. Confirms geometry=addressing-not-semantics a 4th way.
+- **Cognitive feedback loop is wired + runnable** (imports resolve, `ConsolidationEngine` implemented) — the
+  supervised +3.5pp lever as an online loop. `trng/cognitive_feedback_loop.py`, `trng/prime_hotel/lattice_consolidation.py`.
+
+**DERIVATION-ONLY / ASPIRATIONAL:** OSCAR's $722B TAM, 100% accuracy, <1% FP, k!→1 universal narrowing, 89%
+prediction — marketing, never measured; DROP. `test_all_cognitive_features.py` 99.22%-certainty/0-hallucination
+— mock, decoupled from retrieval; DROP from any results doc.
+
+**Uncharted additions (append to §5):**
+- **U-12 φ-distributor for infinite-ingest** — wire φ as the placer in U-6's saturation test; coverage-gap vs
+  by-value/round-robin under 10× growth. Gate `METRIC-INGEST`. ~6h. *(The only path φ comes back via.)*
+- **U-13 Cognitive loop online consolidation** — 3-epoch scifact run, NDCG/pairs trend. Gate `METRIC-CONSOLIDATE`.
+  ~4h. *(Upgrades the proven batch +3.5pp to continual learning.)*
+
+### 9.5 The honest one-paragraph verdict
+Of OSCAR + golden-ratio + Omega + cognitive calculator, **only φ-equidistribution and the cognitive
+consolidation loop add anything the proven core doesn't already have — and both are narrow, gated, and now
+measured rather than asserted.** OSCAR is a *rename*: the comprehensive marketing skin for the AETHOS-13
+lattice, whose defensible content (invertible meet, RCA-by-dominance, pattern compression, no-GPU) is already
+in the PROVEN ledger and whose headline claims (100% accuracy, k!→1, $722B, 89% prediction) are unmeasured
+marketing to be dropped. Omega is a *layer*, not a new idea — the stateless composite-meet serve tier (123 ms /
+MRR 0.3986, glass-box to 3.55e-15) that the ground-up plan already names `serve/`; keep it wholesale. The
+golden-ratio framework is **superseded for addressing** (its coordinates measure to a clean NDCG 0.0000 because
+they live on a 2-D manifold — the same value-not-meaning wall as π-drift and the 8 dense lenses) but holds **one
+genuine, now-measured niche**: φ is the tuning-free optimal low-discrepancy placer (beats random 5–30× on
+discrepancy, beats naive by-value at ingest-scale N), so it earns a *gated* spot as the infinite-ingest
+distributor in `experiments/`, never back in the core. The cognitive calculator is the most valuable of the
+four: it is **the proven +3.5pp supervised-bridge lever** (count-based term bridges from qrels, held-out,
+neural-free — `bench_supervised_bridges.py`) re-expressed as an online sleep-cycle, and it is genuinely wired
+(all imports resolve — the lineage study's "dead code" claim was checking the wrong repo). It is the honest
+"reasoner" only as *adaptive credit assignment over an append-only address book*, not a cognition engine; strip
+the 99.22%-certainty/0-hallucination theater and keep the loop. **Net: the spine does not move — invertible
+meet + min-plus + measured serve/footprint + supervised bridges — but this wave adds two real, small, gated
+pieces (φ-distributor U-12, online consolidation U-13) and deletes a layer of marketing vocabulary (OSCAR's
+TAM/accuracy claims, the cognitive theater).**
+
+---
+
 ## 7. Changelog
+- **2026-06-29 (e)** — Lineage wave folded in as **§9** (OSCAR, golden-ratio/φ, Omega, cognitive calculator).
+  Verified on disk before writing + CORRECTED two lineage-study errors: (1) φ DOES have a captured retrieval
+  result — `phi_lattice_results.txt` (2026-04-16) measures NDCG **0.0000** (root cause: 24 coords on a 2-D
+  manifold), not "untested"; (2) the cognitive feedback loop is WIRED not dead — all 10 imports resolve in
+  `trng/` (study checked the wrong repo), `ConsolidationEngine` fully implemented. BUILT + RAN the KEY φ
+  experiment (`scratchpad/phi_equidist.py`): φ beats random 5–30× on discrepancy and beats naive by-value at
+  ingest-scale N, ties a tuned rational at N=10k → φ = tuning-free low-discrepancy placer, REAL but narrow.
+  Verdicts: OSCAR=rename (drop TAM/100%/k!→1), Omega=the proven `serve/` layer (keep), φ=gated ingest
+  distributor only (U-12, never back in core/addressing), cognitive calculator=the proven +3.5pp supervised
+  lever as an online loop (U-13) + the honest narrow "reasoner" = credit-assignment, not cognition theater.
+  New PROVEN ledger lines (φ-equidistribution win, φ-coords zero-signal null, loop-is-wired); spine unchanged.
 - **2026-06-29 (d)** — Second wave folded in as **§8** (TRNG, 17-project physics suite, the "Packets and
   Strings" particle book, π lineage, Moser K₉). Verified on disk before writing: NIST result files ABSENT
   (claim demoted to UNSUPPORTED), `constructive_pi.py` re-ran clean (π −1.2e-9 @ K=15, all forms machine-
@@ -386,6 +534,13 @@ this wave mostly tells us where *not* to spend, and surfaces one paper-only boun
   versions confirmed). Ledger §4 carries forward the full session's proven/marginal findings. Launched the
   deep ground-up study of every pipeline (workflow wiocm7ny2: RAG/Zeno/quantum/electron/games/anomaly/
   galaxy-core/grand-vision).
+- **2026-06-29 (e)** — Wave 3 (OSCAR / golden-ratio / Omega / cognitive calculator) folded (diary §9).
+  Committed the day's work (31b0968). BUILT + MEASURED the φ-distributor (`_poc_phi_distributor.py`): φ star
+  discrepancy at N=100k = 0.00003 vs random 0.00213 (71×) vs by-value corridor 0.03125 (**1037×**) — φ is the
+  tuning-free optimal low-discrepancy distributor. Golden-ratio earns the `experiments/phi_distributor`
+  allocation tier (gate METRIC-INGEST). Ground-up §6 updated: serve/=Omega, learn/=cognitive consolidation
+  (+3.5pp lever), experiments/phi_distributor. OSCAR = the system's name (drop marketing). Engine: addresses
+  by integer, ALLOCATES by φ.
 - **2026-06-29 (d)** — BUILT + MEASURED the #1 experiment, π-drift (`_poc_pi_drift.py`, 3-arm test).
   Result: scifact + nfcorpus, ARM1 lexical = ARM2 +co-occurrence = ARM3 +π-drift = **+0.0000**. Two findings:
   (1) co-occurrence reranking is redundant with lexical (the words already rank the gold — the ~7th confirmation);
