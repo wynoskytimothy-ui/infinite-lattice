@@ -553,6 +553,14 @@ TAM/accuracy claims, the cognitive theater).**
   versions confirmed). Ledger §4 carries forward the full session's proven/marginal findings. Launched the
   deep ground-up study of every pipeline (workflow wiocm7ny2: RAG/Zeno/quantum/electron/games/anomaly/
   galaxy-core/grand-vision).
+- **2026-06-29 (f)** — PIPELINE SPEED + PRODUCTS + CAPABILITY MAP. Serve **2× (123→61 ms)** at identical
+  accuracy via the binary reader (count where spines intersect) + numba sorted-merge — the geometry IS the
+  speed. Monitoring engine packaged (`aethos_monitor.py`, `LatticeMonitor`): **230 M events/s placement,
+  2.5–3.3 B/s count-core** (measured, memory-bound), 100% whitebox RCA, fault-reconstruct, Zeno halt/resume.
+  Capability campaign to **50 measured (40 PROVEN, 8 PARTIAL, 2 FAILED)** in `CAPABILITY_MATRIX.md` — patent
+  claim-5 proven 8 ways; min-plus graph algebra; WCOJ/vector-clocks/erasure/time-travel/tamper-log. Foundational
+  AXIOMS recorded (§3.0). Two products shippable: RAG (61 ms, 165 B/doc, beats BM25) + Monitoring (billions/s,
+  glass-box, self-healing). Honest walls held: compression=entropy floor, zero-shot-semantics=by-value geometry.
 - **2026-06-29 (e)** — Wave 3 (OSCAR / golden-ratio / Omega / cognitive calculator) folded (diary §9).
   Committed the day's work (31b0968). BUILT + MEASURED the φ-distributor (`_poc_phi_distributor.py`): φ star
   discrepancy at N=100k = 0.00003 vs random 0.00213 (71×) vs by-value corridor 0.03125 (**1037×**) — φ is the
