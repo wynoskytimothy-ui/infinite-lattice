@@ -553,6 +553,16 @@ TAM/accuracy claims, the cognitive theater).**
   versions confirmed). Ledger §4 carries forward the full session's proven/marginal findings. Launched the
   deep ground-up study of every pipeline (workflow wiocm7ny2: RAG/Zeno/quantum/electron/games/anomaly/
   galaxy-core/grand-vision).
+- **2026-06-29 (g)** — MATH FRONTIER closed honestly (`MATH_FRONTIER.md`). 4-agent workflow + live re-runs +
+  the decisive overturn-test. VERDICT: the 4-way branching is CLASSICAL (CHSH=2.0) read natively; it
+  reproduces QM exactly (2√2) ONLY when complex amplitudes are inserted by hand (= a faithful glass-box QM
+  SIMULATOR); "beyond Hilbert" (S>2√2) is physically forbidden (Tsirelson); the native electron is SEPARABLE
+  (concurrence 0, monogamy violated 1871/1871 = broadcast common-cause = the OPPOSITE of entanglement). The
+  lattice is NOT a genuine Hilbert space (trivial-indicator OR previously-indefinite inner product; 4 branches
+  collinear C¹). Ran the native-E(θ) test that COULD have overturned it → confirmed classical (native phase
+  arg(z) pinned near 0, no phase freedom). Fixed the meet_boost PSD bug (verified). **The REAL prize (true,
+  defensible): glass-box exact-QM simulator + coordination-free relational fabric — the SAME invertible meet,
+  honestly named.** Capability map also reached 80 (66 PROVEN) with the NATIVE/SUBSTRATE/WALLS guide.
 - **2026-06-29 (f)** — PIPELINE SPEED + PRODUCTS + CAPABILITY MAP. Serve **2× (123→61 ms)** at identical
   accuracy via the binary reader (count where spines intersect) + numba sorted-merge — the geometry IS the
   speed. Monitoring engine packaged (`aethos_monitor.py`, `LatticeMonitor`): **230 M events/s placement,
