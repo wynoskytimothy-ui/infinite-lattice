@@ -1,0 +1,9 @@
+  loaded 8,841,823 docs
+
+  250 queries
+
+  serve                      MRR@10  recall@100   med ms   p90 ms   p99 ms
+  corr (numpy baseline)      0.3986      91.20%    138.4    299.7    493.2
+  corr (numba merge)         0.3986      91.20%     61.3     95.9    120.2
+
+  same candidates + same scores => identical accuracy; the merge kernel cuts the score-phase.

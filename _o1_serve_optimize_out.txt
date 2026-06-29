@@ -1,0 +1,15 @@
+  loaded 8,841,823 docs
+
+  250 queries (cached)
+
+  PROFILE search_corr (250 q): meet-phase vs score-phase
+    meet-phase 38.8 ms/q | score-phase 112.2 ms/q | median |C|=54,845 (max 476,470)
+
+  serve                  MRR@10  recall@100   med ms   p90 ms
+  corr                   0.3986      91.20%    119.6    277.2
+  corr_capped            0.3748      86.00%     78.1    136.5
+  corr_capped            0.3779      84.80%     65.1    114.3
+  corr_3way              0.3986      91.20%    149.1    329.1
+  corr_capped_3way       0.3748      86.00%    108.4    200.9
+
+  footprint orthogonal: base 168 B/doc (3-bit wt) / EF doc-ids ~165 / 2-bit ~153.
