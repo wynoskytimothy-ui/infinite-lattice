@@ -133,6 +133,25 @@ Locations: `OneDrive/Pictures` (86, incl. the key rendered diagrams), `New folde
 ---
 
 ## 3. The formulas (canonical locations)
+
+### 3.0 FOUNDATIONAL AXIOMS (from Timothy's hand-drawn pages, transcribed 2026-06-29)
+- **Axiom 1:** all 3-space has a center `(0,0,0)`.
+- **Axiom 2:** exactly 8 (extensible to ∞) non-intersecting linear spines `S(n) = (n,0,n)`, `n ∈ ℝ≥0`, +
+  the 7 axis-permutation/sign-reflections (move X in XYZ → YXZ). The 8 spines share the origin, fire to the
+  8 octants, directions linearly independent:
+  - X-frame (XYZ): S₁=(n,0,n) · S₂=(n,0,−n) · S₃=(−n,0,n) · S₄=(−n,0,−n)
+  - Y-frame (YXZ): S₅=(n,0,n) · S₆=(n,0,−n) · S₇=(−n,0,n) · S₈=(−n,0,−n)
+- Each prime then **branches 4 ways** (VA1–VA4) → **8 spines × 4 branches = 32 quadrants**.
+- **Prime×Prime path tables:** each pair (a,b), a≤b, generates a deterministic `(X,Y,Z)` path —
+  `2×2→(4,2,4),(4,2,5),(4,2,6),(5,2,7)…` ; `3×3→(6,3,6)…` ; `5×5→(10,5,10)…`. Rule: **Y = shared/min
+  (interior, constant), Z = total = a+b+step (grows +1), X = top-sum** with a velocity-switch at the prime
+  crossover. Intersections = where two spine-paths CROSS (closed-form), not a search.
+- **The binary reader:** the 3-way intersections are READ from the 2-way structure (save 2 → read the 3rd by
+  intersection-count); the correlated docs are the dots where ≥2 query-spines light up at once. (Tested for
+  serve speed in `_o1_serve_binary.py`.) Build-impact: candidate-gen by COUNTING where spines intersect, not
+  pairwise searchsorted.
+
+
 | Formula | Canonical file |
 |---|---|
 | k-prime coordinate (Z = S+n identity) | `final-build-aethos-13/src/aethos/core/_lattice_core.py` |

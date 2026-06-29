@@ -1,0 +1,9 @@
+  loaded 8,841,823 docs (8,841,823 present)
+
+  250 queries
+
+  serve                        MRR@10  recall@100   med ms   p90 ms   p99 ms
+  searchsorted meets+merge     0.3986      91.20%     86.1    145.2    212.8
+  BINARY READER (count)+merge   0.3986      91.20%     61.5     92.7    119.8
+
+  binary reader = count where anchor-spines intersect (the dots), no pairwise search.
