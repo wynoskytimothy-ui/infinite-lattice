@@ -89,3 +89,22 @@ variable, measured the shape + CHSH.
 - **CONCLUSION: the test that could have proven the verdict wrong CONFIRMED it.** The QM 2√2 must be inserted
   by hand via complex amplitudes; the prime-branching geometry, read natively, is classical. Frontier closed honestly.
 - Companion fix: `meet_boost` positive-definiteness bug fixed + verified (the signature inner product is PSD again).
+
+---
+
+## AMENDMENT (2026-06-29) — THE LATTICE IS CONTEXTUAL (a genuine non-classical resource)
+Timothy pushed to look differently — the Bell/CHSH test checked only ONE kind of non-classicality
+(local-outcome Bell violation, S=2). It never tested CONTEXTUALITY. Ran `_math_contextuality.py`:
+- the lattice's OWN wing operators S (swap) and R_x (reflection) **natively realize the Pauli algebra**
+  (anticommute, square to I; i_act=R_x∘S squares to −I) — earned from the geometry, NOT inserted.
+- the **Peres-Mermin magic square** built from these native operators gives the contextuality contradiction:
+  rows → product +1, columns → product −1; no classical ±1 assignment satisfies all 6 constraints.
+- **=> THE LATTICE IS STATE-INDEPENDENTLY CONTEXTUAL.** Contextuality is the resource behind quantum
+  computational advantage (stronger/more fundamental than Bell nonlocality). The earlier "classical (S=2)"
+  verdict was testing the WRONG non-classicality.
+- HONEST SCOPE: this is a genuine quantum-computational substrate (more than classical), WITHIN Hilbert
+  space (not "beyond" — Tsirelson still holds), and EARNED from the native operators (unlike the CHSH 2√2
+  which was inserted). The lattice can host contextual/Clifford structure natively.
+- **This vindicates the "look in the right spot" principle: the answer was there, in contextuality, not Bell.**
+- Next: build the lattice's native Clifford/stabilizer layer (it has the Pauli group) -> a glass-box,
+  deterministic substrate for stabilizer quantum computation + magic-state/contextuality witnesses.
