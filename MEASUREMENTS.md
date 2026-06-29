@@ -106,3 +106,53 @@ Findings (honest):
   weight-prefix "curation" variants were measured and underperformed (`_serve_corr2/3.log`).
 - Shipped default `SERVE_MODE=corr` (accuracy-optimal 0.398/127ms/287B); `fast`=rarest-union 0.391/88ms;
   `full`=scatter. Stored-composite speed dial available via `composites.npz`.
+
+---
+
+## Speed / Footprint / O(1) deep dive (2026-06-28, `_o1_*.py`, `_dd_wand.py`)
+
+Final pass focused on SPEED + FOOTPRINT + O(1) (NOT accuracy). All CPU, no GPU. Two genuine new wins,
+several confirmed dead-ends.
+
+### NEW WIN 1 — sub-4-bit weights cut the footprint ~15% at held accuracy (`_o1_bitplane_weight_quant.py`)
+Per-term-max SCALING (1 fp16 scale/term) then uniform quantize. 50k-calib, 6980 cached queries, exact rerank.
+| weights | wt B/doc | total B/doc | MRR@10 | ΔMRR | recall@100 |
+|---|---|---|---|---|---|
+| fp32 (baseline) | 483.0 | 605.0 | 0.9240 | — | 99.77% |
+| 5-bit (prior ref) | 75.5 | 197.5 | 0.9201 | −0.0039 | 99.77% |
+| **3-bit per-term** | **46.2** | **168.2** | **0.9226** | **−0.0014** | **99.77%** |
+| 2-bit per-term | 31.1 | 153.1 | 0.9187 | −0.0053 | 99.77% |
+Two-sided: global Lloyd-Max FAILS below 5-bit (3-bit −0.0078) — it starves the rare high-weight postings
+(~9.7% are w>30) that dominate the dot. Per-term scaling keeps each list's dynamic range. **New near-lossless
+footprint = 168 B/doc (gamma doc-ids 122 + 3-bit weights 46), down from 197.5, MRR −0.0014.** Measured on 50k;
+relative shrink is the load-bearing claim.
+
+### NEW WIN 2 — the pooled serve is the fast path, not WAND (`_o1_serve_shootout.py`, full 8.8M, 250 q)
+| serve | MRR@10 | recall@100 | med ms | p90 | p99 |
+|---|---|---|---|---|---|
+| full scatter (exact) | 0.3973 | 91.60% | 3068 | 4065 | 4779 |
+| WAND (numba, exact) | 0.3973 | 91.60% | 878 | 2421 | 3664 |
+| **search_corr (pooled)** | **0.3986** | 91.20% | **123** | 285 | 480 |
+| search_fast (pooled) | 0.3909 | 88.40% | **91** | 115 | 181 |
+**search_corr = 123 ms at MRR 0.3986 (≥ exact) — 25× faster than WAND/scatter, matched accuracy.** WAND is
+exact + 3.5× over naive but ~7× slower than pooling; its only niche is provably-exact top-k. Confirms the
+lattice's rarest-address/meet pooling IS the WAND-class optimization and already beats textbook WAND.
+
+### O(1) content-address — the signature differentiator (`_o1_content_address.py`)
+Proven meet `(a+p+q,p+q,p)`, det=−1. O(1) lookup ties a dict (629 vs 582 ns @1M), beats searchsorted's
+O(log N) (2114 ns). 10M/10M exact invertible. **0 collisions on 10M keys at 0 bits/key** (vs 32-bit hash 456
+collisions on 2M; MPH needs 2–3 bits/key). Coordination-free: 200k/200k independent-node agreement.
+
+### Confirmed (no further chase)
+- **Elias-Fano doc-ids** (`_o1_succinct_postings.py`): 119.2 B/doc = 0.974× gamma + O(1) skip (gamma is
+  sequential). Modest bytes, unlocks skip — pair with WAND for the exact path.
+- **min-plus meet = exact graph algebra** (`_o1_minplus_free_graph.py`): 1.14M pairs, 0 disagreements vs
+  scipy AND networkx Floyd-Warshall; exact (max,+) scheduling + Viterbi from one 3-line kernel. Exactness +
+  operator-reuse, NOT a speed win (10–16× slower than C Floyd-Warshall in pure numpy).
+- **chamber-PQ codebook** (`_o1_pq_3d_chambers.py`): ties k-means; only edges it at 3-bit (under-resourced K);
+  niche fast zero-param low-bitrate quantizer, not a quality leap.
+- **DEAD: corpus-as-a-number** (`_o1_algebraic_number_coldstore.py`): not compression (∑log₂prime > ∑log₂gap);
+  ties FOR, loses to a plain ID list 1.22×; blind decode 5,436× slower.
+- **DEAD: chamber routing** (`_o1_chamber_routing.py`): no operating point with both candidate reduction AND
+  recall ≥98.5% — value-based chambers scatter relevant docs (random-hash control fails identically →
+  intrinsic). Slower than the already-DF-bound scatter in every config.

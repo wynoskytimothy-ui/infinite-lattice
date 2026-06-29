@@ -1,0 +1,26 @@
+[load] 6,933,483 postings, 26,854 terms, 57,416 docs (0.5s)
+[wt] 86 distinct levels in [1,86]  H(w)=4.984 b  mean=12.39
+[q] 6,980 cached queries answerable (NO GPU)
+
+[BASELINE fp32-stored] MRR@10=0.9240 rec@100=99.77% 3.3ms/q  wt=483.0 B/doc  total(+gamma di)=605.0 B/doc
+[5-bit ref Lloyd]      MRR@10=0.9201 (-0.0039) rec=99.77%  wt=75.5 B/doc  total=197.5 B/doc
+
+[SWEEP]  baseline MRR@10=0.9240  (target hold = within 0.005)
+  bits family           MRR@10     dMRR  rec@100  wt B/doc total B/doc   vs5b
+     4 uniform          0.9225  -0.0015    99.74      60.4       182.4  1.25x  HOLD
+     4 lloyd            0.9177  -0.0063    99.76      60.4       182.4  1.25x
+     4 perterm          0.9226  -0.0014    99.77      61.3       183.3  1.23x  HOLD
+     3 uniform          0.9187  -0.0054    99.73      45.3       167.3  1.67x
+     3 lloyd            0.9163  -0.0078    99.73      45.3       167.3  1.67x
+     3 perterm          0.9226  -0.0014    99.77      46.2       168.2  1.63x  HOLD
+     2 uniform          0.8977  -0.0264    99.66      30.2       152.2  2.50x
+     2 lloyd            0.9112  -0.0129    99.74      30.2       152.2  2.50x
+     2 perterm          0.9187  -0.0053    99.77      31.1       153.1  2.42x
+
+============================================================================================
+BASELINE  MRR@10 0.9240  wt 483.0 B/doc  total 605.0 B/doc
+5-bit ref MRR@10 0.9201  wt 75.5 B/doc  total 197.5 B/doc
+SMALLEST BITRATE HOLDING (<=0.005):  3-bit perterm  MRR 0.9226 (-0.0014)  wt 46.2 B/doc  total 168.2 B/doc  (saves 29.3 B/doc vs 5-bit, 1.63x wt-shrink)
+3-bit NON-UNIFORM (Lloyd):  MRR 0.9163 (-0.0078)  FAILS the 0.005 bar  -> wt 45.3 B/doc, total 167.3 B/doc
+
+[done] 248.7s

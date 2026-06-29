@@ -1,0 +1,66 @@
+================================================================================
+CHAMBER-ROUTING LENS -- 32-chamber sublinear routing on MARCO SPLADE 50k
+================================================================================
+  loaded 26,854 terms, 57,416 present docs (0.4s)
+  cached queries with qrels: 6,980
+  chamber def [lattice-octant]: 32 buckets, term spread min/med/max = 383/767/1536
+  chamber def [balanced-hash]: 32 buckets, term spread min/med/max = 838/839/841
+
+  [baseline] full-scatter search() -- computing gold top-100 + latency
+    full-scatter: median 3.57 ms  p90 6.03 ms; |C_full| median 33,258
+    full-scatter recall@100 vs qrels (gold-in-index, n=6980): 99.77%
+
+  built doc-tags [lattice-octant, top1/doc] in 0.1s; avg chambers/doc = 1.00
+    [lattice-octant doc-top1 q-top3]
+        |C| median 6,219 = 18.9% of full (reduction 81.1%)
+        latency median 7.17 ms (full 3.57 ms, speedup 0.50x)  p90 12.45 ms
+        retain full-top100 = 22.17%  (routing-miss 77.83%)
+        recall@100 vs qrels = 72.06%  (full 99.77%, drop +27.71 pp)
+
+  built doc-tags [lattice-octant, top3/doc] in 0.3s; avg chambers/doc = 2.89
+    [lattice-octant doc-top3 q-top3]
+        |C| median 16,761 = 50.9% of full (reduction 49.1%)
+        latency median 18.40 ms (full 3.57 ms, speedup 0.19x)  p90 31.74 ms
+        retain full-top100 = 53.21%  (routing-miss 46.79%)
+        recall@100 vs qrels = 92.19%  (full 99.77%, drop +7.58 pp)
+
+  built doc-tags [lattice-octant, top6/doc] in 0.4s; avg chambers/doc = 5.48
+    [lattice-octant doc-top6 q-top6]
+        |C| median 42,908 = 127.7% of full (reduction -27.7%)
+        latency median 46.47 ms (full 3.57 ms, speedup 0.08x)  p90 75.95 ms
+        retain full-top100 = 90.15%  (routing-miss 9.85%)
+        recall@100 vs qrels = 99.18%  (full 99.77%, drop +0.59 pp)
+
+  built doc-tags [balanced-hash, top1/doc] in 0.1s; avg chambers/doc = 1.00
+    [balanced-hash doc-top1 q-top3]
+        |C| median 5,357 = 15.9% of full (reduction 84.1%)
+        latency median 6.18 ms (full 3.57 ms, speedup 0.58x)  p90 10.12 ms
+        retain full-top100 = 20.72%  (routing-miss 79.28%)
+        recall@100 vs qrels = 71.62%  (full 99.77%, drop +28.15 pp)
+
+  built doc-tags [balanced-hash, top3/doc] in 0.3s; avg chambers/doc = 2.91
+    [balanced-hash doc-top3 q-top3]
+        |C| median 14,649 = 43.3% of full (reduction 56.7%)
+        latency median 16.13 ms (full 3.57 ms, speedup 0.22x)  p90 26.29 ms
+        retain full-top100 = 50.64%  (routing-miss 49.36%)
+        recall@100 vs qrels = 92.31%  (full 99.77%, drop +7.46 pp)
+
+  built doc-tags [balanced-hash, top6/doc] in 0.4s; avg chambers/doc = 5.56
+    [balanced-hash doc-top6 q-top6]
+        |C| median 40,493 = 117.8% of full (reduction -17.8%)
+        latency median 42.88 ms (full 3.57 ms, speedup 0.08x)  p90 70.13 ms
+        retain full-top100 = 87.97%  (routing-miss 12.03%)
+        recall@100 vs qrels = 99.15%  (full 99.77%, drop +0.62 pp)
+
+================================================================================
+VERDICT
+================================================================================
+  full-scatter baseline: median 3.57 ms, recall@100 99.77%
+  lattice-octant doc-top1 q-top3         red  81.1%  0.50x  rec drop +27.71pp  [FAIL]
+  lattice-octant doc-top3 q-top3         red  49.1%  0.19x  rec drop +7.58pp  [FAIL]
+  lattice-octant doc-top6 q-top6         red -27.7%  0.08x  rec drop +0.59pp  [PASS]
+  balanced-hash doc-top1 q-top3          red  84.1%  0.58x  rec drop +28.15pp  [FAIL]
+  balanced-hash doc-top3 q-top3          red  56.7%  0.22x  rec drop +7.46pp  [FAIL]
+  balanced-hash doc-top6 q-top6          red -17.8%  0.08x  rec drop +0.62pp  [PASS]
+
+  Honest read: see whether ANY config gives >1x speedup with recall drop <=1.5pp.

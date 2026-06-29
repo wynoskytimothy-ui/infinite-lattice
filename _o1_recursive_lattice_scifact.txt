@@ -1,0 +1,12 @@
+
+scifact: 5,183 docs | recursive-lattice REVIVE (rare-prime budget, depth-2 co-occurrence)
+  lexical baseline nDCG@10: 0.7023
+  Stage-18 original (no budget): 10.3M addr, 1373 MB, scifact +0.0073 @a0.10
+
+   budget   addresses     B/doc  best nDCG     delta  @beta
+        4      41,600    104.2     0.7023   +0.0000    0.0
+        6      89,460    222.1     0.7023   +0.0000    0.0
+        8     156,290    385.2     0.7023   +0.0000    0.0
+       12     347,558    848.5     0.7023   +0.0000    0.0
+       20     955,132   2314.0     0.7023   +0.0000    0.0
+      all   7,610,991  23593.7     0.7023   +0.0000    0.0

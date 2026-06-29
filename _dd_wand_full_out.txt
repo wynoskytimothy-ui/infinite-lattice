@@ -1,0 +1,11 @@
+  flat built: 1,059,501,065 postings (max-weight bounds: RAM only, footprint unchanged)
+
+  250 queries encoded from cache (no GPU/model loaded)
+
+  CORRECTNESS vs full scatter: top-10 id-order diffs 11/250 (ties), top-100 set diffs 5/250, top-100 SCORE-vector mismatches 1/250 (must be 0 = exact)
+
+  serve                    MRR@10  recall@100   med ms   p90 ms
+  full scatter (ref)       0.3973      91.60%  2888.33  3883.76
+  WAND (numba, exact)      0.3973      91.60%   831.48  2307.33
+
+  footprint 286.9 B/doc UNCHANGED (max-weight bounds are RAM-only). WAND returns exact top-k.

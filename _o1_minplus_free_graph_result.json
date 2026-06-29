@@ -1,0 +1,131 @@
+{
+  "lens": "minplus-free-graph",
+  "exactness": {
+    "configs_tested": 9,
+    "total_pairs_compared": 1140000,
+    "disagreements_vs_scipy_floyd_warshall": 0,
+    "nx_pairs_compared": 390000,
+    "disagreements_vs_networkx_dijkstra": 0,
+    "exact_match": true,
+    "per_config": [
+      {
+        "n": 200,
+        "density": 0.05,
+        "edges": 1988,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": 0,
+        "t_meet_ms": 48.63,
+        "t_scipy_ms": 10.37,
+        "meet_slower_x": 4.7
+      },
+      {
+        "n": 200,
+        "density": 0.1,
+        "edges": 4004,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": 0,
+        "t_meet_ms": 52.14,
+        "t_scipy_ms": 4.38,
+        "meet_slower_x": 11.9
+      },
+      {
+        "n": 200,
+        "density": 0.2,
+        "edges": 7929,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": 0,
+        "t_meet_ms": 38.88,
+        "t_scipy_ms": 4.41,
+        "meet_slower_x": 8.8
+      },
+      {
+        "n": 300,
+        "density": 0.05,
+        "edges": 4477,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": 0,
+        "t_meet_ms": 176.43,
+        "t_scipy_ms": 13.57,
+        "meet_slower_x": 13.0
+      },
+      {
+        "n": 300,
+        "density": 0.1,
+        "edges": 8932,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": 0,
+        "t_meet_ms": 171.75,
+        "t_scipy_ms": 14.38,
+        "meet_slower_x": 11.9
+      },
+      {
+        "n": 300,
+        "density": 0.2,
+        "edges": 17979,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": 0,
+        "t_meet_ms": 145.61,
+        "t_scipy_ms": 13.44,
+        "meet_slower_x": 10.8
+      },
+      {
+        "n": 500,
+        "density": 0.05,
+        "edges": 12377,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": null,
+        "t_meet_ms": 797.99,
+        "t_scipy_ms": 50.97,
+        "meet_slower_x": 15.7
+      },
+      {
+        "n": 500,
+        "density": 0.1,
+        "edges": 24658,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": null,
+        "t_meet_ms": 626.64,
+        "t_scipy_ms": 56.75,
+        "meet_slower_x": 11.0
+      },
+      {
+        "n": 500,
+        "density": 0.2,
+        "edges": 49671,
+        "disagree_vs_scipy": 0,
+        "disagree_vs_nx": null,
+        "t_meet_ms": 632.52,
+        "t_scipy_ms": 58.17,
+        "meet_slower_x": 10.9
+      }
+    ]
+  },
+  "scheduling": {
+    "dag_nodes": 300,
+    "dag_edges": 3594,
+    "critical_path_len_maxplus_meet": 241.0,
+    "critical_path_len_reference": 241.0,
+    "exact_match": true,
+    "note": "same minplus kernel with max instead of min == longest-path / project makespan"
+  },
+  "viterbi": {
+    "states": 6,
+    "obs_len": 40,
+    "best_logprob_maxplus_meet": -94.065705,
+    "best_logprob_reference": -94.065705,
+    "exact_match": true,
+    "note": "Viterbi is max-product == (max,+) in log space == the same meet kernel, relabeled"
+  },
+  "reuse": {
+    "one_kernel_lines": "~3 (broadcast-add, reduce min/max)",
+    "problems_covered": [
+      "all-pairs shortest path",
+      "critical-path scheduling",
+      "Viterbi MAP"
+    ],
+    "same_as_retrieval_meet": "the (sum,min) pair-meet IS one min-plus matmul cell",
+    "cell_identity_holds": true,
+    "what_is_free": "shortest paths + scheduling + Viterbi reuse the exact retrieval correlation operator; no new data structure, no solver dependency for the algebra itself",
+    "honest_cost": "pure-numpy semiring power is O(V^3 log V) and ~10-100x slower than scipy's C Floyd-Warshall; the value is EXACTNESS + operator reuse, NOT speed"
+  }
+}

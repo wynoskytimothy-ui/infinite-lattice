@@ -1,0 +1,23 @@
+================================================================================
+SUCCINCT POSTINGS -- doc-id coder shootout on the real 50k SPLADE index
+================================================================================
+  loaded: 57,416 docs, 26,854 terms, universe U=57,416  (0.4s)
+
+  total doc-id postings: 6,933,483  (120.8 postings/doc)
+
+  coder             bits/posting  doc-id B/doc    vs gamma
+  ------------------------------------------------------
+  Elias gamma              8.10        122.3       1.000x
+  Elias-Fano               7.90        119.2       0.974x
+  FOR+bitpack             10.03        151.4       1.237x
+  PForDelta                9.71        146.6       1.198x
+  Roaring: pyroaring not installed (skipped)
+
+  DECODE throughput (postings/s, sample of 200 terms):
+    Elias gamma : 2.19 M postings/s  (pure-python ref decode)
+    (gap cumsum): 357.84 M postings/s  (vectorized id reconstruction)
+    NB: Elias-Fano supports O(1) random access / skip (WAND-friendly); gamma is sequential.
+
+================================================================================
+  SMALLEST doc-id coder: EF at 119.2 B/doc (1.027x vs gamma). Weights add on top (~5-bit -> ~+80-120 B/doc).
+================================================================================

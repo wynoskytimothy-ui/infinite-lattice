@@ -1,0 +1,11 @@
+  flat: 1,059,501,065 postings, 8,841,823 docs
+
+  250 queries (cached, no GPU)
+
+  serve                      MRR@10  recall@100   med ms   p90 ms   p99 ms
+  full scatter (exact)       0.3973      91.60%   3068.0   4065.4   4779.3
+  WAND (numba, exact)        0.3973      91.60%    878.0   2421.3   3664.2
+  search_fast (approx)       0.3909      88.40%     90.8    115.3    180.7
+  search_corr (approx)       0.3986      91.20%    123.3    284.8    480.4
+
+  footprint UNCHANGED (286.9 B/doc raw; codec ~160-195 B/doc). Speed only.

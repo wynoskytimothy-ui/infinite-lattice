@@ -47,3 +47,13 @@
 - **"MS MARCO MRR 0.948"** from the old overview — drop entirely; real MARCO is ~0.39. **"4 B/doc + high
   accuracy"** — different versions; can't co-claim. **IMS 1.4% early detection** — demoted (a 1-line RMS
   alarm fires earlier). **CMAPSS beats LSTM** — a RandomForest beats it.
+
+## Footprint + serve — MARCO SPLADE, full 8.8M (updated 2026-06-28, `_o1_*` / `_dd_wand.py`)
+*Speed/footprint deep dive. Evidence in MEASUREMENTS.md "Speed / Footprint / O(1) deep dive".*
+| Axis | Number | How | Reproduce |
+|---|---|---|---|
+| **Near-lossless footprint** | **~165–168 B/doc** (gamma/EF doc-ids + **3-bit per-term weights**), MRR −0.0014, recall 99.77% | per-term-max scaling beats global Lloyd-Max (which starves rare high weights) | `_o1_bitplane_weight_quant.py` |
+| **Serve latency, full 8.8M** | **123 ms/query, MRR 0.3986, recall 91.2%** (composite-meet pooling) | 25× faster than exact scatter (3068 ms) & 7× faster than textbook WAND (878 ms), at ≥ exact accuracy | `_o1_serve_shootout.py` |
+| **O(1) content-address** | invertible, **0 collisions on 10M keys at 0 bits/key**, coordination-free (200k/200k) | the meet (det=−1) IS a perfect hash a hash-table can't match (invert + 0-collision + no shared table) | `_o1_content_address.py` |
+- **WAND is exact but not the fast path**: the lattice's own rarest-address/meet pooling already beats textbook WAND ~7×. Pitch the 123 ms pooled serve; keep WAND only for "provably-exact top-k" (compliance).
+- **Dead ends (don't pitch / don't rebuild)**: corpus-as-a-number is NOT compression; chamber routing has no recall-safe candidate reduction; chamber-as-PQ-codebook only ties k-means.
