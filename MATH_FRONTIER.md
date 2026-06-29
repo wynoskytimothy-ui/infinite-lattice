@@ -76,3 +76,16 @@ Assert `|S| ≤ 2√2 + ε` as a **unit test** — if this lattice ever reports 
 ---
 
 *Files verified on disk and re-run live:* `New folder (3)/_dd_chsh_decisive.py`, `_dd_cglmp_final.py`, `_dd_four_way_entanglement.py`, `_dd_hilbert_probe{,2,3}.py`, `aethos_quantum.py`, `aethos_hilbert.py`; `trng/projects/04_hostless_hotel/{chsh_test.py (cosmetic unicode-print crash only), chsh_montecarlo_test.py, cglmp_test.py}` — note: these hotel files DO exist (one agent report incorrectly said they were missing because it only checked New folder (3); they live under `C:/Users/wynos/trng/...`). `cglmp_test.py` ran clean: I₃ = 2.8729340512.
+---
+
+## NATIVE E(θ) test (2026-06-29) — the experiment that could have overturned the verdict
+Ran `_math_native_etheta.py`: derived the correlation from the lattice's OWN spring phases
+`φ(n)=arg(z)` via `wing_transform` (NO hardcoded −cos), used the transgressor n as the shared hidden
+variable, measured the shape + CHSH.
+- **native CHSH |S| = 2.0000** (≤ classical bound) — the geometry's own readout is CLASSICAL.
+- **E(θ) shape: R²(cosine)=0.66, R²(triangle)=0.63 → neither** — because the native phase is DEGENERATE:
+  `arg(z)` is pinned near 0 (range [0.001, 0.464] rad, 3880/4000 samples in the first of 12 bins), since the
+  meet coordinate has X ≫ Y. No genuine phase freedom ⇒ no interference ⇒ no Bell violation.
+- **CONCLUSION: the test that could have proven the verdict wrong CONFIRMED it.** The QM 2√2 must be inserted
+  by hand via complex amplitudes; the prime-branching geometry, read natively, is classical. Frontier closed honestly.
+- Companion fix: `meet_boost` positive-definiteness bug fixed + verified (the signature inner product is PSD again).
