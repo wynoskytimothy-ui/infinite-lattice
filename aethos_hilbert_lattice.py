@@ -163,17 +163,21 @@ class LatticeHilbertSpace:
         return za.conjugate() * zb
 
     def meet_boost(self, a: LatticeState, b: LatticeState) -> float:
-        """Extra pairing when two distinct basis states share formula coordinate."""
+        """PSD coordinate-collision kernel: K(a,b) = 1 iff a,b share a formula coordinate (INCLUDING the
+        diagonal), else 0. This is the Gram matrix of one-hot coordinate features -> positive semidefinite.
+
+        FIX 2026-06-29 (math-frontier audit): the previous version returned 0.0 on the diagonal
+        (la.key()==lb.key()) while returning 1.0 for off-diagonal coordinate collisions, so a two-state
+        collision block was [[0,1],[1,0]] with eigenvalues +-1 -> INDEFINITE (the inner-product axiom failed
+        exactly when the signature 'meet' feature fired; measured Gram min eigenvalue -4.0). Including the
+        diagonal makes every collision block all-ones [[1,1],[1,1]] (eigenvalues block_size, 0,...,0) = PSD,
+        so total_inner is now a genuine (semi-definite) inner product."""
         if len(a.labels) != 1 or len(b.labels) != 1:
             return 0.0
         la, lb = next(iter(a.labels.values())), next(iter(b.labels.values()))
-        if la.key() == lb.key():
-            return 0.0
         ca = formula_coord_branch(la.chain, la.n, la.branch, la.wing)
         cb = formula_coord_branch(lb.chain, lb.n, lb.branch, lb.wing)
-        if ca == cb:
-            return 1.0
-        return 0.0
+        return 1.0 if ca == cb else 0.0
 
     def correlation_inner_words(self, word_a: str, word_b: str) -> float:
         if not self.registry:
