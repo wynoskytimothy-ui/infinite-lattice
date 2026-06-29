@@ -1,0 +1,7 @@
+
+nfcorpus: docs=3633 test_q=323 leak=0
+  A full            743 B/doc  nDCG 0.3203
+  B full+bridge     743 B/doc  nDCG 0.3293
+  C word-only       197 B/doc  nDCG 0.3065
+  D edge champ      197 B/doc  nDCG 0.3161  (bridge +0.0096, vs full -0.0042)
+JSON {"corpus": "nfcorpus", "n_docs": 3633, "n_test_q": 323, "n_train_qrels": 110575, "train_test_query_leak": 0, "bdoc_full": 742.7, "bdoc_word_only": 197.5, "A_full": {"ndcg": 0.3203, "recall": 0.1492, "ms": 0.129}, "B_full_bridge": {"ndcg": 0.3293, "recall": 0.1541, "ms": 1.82}, "C_word_only": {"ndcg": 0.3065, "recall": 0.1453, "ms": 0.043}, "D_edge_champ": {"ndcg": 0.3161, "recall": 0.1477, "ms": 0.147}, "D_beats_A": false, "bridge_gain_on_word_only": 0.0096, "shrink_vs_full": 3.76}

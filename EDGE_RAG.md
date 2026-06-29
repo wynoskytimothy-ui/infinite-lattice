@@ -15,8 +15,33 @@ test queries, not projected.*
 
 Run: `_o1_edge_champion.py`. BM25 reference on scifact ≈ 0.665.
 
-**The edge champion (word-only + bridges) BEATS the fat full-multiview index (0.7112 > 0.7023) at 3.8× smaller
-footprint and sub-millisecond latency — with zero neural model.** It crushes BM25 (+0.046).
+**The edge champion (word-only + bridges) is competitive with the fat full-multiview index (0.7112 vs 0.7023)
+at 3.8× smaller footprint and sub-millisecond latency — with zero neural model.** It crushes BM25 (+0.046).
+On scifact it slightly *beats* full; across corpora the robust claim is *competitive at 3.8× smaller* (see
+Generalization below — "beats full" holds on 2 of 3 corpora; the footprint shrink holds on all 3).
+
+## Generalization (scifact / nfcorpus / fiqa — adversarially audited, zero leakage)
+
+Each run was independently audited by a separate agent: bridges learned ONLY from train qrels, eval ONLY on
+test queries, train/test query splits re-verified disjoint *on disk* (scifact 0 overlap, nfcorpus 0, fiqa
+distinct splits), same metric for all configs. Evidence: `_o1_edge_gen_{scifact,nfcorpus,fiqa}.txt`.
+
+| corpus | docs | full (A) | word-only (C) | **edge champ (D)** | bridge gain D−C | D vs full | shrink |
+|---|---|---|---|---|---|---|---|
+| scifact | 5,183 | 0.7023 | 0.6712 | **0.7112** | **+0.040** | +0.009 ✓ | 3.75× |
+| nfcorpus | 3,633 | 0.3203 | 0.3065 | **0.3161** | +0.0096 | −0.004 ✗ | 3.76× |
+| fiqa | 57,638 | 0.2392 | 0.2347 | **0.2448** | +0.0101 | +0.006 ✓ | 3.94× |
+
+**What generalizes (robust):**
+- The **3.8× footprint shrink** (word-only vs full) — consistent on all three corpora.
+- The **counting-bridge gain over word-only is positive on all three** (+0.010 to +0.040). The large +0.040 is
+  scifact-specific; nfcorpus and fiqa get a smaller but real ~+0.010.
+- The edge champion stays **within ±0.009 nDCG of the fat full index** on every corpus.
+
+**What does NOT generalize (honest):** "beats full" is corpus-dependent — true on scifact (+0.009) and fiqa
+(+0.006), false on nfcorpus (−0.004, a thin miss). The safe product claim is **"matches the fat index at 3.8×
+smaller and faster,"** not "beats it everywhere." All three margins are single-run point estimates (no variance
+reported), so ±0.009 is within run noise — reinforcing "competitive" over "beats."
 
 ## Why it works — the two levers
 
@@ -59,6 +84,30 @@ stays on storage and RAM = the per-query working set, never the whole index. Tha
 The serve cost is **working-set-bound** (only the query's terms are touched), so it scales by query, not by
 corpus — one index format from a 2 MB app KB to an 8.8M-passage MARCO, edge to cloud.
 
+## Phone profile — "RAM = working set, not the whole index" (MEASURED, real RSS)
+
+The CSR postings are dumped as raw uncompressed `.npy` (`seg_indices` uint32 + `seg_data` float16) so
+`np.load(mmap_mode='r')` *truly* memory-maps them (a `.npz` is zipped and can't be mmap'd). A query slices only
+its terms' contiguous CSR segments → only those pages fault in. Measured in isolated subprocesses on a tiled
+259k-doc index (143 MB on disk); `_o1_mmap_serve.py`:
+
+| | FULL load | MMAP |
+|---|---|---|
+| RSS after load | 184 MB | **41 MB** ← index not resident |
+| RSS after serving 300 q | 189 MB | 111 MB |
+| median latency | 2.78 ms | 2.79 ms (equal) |
+
+**Proof:** the mmap process holds **41 MB resident for a 143 MB on-disk index** — the index is *not* in RAM; it
+lives on flash and the OS pages in only the working set (and can evict). Full-load holds the whole 143 MB
+resident. Latency is identical. This is what makes large indexes phone-viable: RAM is bounded by the OS working
+set, not the corpus size.
+
+*Honest caveats:* (1) the demo corpus is 50 identical tiles, so 300 queries collectively touch nearly every
+posting (worst case for mmap) — yet mmap still stays *under* the index size (111 < 143 MB) while full sits above
+it; a real corpus touches far less. (2) Raw mmap postings are ~6 B/posting (uncompressed, for random access) vs
+~1.2 B/posting for the zlib+delta `save()` format — random-access mmap trades disk footprint for low RAM. Both
+are phone-viable; pick mmap when RAM is the constraint, compressed `save()` when storage is.
+
 ## Accuracy tiers — pick by device
 
 - **No GPU (the edge champion):** word-only + counting-bridges = **0.711** nDCG, 198 B/doc, < 1 ms. Beats
@@ -69,15 +118,21 @@ corpus — one index format from a 2 MB app KB to an 8.8M-passage MARCO, edge to
 
 ## What's honest about this
 
-- The headline is on scifact (an edge-sized corpus). The *mechanism* (trigram-drop + counting-bridges)
-  is corpus-general, but the exact +0.040 is scifact-specific; other corpora need their own qrels to learn
-  bridges. The no-bridge word-only floor (0.671, still > BM25) needs no training.
-- Bridges need *some* train qrels. Cold-start (no qrels) → the word-only floor (still beats BM25), then bridges
-  improve it online as judgments arrive (the `learn` step is append-only).
-- The mmap "RAM = working set" claim follows from the CSR save format + the binary-reader serve (which provably
-  touches only the query's term postings); the end-to-end mmap deployment is the next build, not yet benchmarked.
+- Generalization is **measured on 3 corpora** (scifact/nfcorpus/fiqa), adversarially audited for leakage. The
+  footprint shrink (3.8×) and a positive bridge gain hold on all three; "beats full" holds on 2 of 3 (margins
+  are single-run, within ±0.009 run noise → "competitive" is the safe claim). Untested beyond these three.
+- The exact bridge gain is corpus-specific (+0.040 scifact, ~+0.010 nfcorpus/fiqa); each corpus needs its own
+  qrels to learn bridges. The no-bridge word-only floor (still > BM25) needs no training.
+- Bridges need *some* train qrels. Cold-start (no qrels) → the word-only floor, then bridges improve it online
+  as judgments arrive (the `learn` step is append-only).
+- The mmap "RAM = working set" claim is now **measured** (41 MB resident for a 143 MB index, real RSS,
+  `_o1_mmap_serve.py`) — not just inferred from the format. Caveat: tiled-corpus worst case; raw mmap format is
+  fatter on disk than the compressed `save()` (the RAM↔storage tradeoff).
 
-## Files
-- `_o1_edge_champion.py` — the head-to-head table above (A/B/C/D, real save() bytes, held-out nDCG).
+## Files (every number traces to a captured run)
+- `_o1_edge_champion.py` — the scifact head-to-head (A/B/C/D, real save() bytes, held-out nDCG).
+- `_o1_edge_generalize.py` + `_o1_edge_gen_{scifact,nfcorpus,fiqa}.txt` — cross-corpus generalization, with the
+  train/test leakage self-certification; the `.txt` files are the captured evidence.
 - `_o1_edge_prune.py` — the footprint↔accuracy knee (trigram-drop + per-doc top-k curve).
+- `_o1_mmap_serve.py` — the measured mmap RSS proof ("RAM = working set").
 - `_o1_edge_rag.py` — the per-query working-set / RAM profile + scaling projection.

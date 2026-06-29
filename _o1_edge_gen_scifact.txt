@@ -1,0 +1,7 @@
+
+scifact: docs=5183 test_q=300 leak=0
+  A full            743 B/doc  nDCG 0.7023
+  B full+bridge     743 B/doc  nDCG 0.7269
+  C word-only       198 B/doc  nDCG 0.6712
+  D edge champ      198 B/doc  nDCG 0.7112  (bridge +0.0400, vs full +0.0089)
+JSON {"corpus": "scifact", "n_docs": 5183, "n_test_q": 300, "n_train_qrels": 919, "train_test_query_leak": 0, "bdoc_full": 743.3, "bdoc_word_only": 198.2, "A_full": {"ndcg": 0.7023, "recall": 0.8274, "ms": 0.539}, "B_full_bridge": {"ndcg": 0.7269, "recall": 0.8399, "ms": 9.542}, "C_word_only": {"ndcg": 0.6712, "recall": 0.7841, "ms": 0.079}, "D_edge_champ": {"ndcg": 0.7112, "recall": 0.8124, "ms": 0.772}, "D_beats_A": true, "bridge_gain_on_word_only": 0.04, "shrink_vs_full": 3.75}
