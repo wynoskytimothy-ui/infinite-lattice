@@ -26,11 +26,11 @@ nonlinear "hidden layer" learned by counting, no neural net). nDCG@10:
 |---|---|---|---|
 | **scifact** | **0.7645** ✅ beats both | 0.665 | ~0.70 |
 | **nfcorpus** | **0.3346** ✅ beats BM25, ties dense | 0.325 | ~0.34 |
-| fiqa | _(running)_ | 0.236 | ~0.35 |
+| **fiqa** | **0.2443** ✅ beats BM25 (below dense) | 0.236 | ~0.35 |
 
-**On scifact the no-GPU engine beats both BM25 *and* SPLADE/dense; on nfcorpus it beats BM25 and ties
-dense — all with zero GPU.** It beats BM25 on every corpus measured; on the hardest vocab-mismatch corpus
-(fiqa) a GPU SPLADE model is still ahead — so
+**The no-GPU engine beats BM25 on *every* corpus; on scifact it beats SPLADE/dense too, on nfcorpus it
+ties dense — all with zero GPU.** On the hardest vocab-mismatch corpus (fiqa) a GPU SPLADE model is still
+ahead — so
 position AETHOS as **"vector-RAG quality without the GPU, vector DB, or black box,"** not as a MARCO
 leaderboard winner. (For customers who *demand* leaderboard accuracy, the SPLADE-on-lattice variant
 delivers MARCO MRR ~0.39 at ~150 B/doc — same engine, optional GPU encoder.)

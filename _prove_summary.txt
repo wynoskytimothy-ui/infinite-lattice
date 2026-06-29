@@ -1,0 +1,70 @@
+==== Prove the 4 STRUCTURAL claims of the AETHOS CPU stack, each printing P [PROVEN] ====
+RESULT: PASS on all 4. [1] DETERMINISTIC: 50 scifact queries x 10 results are byte-identical across an in-process re-run AND a fresh subprocess (sha256=fe9a2ab08208..., 0 collisions across 3 runs). [2] INVERTIBLE: 20000/20000 random triples round-trip exactly through meet->unmeet with 0 distinct->distinct collisions (20000 distinct inputs -> 20000 distinct addresses); library swap_meet bijection identity bank(a)@p==bank(p)@a holds 2000/2000. [3] APPEND-ONLY: 100 new docs added with NO rebuild in 1.88 ms (18.8 us/doc), 0 of the existing docs' posting/tf/doc_len entries mutated, new docs immediately searchable (sentinel query hits 10/10), and incremental-add rankings == full-rebuild rankings on 50/50 queries. [4] NO-GPU: 0 of {torch, transformers, tensorflow, jax, cupy, onnxruntime, sentence_transformers} present in sys.modules after importing the whole stack (only CPU numpy loaded; 236 total modules).
+REPRO: cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python _prove_structural.py
+NOTE: Honest correction on claim (3): the naive form of "old results unchanged" (strict byte-identical rankings on all 50 queries pre- vs post-append) is FALSE and I did not fudge it - 14/50 baselines shift. That is correct, not a bug: BM25 idf is read LIVE from N and df, so adding 100 docs legitimately nudges existing-doc scores. The real append-only guarantee, which I then proved, is stronger and exac
+
+==== GLASS-BOX claim: for a real scifact query the AETHOS lattice index ret [PROVEN] ====
+RESULT: PASS. Real query 5 '1/2000 in UK have abnormal PrP positivity.' -> #1 doc 13734012 (the GOLD/relevant doc), score=24.2898, "matched on terms [prp(idf=6.68, tf=3.0, chamber=9) -> +9.7677 = 40.2% of score; abnormal(idf=3.87, tf=4.6, chamber=27) -> +6.3993 = 26.3%]". The decomposition reconstructs the engine score to a MAX error of 3.55e-15 across the top-3 docs (well under the 1e-9 bar = exact to machine precision). Output is investor/regulator-readable and contrasts explicitly with a dense retriever's single opaque cosine.
+REPRO: cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python _prove_glassbox.py
+NOTE: The score decomposition (per-term idf-weighted BM25 parts summing exactly to the engine score, err 3.55e-15) is the fully durable, rigorous part -- it is a faithful re-derivation of AppendOnlyLatticeIndex._score and is what a vector DB genuinely cannot produce. Two honesty caveats: (1) The displayed READABLE evidence is the word-gear terms; the index also has char-trigram/prefix robustness gears w
+
+==== PROVE "beats BM25, CPU-only, tiny + fast": AppendOnlyLatticeIndex retr [PROVEN] ====
+RESULT: PASS. nDCG@10 = 0.7023 (> BM25 ref 0.665, delta +0.0373). CPU-only: median query latency 0.59-0.62 ms (p90 ~1.0 ms), ingest 2.33s = ~2,220-2,256 docs/s, on-disk index 3,852,029 B = 743 B/doc over 5183 docs (vocab 57,847 primes). Identical across two runs (nDCG and B/doc bit-stable; latency 0.59/0.62 ms). GPU check confirms the pure-numpy CPU path is used (torch.cuda present but unused).
+REPRO: cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python "_prove_retrieval_cpu.py"
+NOTE: The 0.7023 is the PURE LEXICAL index (no GPU, no supervision) — it cleanly beats BM25 0.665 (+0.0373), which is exactly the retrieval-cpu PASS target. It is NOT the 0.7645 headline from the brief: that higher number requires the supervised RelevanceBridges reranker (learned from train qrels) layered on top, which this script intentionally does not include to keep the claim "the index alone beats B
+
+==== NEW capability: the AETHOS lattice MEET can CHAIN a multi-hop / bridge [PROVEN] ====
+RESULT: PASS (deterministic, re-ran identical twice). SYNTHETIC: single-hop bridge-doc recall 3/5, meet-chain 5/5 (+2; e.g. 'varnhold'/'qixly' cases B is unreachable single-hop, chain recovers it). REAL scifact: on 60 mined HARD bridge pairs (single-hop recall 0/60 = 0.000 by construction -- B shares no query term), meet-chain recovers the 2nd-hop answer doc B in 45/60 = 0.750. Net: 47 bridge docs recovered that single-hop BM25 missed (synthetic +2, real +45/60).
+REPRO: cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python _prove_multihop.py
+NOTE: Honest caveats: (1) The REAL single-hop 0/60 is 0 BY CONSTRUCTION -- I deliberately filtered to hard cases where single-hop already fails, so the load-bearing number is the chain's 0.750 RECOVERY rate on otherwise-unreachable docs, not a head-to-head delta on a natural query distribution. The chain still misses 15/60 (entity too high-df to surface B in the top-k expansion, or B's tf on X is low). 
+
+==== Two glass-box, no-GPU selling points on the AppendOnlyLatticeIndex: (A [PROVEN] ====
+RESULT: PASS both. (A) Exact-match candidate recall = 100.0000% — 4314/4314 single-term (term,doc) matches reachable, 0 false negatives, plus 300/300 two-term phrase queries had 100% of co-occurring docs reachable via the posting-list meet. Tombstone stress: after removing 200 docs and testing 2000 terms (247,963 alive matches), 0 false negatives and 0 removed-doc leaks. (B) Dedup precision=100.00%, recall=99.17%, F1=99.58% at Jaccard>=0.80 (exact-dup recall 100.0%, near-dup recall 98.3%, FN=2/240), comparing only 240 candidate pairs vs 352,380 full N^2 in 2ms. Threshold sweep: precision stays 100% for all thresholds 0.60-0.90; recall stable at 99.17% for thr in [0.60,0.80], degrading gracefully to 89.2% (0.85) and 58.3% (0.90).
+REPRO: cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python "_prove_compliance_dedup.py"
+NOTE: Framed honestly per the prompt. (A) The 100% is CANDIDATE recall on the inverted index — the posting list provably contains every doc with that exact token, so no scoring threshold can drop a containing record (the load-bearing compliance guarantee). It is NOT a claim about ranking quality or about fuzzy/semantic matches — only exact tokenized terms, after the index's own stop-word/length>2/lowerc
+
+==== SYNTHESIS ====
+The five agents' findings are already in hand. Let me give Timothy the synthesized deliverable directly — no need to re-run anything, the scorecard is what was asked for.
+
+# AETHOS CPU Stack — What Passed (safe to pitch)
+
+## (1) PROVEN-claims scorecard — each has a passing reproducible test + a number
+
+| # | Claim | Number (measured) | Reproduce |
+|---|-------|-------------------|-----------|
+| 1 | **Beats BM25, CPU-only, index alone** | scifact nDCG@10 = **0.7023** vs BM25 0.665 (**+0.0373**); pure lexical, no GPU, no supervision | `python _prove_retrieval_cpu.py` |
+| 2 | **Sub-ms, tiny, fast ingest** | median **0.59–0.62 ms/query** (p90 ~1.0 ms); **~2,250 docs/s** ingest; **743 B/doc** on disk (5183 docs) | `python _prove_retrieval_cpu.py` |
+| 3 | **Deterministic / bit-identical** | 50 queries × 10 results byte-identical in-process AND across a fresh subprocess (sha256 `fe9a2ab0…`), 0 collisions over 3 runs | `python _prove_structural.py` |
+| 4 | **Invertible / zero-collision meet** | **20000/20000** triples round-trip meet→unmeet exactly, 20000 distinct→20000 distinct (0 collisions); library `swap_meet` bijection identity 2000/2000 | `python _prove_structural.py` |
+| 5 | **Append-only, no rebuild** | 100 docs added in **1.88 ms** (18.8 µs/doc), **0** existing posting/tf/doc_len entries mutated, immediately searchable, incremental == full rebuild on **50/50** queries | `python _prove_structural.py` |
+| 6 | **No GPU** | **0/7** of {torch, transformers, tensorflow, jax, cupy, onnxruntime, sentence_transformers} in `sys.modules` after importing the full stack (236 modules, CPU numpy only) | `python _prove_structural.py` |
+| 7 | **Glass-box (explanation IS the score)** | per-term idf-weighted BM25 parts reconstruct the engine score to **3.55e-15** (machine precision) across top-3 docs of a real query | `python _prove_glassbox.py` |
+| 8 | **Exact-match completeness** | **100.0000%** candidate recall, 4314/4314 single-term + 300/300 phrase-meet queries, 0 false negatives; 0 leaks after tombstoning 200 docs (247,963 alive matches) | `python _prove_compliance_dedup.py` |
+
+(Run any of the above from `cd "C:/Users/wynos/New folder (3)"` with `PYTHONUTF8=1`.)
+
+## (2) New solvable problems that worked — new selling points
+
+- **Multi-hop / bridge retrieval with no stored graph.** A single content-meet turns the corpus's own rare-entity co-occurrence into a free second hop. Synthetic bridge corpus: **5/5** vs single-hop 3/5. Real scifact, 60 mined hard bridge pairs (single-hop **0/60** by construction): meet-chain recovers the answer doc **45/60 = 0.750**. Net **+47** docs recovered that single-hop lexical scoring structurally cannot reach. → `python _prove_multihop.py`
+- **Dedup / near-duplicate from content signature, no embeddings.** Word-prime-set Jaccard (the meet) with rarest-prime blocking: **precision 100.00%, recall 99.17%, F1 99.58%** at Jaccard≥0.80, comparing 240 candidate pairs vs 352,380 full N² in **2 ms**. Precision holds 100% across thresholds 0.60–0.90. → `python _prove_compliance_dedup.py`
+- **Compliance "find every record" guarantee.** The exact-match 100% candidate recall above is the load-bearing number for regulated search — no scoring threshold can drop a containing record.
+
+## (3) Honest — failed or partial (do NOT pitch as-is)
+
+- **0.7645 headline is NOT what the index alone proved.** The reproducible index-alone number is **0.7023**. The 0.7645 requires the supervised `RelevanceBridges` reranker (learned from train qrels) layered on top; that layer was *not* exercised in these passing scripts. Pitch 0.7023 as airtight; 0.7645 only with the reranker explicitly named and a fresh passing run.
+- **"Old results unchanged" (strict form) is FALSE — and the agent did not fudge it.** 14/50 baselines shift after append because BM25 idf is read live from N/df. The *true*, proven append-only guarantee is the stronger triple: 0 existing entries mutated + immediately searchable + incremental == rebuild. Pitch that triple, never "rankings never change."
+- **Multi-hop is mechanism, not end-task.** The 0.750 is recovery on *mined pseudo-bridge* questions (rare co-occurrence + synthetic A-only queries), not human-authored multi-hop qrels (no HotpotXX labels in scifact). Single-hop 0/60 is 0 by construction (hard cases only). Honest claim = "the meet makes a free second hop," not a head-to-head multi-hop nDCG win. Chain still misses 15/60.
+- **Dedup precision 100% is partly a scifact property** (few organic near-dups cross 0.80) on synthetically injected pairs; expect some (arguably-genuine) false positives on boilerplate-heavy corpora.
+- **Glass-box caveats:** the readable evidence is the word-gear terms only (char-trigram/prefix gears are folded into the exact total but not itemized); the "32-chamber region" is a real deterministic address label, not an independent relevance signal; the "cosine=0.83" contrast line is an illustrative placeholder, not a measured dense baseline.
+- **Not in any passing test here:** the 0.7645/nfcorpus 0.3346/fiqa 0.2443 *supervised* headlines, and BM25 0.665 itself (taken as a fixed reference, not re-run head-to-head). Latency/throughput are this Windows box; order of magnitude is the durable part.
+
+## (4) The 3 strongest, defensible bullets for the investor one-pager
+
+1. **Beats BM25 on accuracy while running entirely on CPU at sub-millisecond latency.** BEIR-scifact nDCG@10 **0.7023 vs 0.665** (+0.0373), **0.59–0.62 ms/query**, **743 B/doc**, **~2,250 docs/s** ingest — no GPU, no model downloads, no supervision.
+  *Reproduce:* `cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python _prove_retrieval_cpu.py`
+2. **Fully glass-box and deterministic — auditable in a way vector DBs structurally are not.** Every ranking is bit-identical across processes (sha256-stable), and each score decomposes into per-term idf-weighted contributions that reconstruct the engine output to **3.55e-15** (machine precision). For compliance search, exact-term recall is **100.0000%** — zero false negatives by construction.
+  *Reproduce:* `cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python _prove_glassbox.py` and `… python _prove_compliance_dedup.py`
+3. **Append-only and self-extending: new data is live in microseconds, and the same content-meet operator delivers capabilities BM25 can't.** Adds **100 docs in 1.88 ms** with **0** existing entries mutated (incremental == full rebuild, 50/50), the meet is a verified **zero-collision invertible bijection (20000/20000)**, and that one operator powers free multi-hop bridge recovery (**+47** otherwise-unreachable docs) and embedding-free dedup (**F1 99.58%**).
+  *Reproduce:* `cd "C:/Users/wynos/New folder (3)" && PYTHONUTF8=1 python _prove_structural.py`, `… python _prove_multihop.py`, `… python _prove_compliance_dedup.py`
+
+**Bottom line:** the durable, pitchable story is **0.7023 > BM25, CPU-only, sub-ms, 743 B/doc, fully deterministic and glass-box, append-only**, plus three new meet-powered capabilities (multi-hop +47, dedup F1 99.58%, exact-match 100%). Hold the supervised 0.7645 until it has its own passing run with the reranker named.
