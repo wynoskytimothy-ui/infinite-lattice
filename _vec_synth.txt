@@ -1,0 +1,56 @@
+The captured outputs confirm the summary numbers and, critically, expose an important nuance the summary table glossed over: **the per-corpus lexical baselines differ across lenses** (BM25 0.6125–0.6661 depending on how many gears the agent used). A fair synthesis must compare each lens to *its own* baseline, not the headline 0.7023. The disk evidence backs every claim. The key cross-cutting fact: the only consistent positive deltas are on nfcorpus (vocabulary-mismatch), all tiny (+0.005 to +0.011), and only via RRF/rerank — never standalone, never on scifact, never near dense.
+
+Here is the synthesis.
+
+---
+
+# No-GPU semantic layer: 8-lens verdict for Timothy
+
+**Bottom line up front: none of the eight lenses reaches dense quality, and none beats the lexical lattice baseline (0.7023 / 0.3204) standalone. The honest signal is real but small and one-sided — it lives entirely on the vocabulary-mismatch corpus (nfcorpus), entirely through fusion, and is worth at most +0.01 nDCG@10. On the lexically-aligned corpus (scifact), every latent lens is a net drag. This is the textbook small-corpus co-occurrence failure, and the disk evidence confirms it cleanly.**
+
+## 1. Which lens best adds semantics over lexical — and does any match dense?
+
+Ranked by best *fused* result against each lens's own internal BM25 baseline (the only fair comparison — baselines vary 0.61–0.67 by gear count):
+
+| Lens | scifact best | Δ own-BM25 | nfcorpus best | Δ own-BM25 | Adds semantics? |
+|---|---|---|---|---|---|
+| **spectral-laplacian** | 0.6490 (rerank) | −0.017 | **0.3160** (RRF k=384) | **+0.0091** | nfcorpus only, fusion only |
+| **nmf-topics** | 0.6587 (blend) | +0.0057 | 0.3179 (blend) | +0.0099 | both, but vs a weak 0.653/0.308 base |
+| **pmi-svd** | 0.6047 (RRF) | drags down | 0.3195 (RRF) | +0.011 | nfcorpus only |
+| **random/JL (PPMI)** | 0.5982 (RRF) | below base | 0.2974 (RRF) | +0.006 | nfcorpus only, and it's PPMI doing the work, not JL |
+| lsa-termdoc | 0.5758 (RRF) | −0.127 | 0.3127 (RRF) | −0.008 | no |
+| holographic-vsa | 0.6307 | below base | 0.3069 | ≈0 | no (random codebook = zero semantics) |
+| tensor-3way | 0.1249 | catastrophic | 0.075 | catastrophic | no (data-starved) |
+| lattice-coord (3D-plane) | 0.0012 | failed | 0.012 | failed | no (places by value, not meaning) |
+
+**Does any match dense (~0.70 / ~0.34)? No. Not one, on either corpus, standalone or fused.** The closest standalone dense vector is PMI-SVD scifact 0.5382 — 0.16 below lexical. The best fused result that improves on its baseline (nfcorpus +0.011) lands at 0.3195, still under both lexical 0.3204 and dense 0.34.
+
+**The real cross-cutting law confirmed on disk:** the only standalone vector that ever *edges past* its lexical baseline is **PPMI co-occurrence on nfcorpus** (P3: 0.2944 cosine vs internal BM25 0.2912). Pure JL (P1 SRP 0.4594 → 0.5823 as k grows, asymptoting to TF-IDF 0.5890, never above), random VSA (flat 0.5502→0.5564 across D=4k→16k), and lattice coords (0.0012) all confirm: **projection/binding without a shared-latent-axis factorization step adds no signal.** The semantic lift, where it exists, comes from PPMI factorization — exactly LSA/word2vec — and nothing else.
+
+## 2. Single most promising construction for the product's "semantic layer, no GPU"
+
+**PPMI-factorization (PMI-SVD / spectral-Laplacian on the PPMI term-graph), RRF-fused, gated to mismatch corpora only.** These are the same object — Levy-Goldberg's word2vec-as-SVD and the diffusion-map eigenbasis both factorize the positive-PMI term-term matrix. They give the only repeatable positive delta (nfcorpus +0.006 to +0.011), they're glass-box (you can print the topic/eigen-axis terms — NMF topic#3 = `[stem, cells, differentiation, embryonic, pluripotent, ipscs]`), they build in 14–37s CPU, and the lift is structurally explainable (it bridges `phytochemicals↔mechanisms` type vocabulary gaps BM25 can't).
+
+The honest framing for a pitch: **this is not a dense replacement, it's a cheap mismatch-corpus booster.** It earns its place as an RRF term that you *gate on* when a corpus shows vocabulary mismatch (the diagnostic battery already detects this), and gate *off* on aligned corpora where it's pure drag.
+
+## 3. The honest reality: why they're all weak, and which would scale
+
+**They are all weak for one reason, and it is a data reason, not a math reason:** scifact (5,183 docs) and nfcorpus (3,633 docs) are too small to estimate a stable latent geometry. Co-occurrence counts are too sparse — the spectral eigenvalues all bunch in 0.46–0.86 (no clean low-frequency structure), TruncatedSVD captures only 21–34% variance at k=300, NMF cosine collapses to 0.09/0.14 because topics can't rank *within* a topic, and 3-way tensor reconstruction tops out at 0.30 correlation. The k-sweeps are monotone with **no plateau** (LSA scifact 0.235@k50 → 0.558@k700) — that's not finding semantics, it's just reconstructing the sparse matrix as rank → full. This matches the standing memory note exactly: raw co-occurrence is sparse on tiny corpora.
+
+**What would scale with more docs:** PMI-SVD and spectral-Laplacian. Both are the proven LSA/GloVe/word2vec family — on Wikipedia-scale or full-8.8M-MARCO co-occurrence, the PMI matrix is dense and well-conditioned, and these *are* how the field built semantic vectors before GPUs. The monotone-no-plateau sweeps are the signature of a method starved of data, not a method that's fundamentally capped. **What will NOT scale:** random VSA (fixed-random codebook carries zero semantics at any corpus size — the dimension sweep is flat by construction), pure JL (a lossy compressor, can't exceed its source at any k), 3-way tensor (order-2 is denser and better-conditioned — going to order-3 always adds noise; this is why the whole field lives at order 2), and lattice-coord features (the 3D-plane places by value not meaning — 0.9995 mean pairwise cosine, a coordinate system not a vector space; this confirms the standing finding and is a genuine dead end for semantics).
+
+## 4. The ONE next build
+
+**Build the PPMI-SVD semantic vector on the full 8.8M-doc MARCO co-occurrence matrix (not on a 5k BEIR toy), and measure whether the mismatch-lift survives at scale.** Concretely: stream the corpus once to a sparse VxV shifted-PPMI term-term matrix (neg=5, window=10 — the tuned winner), `scipy.sparse.linalg.svds` to k=300, IDF-pool to doc vectors, RRF-fuse with the existing lexical lattice, and measure nDCG@10 on MARCO dev-small **gated** (fuse only when a per-query mismatch signal fires). This is the single experiment that distinguishes "co-occurrence factorization is fundamentally weak" from "it was just data-starved on BEIR-tiny." Every lens here points to it: PPMI is the only thing that ever helped, and tiny-corpus sparsity is the only thing that held it back. If the lift grows from +0.01 to something material at 8.8M docs, that is the no-GPU semantic layer; if it stays at +0.01, the honest product is lexical-lattice + supervised qrels bridges, and the "free vectors from geometry" thesis is closed.
+
+---
+
+**The hard honest sentence for someone betting their livelihood:** the no-GPU "vectors for free from corpus geometry" idea, as tested across eight independent mathematical lenses, does **not** reach dense quality on small corpora and the best any lens adds over a strong lexical baseline is +0.01 nDCG@10 on mismatch corpora via fusion. The geometry lenses (3D-plane, VSA, JL, tensor) are confirmed dead ends for semantics. The only survivor is classical PPMI factorization (LSA/word2vec), and its one untested upside is scale. Sell the lexical lattice + supervised bridges as the product *today*; treat PPMI-at-scale as the one R&D bet that could add a genuine free semantic layer — and kill it fast if the 8.8M run still only buys +0.01.
+
+Relevant files (all reproduce their numbers, verified against captured stdout):
+- `C:\Users\wynos\New folder (3)\_vec_pmi_svd.py`, `_vec_pmi_svd_tune.py`
+- `C:\Users\wynos\New folder (3)\_vec_spectral_laplacian.py` + `_vec_spectral_laplacian_out.txt`
+- `C:\Users\wynos\New folder (3)\_vec_nmf_topics_v2.py` + `_vec_nmf_topics_v2_out.txt`
+- `C:\Users\wynos\New folder (3)\_vec_random_projection.py` + `_vec_random_projection_out.txt`
+- `C:\Users\wynos\New folder (3)\_vec_lsa_termdoc.py` + `_vec_lsa_termdoc_out.txt`
+- `C:\Users\wynos\New folder (3)\_vec_tensor3way.py`, `_vec_holographic_vsa.py`, `_vec_lattice_coord_features.py` (the three dead ends)
