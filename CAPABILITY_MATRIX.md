@@ -50,6 +50,29 @@ by-value, ~7 measured nulls). Map every capability against that line.
 forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, dedup, coprimality), STRUCTURE
 (O(1) address, ECC, scheduling, min-plus), and NONLINEAR-BY-BINDING (VSA 1.000 vs linear 0.546).
 
+## WAVE 3 — domains 21-30 (`_cap_probe_wave3.py`, 2026-06-29) — 9 PROVEN, 1 PARTIAL
+| # | domain | capability | verdict | measured |
+|---|---|---|---|---|
+| 21 | crdt | OR-Set convergent replicated merge | PROVEN | commutative+idempotent+associative |
+| 22 | set-reconciliation | reconcile sets differing by d via product-residual | PROVEN | **14 B residual vs 6009 B to ship the set** (Minisketch-class) |
+| 23 | range-queries | predecessor/successor via sorted lattice order | PROVEN | O(log N), 0.318 µs/query on 1M keys |
+| 24 | string-matching | Rabin-Karp prime polynomial rolling hash | PROVEN | exact O(n) substring search |
+| 25 | consistent-hashing | prime-multiplicative even load | PROVEN | 64 nodes, load CV=0.000 |
+| 26 | cardinality | exact count-distinct vs HLL | PARTIAL | exact but O(n) vs HLL O(loglog n) @1% err |
+| 27 | homomorphic | set ∩/∪ on encoded products, no decode | PROVEN | gcd=∩, lcm=∪, exact cardinalities |
+| 28 | constraint | proper graph coloring + prime certificate | PROVEN | 6 colors, 587 edges certified (NOT NP-optimal) |
+| 29 | knowledge-graph | transitive multi-hop reachability (meet-closure) | PROVEN | closure == BFS (this IS the +47 multi-hop) |
+| 30 | reversible | bijective meet = reversible op (no erasure) | PROVEN | forward∘inverse=identity on 500k (Landauer-reversible) |
+
+## ░░ CAMPAIGN TALLY — 30 capabilities measured (waves 1-3) ░░
+**24 PROVEN · 4 PARTIAL · 2 FAILED.** Standouts: O(1) invertible+reversible address, exact set-algebra
+(PSI/dedup/homomorphic/reconciliation/coprimality — the patent's claim 5, proven 8 ways), min-plus graph
+algebra (APSP/scheduling/KG-reachability from ONE operator), VSA nonlinear classifier (1.000 vs linear 0.546),
+O(d) set reconciliation (14 B vs 6 KB), whitebox RCA (500/500). Honest losses: raw compression (gzip wins),
+forecasting (ties last-value), space-vs-exactness PARTIALs (sketching, membership, cardinality). Next: waves
+4+ go DEEPER per domain + remaining frontiers (succinct DS, automata, SAT, type-theory, computational geometry,
+homomorphic compute, federated merge).
+
 ## Carried-forward PROVEN (from earlier this session — measured, reproducible)
 | domain | capability | measured | file |
 |---|---|---|---|
