@@ -121,8 +121,28 @@ forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, d
 | 69 | geometry | 2D convex hull (monotone chain) | PROVEN | substrate |
 | 70 | hashing | cuckoo / perfect placement | PARTIAL | NATIVE (perfect-hash proven w1; cuckoo impl) |
 
-## ░░ CAMPAIGN TALLY — 70 capabilities measured (waves 1-7) ░░
-**56 PROVEN · 12 PARTIAL · 2 FAILED.**
+## WAVE 8 — domains 71-80 (`_cap_probe_wave8.py`, 2026-06-29) — 10 PROVEN
+| # | domain | capability | verdict | tag |
+|---|---|---|---|---|
+| 71 | crypto | Diffie-Hellman key exchange | PROVEN | **NATIVE** (modular exp / prime ring) |
+| 72 | crypto | Shamir (k,n) secret sharing | PROVEN | **NATIVE** (Lagrange / prime field) |
+| 73 | provenance | Merkle authenticated dict (inclusion proof) | PROVEN | log-size proofs |
+| 74 | crypto | discrete log (baby-step giant-step) | PROVEN | prime-group |
+| 75 | number-theory | continued fractions (best rational approx) | PROVEN | **NATIVE** (Euclid/Stern-Brocot) |
+| 76 | data-structures | trie prefix search | PROVEN | substrate |
+| 77 | data-structures | binary heap priority queue | PROVEN | substrate |
+| 78 | data-structures | skip list (ordered set) | PROVEN | substrate |
+| 79 | data-structures | Bloom filter (not deletable; cf quotient w39) | PROVEN | substrate |
+| 80 | systems | LRU cache (O(1) get/put) | PROVEN | substrate |
+
+## ░░ CAMPAIGN TALLY — 80 capabilities measured (waves 1-8) ░░
+**66 PROVEN · 12 PARTIAL · 2 FAILED.** NATIVE crypto/number-theory now confirmed (DH, Shamir, discrete-log,
+CF, NTT, CRT) — the prime ring is a genuine cryptographic + exact-arithmetic substrate. Map CONVERGED:
+the lattice is a complete general-purpose computer with NATIVE strengths in exact addressing/algebra/
+number-theory/crypto; SUBSTRATE for the standard algorithm toolkit; WALLS at compression & semantics.
+**MATH FRONTIER (`_math_chsh.py`):** local 4-way branching = classical (CHSH S=2); with complex amplitudes
+= QM exactly (2√2); 'beyond Hilbert space' (S>2√2) is non-physical (Tsirelson). Defensible 'more' = ONE
+deterministic glass-box substrate hosting BOTH QM-simulation AND classical compute.
 
 ### THE MAP, in 3 categories (this is how to build on it)
 - **NATIVE strengths — BUILD HERE** (the formula is uniquely good): O(1) invertible/reversible content-address,
