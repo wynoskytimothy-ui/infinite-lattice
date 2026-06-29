@@ -31,6 +31,25 @@ by-value, ~7 measured nulls). Map every capability against that line.
 | 9 | storage | content-addressed exact dedup (product fingerprint) | PROVEN | 300/300 dup-groups, 0 FN |
 | 10 | number-theory | independence via coprimality (gcd=1) | PROVEN | 3000/3000 gcd=1 ⇔ disjoint |
 
+## WAVE 2 — domains 11-20 (`_cap_probe_wave2.py`, 2026-06-29) — 7 PROVEN, 1 PARTIAL, 2 FAILED
+| # | domain | capability | verdict | measured |
+|---|---|---|---|---|
+| 11 | compression | shared-substructure factoring (set-of-sets) | **FAILED** | factored+gzip 73920 B ≥ gzip 73808 — gzip already gets the repetition |
+| 12 | cryptography | dynamic accumulator: O(1) membership witness | PROVEN | witness verifies, naive forgery blocked (RSA-acc structure) |
+| 13 | databases | invertible composite index + O(1) equi-join | PROVEN | invertible, 25000/25000 joined in 7 ms |
+| 14 | machine-learning | VSA bind/bundle nonlinear classifier (no backprop) | PROVEN | **acc 1.000 vs logistic 0.546** on nonlinear parity |
+| 15 | anomaly | whitebox RCA names the faulty channel | PROVEN | top-1 naming 500/500 = 1.000 (specificity = the claim) |
+| 16 | prediction | lattice-symbol Markov forecast | **FAILED** | MAE 0.392 vs last-value 0.359 — ties/loses, no breakthrough |
+| 17 | scheduling | (max,+) critical-path / makespan | PROVEN | makespan 587, matches networkx |
+| 18 | language-modeling | PLMC char LM + geometric-cluster backoff | PARTIAL | perplexity 1.49→1.49 (corpus too easy; lever real, unshown) |
+| 19 | rng | NIST-lite PRNG quality (von Neumann debiased) | PROVEN | freq/runs/autocorr all pass — good PRNG (NOT a TRNG) |
+| 20 | security | tamper-evidence / avalanche of keyed set-hash | PROVEN | 0.496 bit-flip on 1-elem change (ideal 0.5) |
+
+**Waves 1+2 = all 20 domains mapped: 15 PROVEN, 3 PARTIAL, 2 FAILED.** The 2 FAILED (raw compression, forecasting)
++ the PARTIALs sharpen the meta-pattern: the formula does NOT beat a tuned general coder on space, and is NOT a
+forecasting breakthrough — it wins on EXACT ALGEBRA (accumulator, PSI, join, dedup, coprimality), STRUCTURE
+(O(1) address, ECC, scheduling, min-plus), and NONLINEAR-BY-BINDING (VSA 1.000 vs linear 0.546).
+
 ## Carried-forward PROVEN (from earlier this session — measured, reproducible)
 | domain | capability | measured | file |
 |---|---|---|---|
@@ -56,8 +75,8 @@ by-value, ~7 measured nulls). Map every capability against that line.
 
 ## The 20 domains — coverage tracker (campaign target: hundreds of tests)
 1. ✅ indexing/search · 2. ✅ provenance/audit · 3. ◐ sketching/streaming · 4. ✅ privacy/PSI · 5. ✅ distributed/coordination-free · 6. ✅ graph algorithms · 7. ◐ data-structures/membership · 8. ✅ coding/ECC · 9. ✅ storage/dedup · 10. ✅ number-theory ·
-11. ⬜ compression (lossless/grammar) · 12. ⬜ cryptography (commitments/ZK/homomorphic) · 13. ⬜ databases (joins/indexes) · 14. ⬜ machine-learning (VSA net/classification/clustering) · 15. ⬜ anomaly/monitoring (RCA residuals) · 16. ⬜ prediction/forecasting (RUL/time-series) · 17. ⬜ scheduling/optimization (assignment/bin-packing) · 18. ⬜ language-modeling (PLMC generative) · 19. ⬜ random-number-generation (TRNG/NIST) · 20. ⬜ security (PSI/secure-dedup/tamper-evidence) ·
-*(+ more as they surface: error-correcting codes beyond repetition, succinct data structures, range/successor queries, set reconciliation/Minisketch, CRDTs, Merkle/blockchain, computational geometry, SAT/constraint, automata, type theory.)*
+11. ✗ compression (gzip wins) · 12. ✅ cryptography (accumulator) · 13. ✅ databases (invertible join) · 14. ✅ machine-learning (VSA 1.0 vs 0.55) · 15. ✅ anomaly/RCA (500/500) · 16. ✗ prediction (ties last-value) · 17. ✅ scheduling (max,+) · 18. ◐ language-modeling (PLMC) · 19. ✅ rng (good PRNG) · 20. ✅ security (avalanche 0.496) ·
+**ALL 20 first-pass mapped (15 ✅ / 3 ◐ / 2 ✗).** Waves 3+ go DEEPER (multiple tests/domain) + new domains as they surface: ⬜ CRDTs · ⬜ Merkle/blockchain · ⬜ succinct data-structures · ⬜ range/successor queries · ⬜ set reconciliation (Minisketch) · ⬜ computational geometry · ⬜ SAT/constraint · ⬜ automata/regex · ⬜ type-theory/proof-checking · ⬜ homomorphic compute · ⬜ load-balancing/consistent-hashing · ⬜ Bloom/HLL cardinality · ⬜ deduplication-at-scale · ⬜ knowledge-graph reasoning · ⬜ federated/CRDT merge.
 
 ## Campaign plan
 - **Wave N** = one runnable `_cap_probe_waveN.py` (≈10 measured probes) + agent waves (4–5, when the rate
