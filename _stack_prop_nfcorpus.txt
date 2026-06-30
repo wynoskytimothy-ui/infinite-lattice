@@ -1,0 +1,7 @@
+======================================================================================
+PROP IN THE STACK — nfcorpus: 3,633 docs, 323 q, distilled=y
+======================================================================================
+  union ceiling@300  (4 sources, no prop): 0.4867
+  union ceiling@300  (5 sources, + prop) : 0.5068   (+0.0201)
+  gold ONLY propagation reaches (not in the other 4): 0.0201
+  -> propagation is COMPLEMENTARY (raises the ceiling) with the existing sources.
