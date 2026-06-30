@@ -1,0 +1,10 @@
+device=cuda
+  scifact: doc cache 5,183 in 6s
+  scifact: distill 1518 words
+  scifact: ready (docs=True, distill=True)
+  fiqa: doc cache 57,638 in 62s
+  fiqa: distill 1586 words
+  fiqa: ready (docs=True, distill=True)
+  trec-covid: doc cache 171,332 in 186s
+  trec-covid: distill 199 words
+  trec-covid: ready (docs=True, distill=True)

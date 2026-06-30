@@ -67,6 +67,11 @@ def main():
     print(f"\n  CAPTURED: recall@100 {base:.3f} -> {R['rerank@100']/nq:.3f}; @200 {R['rerank@200']/nq:.3f}; "
           f"@500 {R['rerank@500']/nq:.3f} (ceiling {R['ceiling@300pool']/nq:.3f}).")
     print("  deeper pools raise the ceiling; recall@k shows how much gold sits just past 100.")
+    import json
+    print("JSON " + json.dumps({"corpus": name, "n_docs": N, "n_q": nq, "distilled": spl is not None,
+                                "lexical_r100": round(base, 4), "stack_r100": round(R['rerank@100']/nq, 4),
+                                "stack_r200": round(R['rerank@200']/nq, 4), "stack_r500": round(R['rerank@500']/nq, 4),
+                                "ceiling300": round(R['ceiling@300pool']/nq, 4), "rerank_ndcg": round(ndcg/nq, 4)}))
 
 
 if __name__ == "__main__":
