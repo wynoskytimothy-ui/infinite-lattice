@@ -1,0 +1,12 @@
+============================================================================================
+DISTILL SPLADE -> LATTICE — nfcorpus: 3,633 docs (encoder-free serve test)
+============================================================================================
+
+  mode                     nDCG@10  Recall@100  encoder@serve?
+  lexical                   0.3071      0.2379              no
+  splade_full               0.3361      0.2821             YES
+  distilled                 0.3208      0.2750              NO
+  distilled_rrf             0.3243      0.2680              NO
+
+  RECALL@100: lexical 0.238 -> distilled(no encoder) 0.275 -> SPLADE-full 0.282 (distilled recovers 84% of SPLADE's recall gain, NO query encoder)
+  nDCG@10:    lexical 0.307 -> distilled 0.321 -> distilled+lex 0.324 -> SPLADE-full 0.336

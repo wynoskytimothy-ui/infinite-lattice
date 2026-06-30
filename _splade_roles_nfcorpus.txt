@@ -1,0 +1,14 @@
+============================================================================================
+SPLADE'S FOUR ROLES — nfcorpus: 3,633 docs, 323 queries (encode cached)
+============================================================================================
+  encoded (or cached) in 961s; 127 terms/doc
+
+  role                         nDCG@10  Recall@100
+  lexical                       0.3071      0.2379
+  splade                        0.3361      0.2821
+  rrf                           0.3265      0.2702
+  splade_rerank                 0.3258      0.2379
+  union ceiling (lex|splade)                0.3104
+
+  RECALL: lexical 0.238 -> +SPLADE expansion 0.282 -> RRF-fused 0.270 (fusion reaches what each misses)
+  nDCG:   lexical 0.307 -> SPLADE 0.336 -> fused 0.326 | SPLADE-as-reranker 0.326
