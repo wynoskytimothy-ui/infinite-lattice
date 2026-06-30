@@ -121,3 +121,32 @@ THE RECALL IS POOL-DEPTH-LIMITED, not gone: the gold sits just past rank-100. De
 recovers it — recall@500 0.456 vs lexical 0.238 (nearly 2x), nDCG held 0.332. For a RAG feeding an LLM a
 top-200..500 context, this DOUBLES recall. recall@100 strictly is reranker-bound (a stronger reranker is the
 lever there). The campaign's located headroom is captured at depth.
+
+## Wave 3b GENERALIZED — the full stack across 4 corpora (the campaign's payoff)
+
+| corpus | lexical@100 | stack@100 | stack@200 | stack@500 | ceiling@300 | rerank nDCG | ceiling lift |
+|---|---|---|---|---|---|---|---|
+| scifact | 0.876 | 0.901 | 0.924 | 0.965 | 0.972 | 0.600 | +11% |
+| nfcorpus | 0.238 | 0.272 | 0.334 | 0.456 | 0.487 | 0.332 | +105% |
+| fiqa | 0.508 | 0.601 | 0.663 | 0.736 | 0.737 | 0.314 | +45% |
+| trec-covid | 0.095 | 0.123 | 0.196 | 0.314 | 0.319 | 0.687 | **+236%** |
+
+**The stack GENERALIZES on all 4 corpora — no failures.** Honest-comparison discipline (enforced):
+- **Same-depth (apples-to-apples): stack@100 > lexical@100 EVERYWHERE** (+2.9% / +14.5% / +18.3% / +29.7%). The
+  stack never hurts → a safe always-on replacement for lexical-only retrieval.
+- **Method-fair proof: the union ceiling@300 is recall lexical-alone could NEVER reach at any depth** (those gold
+  docs aren't in lexical's tail — they need the drift/bridge/SPLADE sources). nfcorpus 0.487, trec-covid 0.319.
+- **Helps MOST exactly where predicted** — relative ceiling lift: trec-covid +236% > nfcorpus +105% > fiqa +45% >
+  scifact +11%. The low-recall semantic-bound corpora have the most gold to recover.
+- **fiqa is the biggest same-depth win (+18.3%)** — the stack SOLVES the Wave-1 fiqa paradox (drowning by
+  relevant common terms → semantic sources recover it).
+- **Saturation: stack@500 reaches 93–99.8% of ceiling@300** → depth-300 is the knee.
+
+**Honest caveats:** ceiling@300 is a union/oracle upper bound (served recall is ~stack@300, between s200/s500);
+deeper-k gains alone aren't head-to-head wins (any method gets more with budget) — the same-depth s100 win + the
+method-fair ceiling are the load-bearing claims. fiqa's low rerank nDCG (0.314) despite high recall = its
+bottleneck is reranker precision, not recall.
+
+**DEPLOY:** fuse the 4 sources → pool depth 300 → cross-encoder rerank → top-k to the LLM. Corpus-adaptive depth
+(aligned/high-lexical saturates by 200-300; semantic-bound pools to 300-500). The campaign is complete: every
+lever measured, aimed by the prior wave's diagnosis, glass-box throughout.
