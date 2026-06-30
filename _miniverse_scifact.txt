@@ -1,0 +1,8 @@
+================================================================================
+MINI-VERSE (passage) — scifact: 5,183 docs, 24,978 passages, avg 215 words/doc
+================================================================================
+  retrieval               recall@100   nDCG@10
+  flat whole-doc              0.8759    0.6712
+  mini-verse (max-passage)      0.8742    0.6105
+  delta: recall -0.0017, nDCG -0.0607 (neutral/whole-doc better)
+  (structure: each doc node seeds a passage sub-lattice; doc score = meet/max over passages.)
