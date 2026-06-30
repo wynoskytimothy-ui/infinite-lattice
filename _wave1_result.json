@@ -1,0 +1,254 @@
+{
+  "summary": "Wave 1: glass-box recall failure-analysis + zero-shot lexical lever sweep across 5 BEIR corpora, synthesized into a per-corpus tuning map",
+  "agentCount": 6,
+  "logs": [],
+  "result": {
+    "diagnostics": [
+      {
+        "corpus": "scifact",
+        "n_docs": 5183,
+        "n_q": 300,
+        "drowned_frac": 0.097,
+        "gap_frac": 0.02,
+        "median_drown_rank": 276,
+        "bm25_recall": 0.8759,
+        "best_lever": "dfcap10",
+        "best_recall_gain": 0.0057,
+        "lever_recalls": "bm25:0.8759 idf2:0.8722 dfcap30:0.8792 dfcap10:0.8816 2way:0.8686 3way:0.8717 anchor:0.5564"
+      },
+      {
+        "corpus": "nfcorpus",
+        "n_docs": 3633,
+        "n_q": 323,
+        "drowned_frac": 0.025,
+        "gap_frac": 0.198,
+        "median_drown_rank": 292,
+        "bm25_recall": 0.2379,
+        "lever_recalls": "bm25:0.2379 idf2:0.2359 dfcap30:0.2382 dfcap10:0.2406 2way:0.2367 3way:0.2381 anchor:0.1566",
+        "best_lever": "dfcap10",
+        "best_recall_gain": 0.0027,
+        "error": ""
+      },
+      {
+        "corpus": "fiqa",
+        "n_docs": 57638,
+        "n_q": 648,
+        "drowned_frac": 0.27,
+        "gap_frac": 0.026,
+        "median_drown_rank": 638,
+        "bm25_recall": 0.5078,
+        "best_lever": "bm25",
+        "best_recall_gain": 0,
+        "lever_recalls": "bm25:0.5078 idf2:0.4940 dfcap30:0.5078 dfcap10:0.4953 2way:0.4632 3way:0.4516 anchor:0.3181"
+      },
+      {
+        "corpus": "trec-covid",
+        "n_docs": 171332,
+        "n_q": 50,
+        "drowned_frac": 0,
+        "gap_frac": 0,
+        "median_drown_rank": -1,
+        "bm25_recall": 0.0949,
+        "best_lever": "bm25",
+        "best_recall_gain": 0,
+        "lever_recalls": "bm25:0.0949 idf2:0.0935 dfcap30:0.0876 dfcap10:0.0794 2way:0.0857 3way:0.0807 anchor:0.0874"
+      },
+      {
+        "corpus": "webis-touche2020",
+        "n_docs": 382545,
+        "n_q": 49,
+        "drowned_frac": 0,
+        "gap_frac": 0,
+        "median_drown_rank": -1,
+        "bm25_recall": 0.5579,
+        "best_lever": "2way",
+        "best_recall_gain": 0.0073,
+        "lever_recalls": "bm25:0.5579 idf2:0.5461 dfcap30:0.5525 dfcap10:0.5495 2way:0.5653 3way:0.5555 anchor:0.4774"
+      }
+    ],
+    "synthesis": {
+      "tuning_map": [
+        {
+          "corpus": "scifact",
+          "profile": "DROWNED-dominant: drowned 9.7% vs gap 2.0% (4.9x). High BM25 floor 0.8759, median drown rank 276. Lexical-fixable.",
+          "recommended_lever": "dfcap10 (df-cap family): bm25 0.8759 -> 0.8816 (+0.0057, the largest dfcap10 win of any corpus). dfcap30 also helps (+0.0033). Avoid 2way (-0.0073), idf2 (-0.0037), and especially anchor (-0.3195)."
+        },
+        {
+          "corpus": "nfcorpus",
+          "profile": "SEMANTIC-BOUND: gap 19.8% vs drowned 2.5% (7.9x, the highest gap-share). Low BM25 floor 0.2379, median drown rank 292. Lexical levers near-useless.",
+          "recommended_lever": "distilled-SPLADE / semantic expansion. Best lexical lever dfcap10 yields only +0.0027 (to 0.2406); the 19.8% gold-with-no-shared-word fraction is unreachable by any lexical lever. dfcap30 is the safe no-op fallback (+0.0003). anchor -0.0813."
+        },
+        {
+          "corpus": "fiqa",
+          "profile": "DROWNED but LEVER-RESISTANT (surprising): drowned 27% (highest) vs gap 2.6%, yet no intersection lever helps. Median drown rank 638. BM25 0.5078.",
+          "recommended_lever": "Keep BM25 (best_lever=bm25, gain 0). Only dfcap30 ties (0.5078); every aggressive lever hurts: 2way -0.0446, 3way -0.0562, dfcap10 -0.0125, idf2 -0.0138, anchor -0.1897. High drowned% should be lexically fixable but isn't -> the drowning here is by query-relevant common terms, so intersection/df-cap discards signal. Needs reranking or SPLADE term-weighting, not hard lexical pruning."
+        },
+        {
+          "corpus": "trec-covid",
+          "profile": "SEMANTIC-BOUND de facto / DIAGNOSTIC-UNCLASSIFIED: reports drowned 0 / gap 0 but BM25 recall is only 0.0949 (~90% of gold unretrieved). The 0/0 split is uninformative — the diagnostic failed to classify the misses.",
+          "recommended_lever": "Keep BM25 (best_lever=bm25, gain 0) then add distilled-SPLADE for the unrecovered 90%. Every lever HURTS: dfcap10 -0.0155 (worst), dfcap30 -0.0073, 3way -0.0142, 2way -0.0092, anchor -0.0075. Long descriptive queries -> treat as semantic-bound."
+        },
+        {
+          "corpus": "webis-touche2020",
+          "profile": "INTERSECTION-FAVORABLE (the outlier): drowned 0 / gap 0 reported, BM25 0.5579. The only corpus where multi-term intersection helps.",
+          "recommended_lever": "2way (intersection family): bm25 0.5579 -> 0.5653 (+0.0073), the only corpus where 2way wins and the best lever overall. 3way roughly neutral (-0.0024). df-cap mildly hurts (dfcap30 -0.0054, dfcap10 -0.0084); idf2 -0.0118; anchor -0.0805. Argument/debate queries reward co-occurrence."
+        }
+      ],
+      "general_patterns": [
+        "ANCHOR IS UNIVERSALLY TOXIC: negative on 5/5 corpora, mean -0.1357, worst -0.3195 (scifact 0.8759->0.5564, a 36% relative recall collapse) and -0.1897 (fiqa). Never deploy anchor on any corpus tested.",
+        "IDF^2 NEVER HELPS: negative on 5/5, mean -0.0065, worst -0.0138 (fiqa). Over-weighting rare terms consistently drops recall; drop idf2 from the lever set entirely.",
+        "INTERSECTION LEVERS (2way/3way) ARE MOSTLY HARMFUL: 2way mean -0.0110 (helps only touche +0.0074), 3way mean -0.0154 (helps nobody meaningfully, max +0.0002 nfcorpus, worst -0.0562 fiqa). Hard term-intersection discards gold that matches on a subset of query terms. Use only on co-occurrence-friendly corpora (touche).",
+        "DF-CAP IS THE GENTLEST FAMILY: dfcap30 mean -0.0018 with worst-case only -0.0073 (the smallest downside of any lever), positive on scifact+nfcorpus and a tie on fiqa. dfcap10 is more aggressive: mean -0.0056, helps the two SMALL drowned corpora (scifact +0.0057, nfcorpus +0.0027) but hurts the LARGE ones (trec -0.0155, fiqa -0.0125, touche -0.0084).",
+        "DROWNED% DOES NOT RELIABLY PREDICT LEVER BENEFIT: fiqa has the highest drowned fraction (27%) yet zero lever helps, while scifact (9.7% drowned) gets the biggest dfcap10 win. The mechanism of drowning (common noise terms vs query-relevant common terms) matters more than the raw drowned%.",
+        "LEVER MAGNITUDES ARE TINY ON HARD CORPORA: best lexical gains are all <=+0.0073 absolute. Lexical tuning is a marginal lever; the large recall deficits (nfcorpus 0.24, trec 0.09) are gap-driven and require semantic expansion, not lexical retuning."
+      ],
+      "universal_default": "dfcap30 (moderate document-frequency cap). It is the only lever that is never catastrophically negative (worst case -0.0073 on trec-covid), is positive on scifact (+0.0033) and nfcorpus (+0.0003), and ties BM25 exactly on fiqa (0.5078). Mean delta -0.0018, the closest-to-neutral of all levers while retaining upside. Where you want strictly zero downside, fall back to plain BM25 (the measured best_lever for fiqa and trec-covid); reserve the more aggressive dfcap10 for small drowned-dominant corpora (scifact, nfcorpus) only.",
+      "general_patterns_note": "placeholder",
+      "semantic_bound_corpora": [
+        "nfcorpus",
+        "trec-covid"
+      ],
+      "notes": "Quantitative basis (all deltas vs BM25, computed from the provided lever_recalls): scifact dfcap10 +0.0057 / 2way -0.0073 / anchor -0.3195; nfcorpus dfcap10 +0.0027 / anchor -0.0813; fiqa dfcap30 0.0000 / 2way -0.0446 / 3way -0.0562 / anchor -0.1897; trec-covid all negative, dfcap10 -0.0155 worst; touche 2way +0.0073 (only positive 2way). Per-lever mean delta: anchor -0.1357, 3way -0.0154, 2way -0.0110, idf2 -0.0065, dfcap10 -0.0056, dfcap30 -0.0018. anchor/idf2 negative on 5/5 corpora.\\n\\nSEMANTIC-BOUND classification: nfcorpus is the clean case (gap 19.8% >> drowned 2.5%, best lexical gain only +0.0027) -> MUST use distilled-SPLADE. trec-covid is semantic-bound de facto: its diagnostic reports drowned=0/gap=0 but BM25 recall is 0.0949, meaning ~90% of gold is unretrieved and UNCLASSIFIED by the diagnostic -> the 0/0 split is a diagnostic gap, not a clean corpus; treat as semantic-bound and add SPLADE.\\n\\nFLAGGED INCONSISTENCIES / SURPRISES: (1) fiqa paradox -- highest drowned fraction (27%) of any corpus, yet every lexical lever ties-or-hurts and best_lever=bm25 (gain 0). High drowned% would predict df-cap/intersection wins; it doesn't, because the drowning terms are query-relevant common words that intersection/df-cap discard. fiqa needs term-WEIGHTING (SPLADE) or reranking, not lexical PRUNING -- so it behaves semantic-leaning despite a tiny gap fraction (2.6%). (2) trec-covid drowned=0/gap=0 vs 0.0949 recall is internally inconsistent (the classifier covered ~0 of the misses). (3) median_drown_rank for the two large drowned corpora sits near the cutoff (fiqa 638, scifact 276, nfcorpus 292), suggesting many drowned golds are just past the retrieval depth -- increasing candidate pool depth (recall@k) may recover more than any lever, consistent with the repo's standing 'recall is the lever, pool-limited' finding. (4) Only webis-touche2020 rewards intersection (2way +0.0073); it is the lone intersection-favorable corpus and should not generalize the 2way lever to others.\\n\\nLEVER FAMILY SUMMARY: deploy dfcap30 as universal default; dfcap10 only on small drowned corpora (scifact/nfcorpus); 2way only on touche; BM25-only on fiqa/trec-covid; SPLADE on nfcorpus + trec-covid (and as the real accuracy lever for fiqa). Never deploy anchor or idf2 anywhere."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Diagnose"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Synthesize"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "diag:scifact",
+      "phaseIndex": 1,
+      "phaseTitle": "Diagnose",
+      "agentId": "a0b1d81a3bcaa7ed3",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795057074,
+      "queuedAt": 1782795057064,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "scifact",
+      "promptPreview": "Run the recall diagnostic for BEIR corpus \"scifact\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_diag.py scifact\nIt builds a lexical index and computes (a) the recall-failure breakdown DROWNED (gold shares a query word but\nranks >100) vs GAP (gold shares no query word), and (b) recall@100 for 7 zero-shot levers. Big corpo…",
+      "lastProgressAt": 1782795066814,
+      "tokens": 38927,
+      "toolCalls": 2,
+      "durationMs": 9740,
+      "resultPreview": "{\"corpus\":\"scifact\",\"n_docs\":5183,\"n_q\":300,\"drowned_frac\":0.097,\"gap_frac\":0.02,\"median_drown_rank\":276,\"bm25_recall\":0.8759,\"best_lever\":\"dfcap10\",\"best_recall_gain\":0.0057,\"lever_recalls\":\"bm25:0.8759 idf2:0.8722 dfcap30:0.8792 dfcap10:0.8816 2way:0.8686 3way:0.8717 anchor:0.5564\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "diag:nfcorpus",
+      "phaseIndex": 1,
+      "phaseTitle": "Diagnose",
+      "agentId": "a4b9c8f98a39c3f98",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795057074,
+      "queuedAt": 1782795057064,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "nfcorpus",
+      "promptPreview": "Run the recall diagnostic for BEIR corpus \"nfcorpus\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_diag.py nfcorpus\nIt builds a lexical index and computes (a) the recall-failure breakdown DROWNED (gold shares a query word but\nranks >100) vs GAP (gold shares no query word), and (b) recall@100 for 7 zero-shot levers. Big cor…",
+      "lastProgressAt": 1782795068835,
+      "tokens": 38945,
+      "toolCalls": 2,
+      "durationMs": 11761,
+      "resultPreview": "{\"corpus\":\"nfcorpus\",\"n_docs\":3633,\"n_q\":323,\"drowned_frac\":0.025,\"gap_frac\":0.198,\"median_drown_rank\":292,\"bm25_recall\":0.2379,\"lever_recalls\":\"bm25:0.2379 idf2:0.2359 dfcap30:0.2382 dfcap10:0.2406 2way:0.2367 3way:0.2381 anchor:0.1566\",\"best_lever\":\"dfcap10\",\"best_recall_gain\":0.0027,\"error\":\"\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "diag:fiqa",
+      "phaseIndex": 1,
+      "phaseTitle": "Diagnose",
+      "agentId": "a7f206fb807844e28",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795057075,
+      "queuedAt": 1782795057064,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "fiqa",
+      "promptPreview": "Run the recall diagnostic for BEIR corpus \"fiqa\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_diag.py fiqa\nIt builds a lexical index and computes (a) the recall-failure breakdown DROWNED (gold shares a query word but\nranks >100) vs GAP (gold shares no query word), and (b) recall@100 for 7 zero-shot levers. Big corpora\n(tr…",
+      "lastProgressAt": 1782795073314,
+      "tokens": 38932,
+      "toolCalls": 2,
+      "durationMs": 16239,
+      "resultPreview": "{\"corpus\":\"fiqa\",\"n_docs\":57638,\"n_q\":648,\"drowned_frac\":0.27,\"gap_frac\":0.026,\"median_drown_rank\":638,\"bm25_recall\":0.5078,\"best_lever\":\"bm25\",\"best_recall_gain\":0,\"lever_recalls\":\"bm25:0.5078 idf2:0.4940 dfcap30:0.5078 dfcap10:0.4953 2way:0.4632 3way:0.4516 anchor:0.3181\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "diag:trec-covid",
+      "phaseIndex": 1,
+      "phaseTitle": "Diagnose",
+      "agentId": "a33ea616e167bf6bc",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795057075,
+      "queuedAt": 1782795057064,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "trec-covid",
+      "promptPreview": "Run the recall diagnostic for BEIR corpus \"trec-covid\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_diag.py trec-covid\nIt builds a lexical index and computes (a) the recall-failure breakdown DROWNED (gold shares a query word but\nranks >100) vs GAP (gold shares no query word), and (b) recall@100 for 7 zero-shot levers. Big…",
+      "lastProgressAt": 1782795071150,
+      "tokens": 38943,
+      "toolCalls": 2,
+      "durationMs": 14075,
+      "resultPreview": "{\"corpus\":\"trec-covid\",\"n_docs\":171332,\"n_q\":50,\"drowned_frac\":0,\"gap_frac\":0,\"median_drown_rank\":-1,\"bm25_recall\":0.0949,\"best_lever\":\"bm25\",\"best_recall_gain\":0,\"lever_recalls\":\"bm25:0.0949 idf2:0.0935 dfcap30:0.0876 dfcap10:0.0794 2way:0.0857 3way:0.0807 anchor:0.0874\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "diag:webis-touche2020",
+      "phaseIndex": 1,
+      "phaseTitle": "Diagnose",
+      "agentId": "aca8b2960c4bfd5ba",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795057075,
+      "queuedAt": 1782795057064,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "webis-touche2020",
+      "promptPreview": "Run the recall diagnostic for BEIR corpus \"webis-touche2020\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_diag.py webis-touche2020\nIt builds a lexical index and computes (a) the recall-failure breakdown DROWNED (gold shares a query word but\nranks >100) vs GAP (gold shares no query word), and (b) recall@100 for 7 zero-shot…",
+      "lastProgressAt": 1782795076672,
+      "tokens": 38952,
+      "toolCalls": 2,
+      "durationMs": 19597,
+      "resultPreview": "{\"corpus\":\"webis-touche2020\",\"n_docs\":382545,\"n_q\":49,\"drowned_frac\":0,\"gap_frac\":0,\"median_drown_rank\":-1,\"bm25_recall\":0.5579,\"best_lever\":\"2way\",\"best_recall_gain\":0.0073,\"lever_recalls\":\"bm25:0.5579 idf2:0.5461 dfcap30:0.5525 dfcap10:0.5495 2way:0.5653 3way:0.5555 anchor:0.4774\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "You are synthesizing a per-corpus RAG TUNING MAP from these",
+      "phaseIndex": 2,
+      "phaseTitle": "Synthesize",
+      "agentId": "add2c68f2f5df024e",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795076682,
+      "queuedAt": 1782795076673,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "dfcap30 (moderate document-frequency cap). It is the only l…",
+      "promptPreview": "You are synthesizing a per-corpus RAG TUNING MAP from these recall diagnostics: [{\"corpus\":\"scifact\",\"n_docs\":5183,\"n_q\":300,\"drowned_frac\":0.097,\"gap_frac\":0.02,\"median_drown_rank\":276,\"bm25_recall\":0.8759,\"best_lever\":\"dfcap10\",\"best_recall_gain\":0.0057,\"lever_recalls\":\"bm25:0.8759 idf2:0.8722 dfcap30:0.8792 dfcap10:0.8816 2way:0.8686 3way:0.8717 anchor:0.5564\"},{\"corpus\":\"nfcorpus\",\"n_docs\":363…",
+      "lastProgressAt": 1782795143484,
+      "tokens": 41267,
+      "toolCalls": 2,
+      "durationMs": 66802,
+      "resultPreview": "{\"tuning_map\":[{\"corpus\":\"scifact\",\"profile\":\"DROWNED-dominant: drowned 9.7% vs gap 2.0% (4.9x). High BM25 floor 0.8759, median drown rank 276. Lexical-fixable.\",\"recommended_lever\":\"dfcap10 (df-cap family): bm25 0.8759 -> 0.8816 (+0.0057, the largest dfcap10 win of any corpus). dfcap30 also helps (+0.0033). Avoid 2way (-0.0073), idf2 (-0.0037), and especially anchor (-0.3195).\"},{\"corpus\":\"nfcorp…"
+    }
+  ],
+  "totalTokens": 235966,
+  "totalToolCalls": 12
+}
