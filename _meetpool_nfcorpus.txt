@@ -1,0 +1,9 @@
+================================================================================
+MEET POOLS — nfcorpus: 3,633 docs, 323 q
+================================================================================
+  config              recall@100   nDCG@10    vs lexical
+  lexical                 0.2379    0.3071       +0.0000
+  + meet-2                0.2378    0.3044       -0.0001
+  + meet-2+3              0.2377    0.3045       -0.0002
+  + meet + drift          0.2680    0.3112       +0.0301
+  meet pool = intersect rarest query terms (free, query-time) -> precise pool fused into the union.
