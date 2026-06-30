@@ -29,6 +29,7 @@ class EdgeRAG:
     # ---------------- ingest ----------------
     def build(self, corpus):
         self.doc_ids = list(corpus.keys())
+        self._d2i = {d: i for i, d in enumerate(self.doc_ids)}
         texts = list(corpus.values())
         t0 = time.perf_counter()
         Bd, _ = radix_build_mt(texts, self.nthreads)
@@ -224,10 +225,48 @@ class EdgeRAG:
             return self._splade.search(query, n)
         raise ValueError(f"unknown tier '{tier}'")
 
-    def retrieve(self, query, k=10, tier="bridged", fuse=None, weights=None, K0=60):
-        """ONE API for the whole dial. tier in {lexical, bridged, distilled, wand}; or fuse=[tiers...] for
-        weighted reciprocal-rank fusion (weights={tier: w}). Encoder-free unless tier/fuse includes a SPLADE
-        path that needs an encoder at serve."""
+    # ---- the proven campaign stack (fuse 4 complementary sources -> deeper pool -> rerank) ----
+    def attach_drift(self, corpus, seeds=None):
+        """Build the zero-shot co-occurrence DRIFT graph (Timothy's higher-D idea) for the stack tier."""
+        from _o1_drift import build_drift
+        if seeds is None: seeds = self._all_seed_words(corpus)
+        self._drift, _, _ = build_drift(corpus, seeds)
+        return self
+
+    def _all_seed_words(self, corpus):
+        from _fast_tok import words as _w
+        return {x for t in corpus.values() for x in _w(t)}
+
+    def attach_reranker(self, ce, corpus):
+        """Attach a cross-encoder reranker + the doc texts it needs (for the stack tier)."""
+        self._ce = ce; self._doc_text = corpus; return self
+
+    def _drift_idx(self, query, depth):
+        from _o1_drift import drift_bag, score_bag
+        sc = score_bag(self, drift_bag(query, self._drift, alpha=0.4))
+        return list(np.argsort(sc)[::-1][:depth])
+
+    def _stack(self, query, k=10, depth=300, rerank=True):
+        """The campaign stack: fuse lexical+bridges+drift+distilled-SPLADE top-`depth`, union, CE-rerank, top-k."""
+        pools = [list(np.argsort(self.score(query))[::-1][:depth]),
+                 [self._d2i[d] for d in self.search_bridged(query, depth)]]
+        if getattr(self, "_drift", None) is not None: pools.append(self._drift_idx(query, depth))
+        if getattr(self, "_splade", None) is not None:
+            pools.append([self._d2i[d] for d in self._splade.search(query, depth)])
+        u = list(set().union(*[set(p) for p in pools]))
+        if not (rerank and getattr(self, "_ce", None) is not None and u):
+            return [self.doc_ids[i] for i in u[:k]]                    # fused pool, unranked (no reranker)
+        sc = self._ce.predict([(query, self._doc_text[self.doc_ids[i]][:512]) for i in u],
+                              batch_size=256, show_progress_bar=False)
+        order = [u[j] for j in np.argsort(sc)[::-1]]
+        return [self.doc_ids[i] for i in order[:k]]
+
+    def retrieve(self, query, k=10, tier="bridged", fuse=None, weights=None, K0=60, depth=300):
+        """ONE API for the whole dial. tier in {lexical, bridged, distilled, wand, stack}; or fuse=[tiers...]
+        for weighted reciprocal-rank fusion. 'stack' = the proven campaign stack (fuse 4 sources -> pool depth
+        -> CE rerank). Encoder-free unless tier/fuse includes a SPLADE path that needs an encoder at serve."""
+        if tier == "stack" and not fuse:
+            return self._stack(query, k, depth)
         if not fuse:
             return self._tier(query, tier, k)
         w = weights or {}
