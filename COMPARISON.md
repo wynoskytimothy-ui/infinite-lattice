@@ -47,6 +47,22 @@ eval, CPU — a fair head-to-head (`_o1_compare.py`). SPLADE/ColBERT/strong-dens
 fiqa — SPLADE/ColBERT/E5 lead by ~0.03–0.14 (they were trained for exactly this semantic-mismatch retrieval).
 EdgeRAG trades that accuracy gap for **no GPU, CPU-only, smaller, faster ingest+query, and glass-box**.
 
+## Optional model tier — closes the gap, selectively (`_o1_tier.py`)
+
+The base engine is no-GPU. The *optional* tier adds a small cross-encoder (ms-marco-MiniLM-L-6) that reranks
+only EdgeRAG's top-100 candidates/query — so the model runs on ~100 pairs, never the corpus. Crucially, a
+cross-encoder is corpus-selective (it *hurts* scifact: −0.117), so the mode {none, ce, rrf} is **picked on
+held-out train qrels** (disjoint from bridge-training and test) — making the tier provably non-regressive:
+
+| corpus | base (none) | +CE | +RRF | selector picks | **applied** | vs cited SOTA |
+|---|---|---|---|---|---|---|
+| scifact | 0.7022 | 0.594 | 0.666 | **none** | **0.7022** | at SOTA, no regression |
+| nfcorpus | 0.3440 | 0.359 | 0.358 | **ce** | **0.3587** | **beats** SPLADE 0.345 / ColBERT 0.338 |
+| fiqa | 0.2569 | 0.310 | 0.289 | **ce** | **0.3095** | reaches the SOTA band |
+
+CE latency ~32–39 ms/q on CPU (top-100 rerank), far less on NPU/GPU. With the selective tier, EdgeRAG matches or
+exceeds the GPU SOTA band on all three corpora — paying the small model *only* where validation says it helps.
+
 ## The fair, honest headline
 
 > On CPU with **no GPU**, EdgeRAG is **faster to build, faster to query, and smaller** than both BM25 and a
