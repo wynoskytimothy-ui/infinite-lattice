@@ -31,11 +31,13 @@ def _scan_dedup(buf, doc_starts, d0, d1, stop_sorted, out_doc, out_hash, out_tf)
         i = s; tokpos = 0
         while i < e:
             c = buf[i]
+            if 65 <= c <= 90: c += 32                   # lowercase ASCII inline (no Python .lower())
             if 97 <= c <= 122:
                 j = i + 1
                 h = (FNV_OFF ^ np.uint64(c)) * FNV_PRM
                 while j < e:
                     cj = buf[j]
+                    if 65 <= cj <= 90: cj += 32
                     if (97 <= cj <= 122) or (48 <= cj <= 57):
                         h = (h ^ np.uint64(cj)) * FNV_PRM; j += 1
                     else:
@@ -99,7 +101,11 @@ def radix_build(texts):
 
 
 def _prep(texts):
-    db = [x.lower().encode("ascii", "replace") for x in texts]
+    # BIT-IDENTICAL + fast: Python's Unicode .lower() is the costly stage, but it's only needed for non-ASCII
+    # docs (where it does case-folding the scan can't, e.g. U+212A KELVIN SIGN -> 'k'). Pure-ASCII docs (the
+    # majority) skip .lower() entirely -- the numba scan lowercases their a-z inline. x.isascii() is a fast C
+    # check. Result is identical to x.lower().encode('ascii','replace') for every doc.
+    db = [x.encode("ascii") if x.isascii() else x.lower().encode("ascii", "replace") for x in texts]
     lens = np.fromiter((len(b) for b in db), np.int64, len(db))
     buf = np.frombuffer(b"".join(db), np.uint8)
     doc_starts = np.concatenate([[0], np.cumsum(lens)]).astype(np.int64)

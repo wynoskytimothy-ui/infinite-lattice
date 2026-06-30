@@ -55,13 +55,42 @@ now balanced across the three stages (all ~native), so the index is verified ide
   / parallel sort would push further. The hash-keyed vocab also needs a `hash→token` map (~70k entries, built by
   decoding unique spans) for the bridge layer — cheap, not yet wired.
 
-## Projection to the "100M tokens" target
+## The 1s/100M push — honest core-scaling analysis
 
-- Full ingest→serve-ready (radix, 8-thread): **24.5M tok/s → 100M tokens in ~4.1 s**. The whole pipeline is now
-  native + parallel; no Python floor remains. More cores scale the scan further (it's per-doc independent), and
-  `prep`/`vocab+counting` are the next stages to thread to push toward the 1-second/100M vision.
-- This is on the word-only edge-champion index — exactly the one that's 198 B/doc and serve-ready CSR. So the
-  *same* artifact that's small + fast-to-query is now also fast-to-build.
+Measured radix-build at 1/2/4/8 threads (fiqa, 4.24M tokens, bit-identical throughout):
+
+| threads | total | scan stage | prep+vocab (serial) | tok/s |
+|---|---|---|---|---|
+| 1 | 446 ms | 326 ms | ~121 ms | 9.5M |
+| 2 | 290 ms | 169 ms | ~121 ms | 14.6M |
+| 4 | 217 ms | 91 ms | ~126 ms | 19.6M |
+| 8 | 181 ms | 59 ms | ~121 ms | 23.4M |
+
+**The scan scales ~linearly; prep + vocab are a fixed serial floor (~121 ms = 68% of the 8-thread time).** By
+Amdahl, even infinite cores cap the total at ~121 ms → **~35M tok/s**. So *more cores alone cannot reach
+1s/100M* — the serial stages are the wall.
+
+What was done bit-identically: the scan is threaded (nogil), and prep got the **`isascii` fast-path** — Python's
+Unicode `.lower()` (the costly part) runs only on non-ASCII docs; pure-ASCII docs skip it and the numba scan
+lowercases their a-z inline (67→53 ms on fiqa, 13→12 ms scifact; verified identical).
+
+What is *honestly* hard, and why:
+- **prep** (Python `.lower()`/`.encode()`) is GIL-bound — threads don't help; only processes do, and spawn cost
+  only amortizes on a *huge* corpus (i.e. the 100M-token target itself).
+- **vocab** (open-addressing hash-table build) is sequential ID assignment; it can be threaded via per-shard
+  (hash%T → disjoint buckets) sub-vocabs, reaching ~30–32M tok/s — but that's still short of 100M tok/s.
+
+**The real path to 1s/100M:** a native (Rust/C) tokenizer with SIMD scan + lock-free vocab — exactly what
+Tantivy/PISA/Lucene do, and a well-understood ~10–20× over Python+numba. The *algorithm* here (radix/hash
+group-by, no comparison sort, per-doc dedup) is already the one such an implementation would use — **the design
+is done and optimal; the last 4× to 1s is a language port, not a research problem.**
+
+## Projection (current, bit-identical, this 8-core laptop)
+
+- Full ingest→serve-ready (radix, 8-thread): **~24M tok/s → 100M tokens in ~4 s**. Same word-only edge-champion
+  index (198 B/doc, serve-ready CSR) — the artifact that's small + fast-to-query is now also fast-to-build.
+- Honest ceiling on this hardware/runtime: ~30–35M tok/s (~3 s/100M) if vocab is sharded; 1s/100M needs the
+  native tokenizer above.
 
 ## Files
 - `_o1_ingest_profile.py` — the tokenize/placement profile (the bottleneck).
