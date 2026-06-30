@@ -1,0 +1,16 @@
+========================================================================================
+INGEST PROPAGATION — nfcorpus: 3,633 docs, 323 q (prop built 0.6s)
+========================================================================================
+  config                    recall@100   nDCG@10    vs 1-hop
+  lexical                       0.2379    0.3071            
+  1-hop drift                   0.2841    0.2925     +0.0000
+  + prop raw a2=0.1             0.2832    0.2835     -0.0009
+  + prop raw a2=0.2             0.2876    0.2769     +0.0035
+  + prop raw a2=0.3             0.2902    0.2690     +0.0061
+  + prop raw a2=0.4             0.2915    0.2601     +0.0074
+  + prop mutual a2=.2           0.2837    0.2888     -0.0004
+  + prop thresh a2=.2           0.2907    0.2776     +0.0066
+  BEST rule: + prop raw a2=0.4 (recall 0.2915, +0.0074 vs 1-hop drift)
+
+  glass-box: 'epic' 1-hop -> ['norfolk', 'oxford', 'scotland', 'centre', 'european']
+             'epic' PROPAGATED 2-hop -> ['vegetarians', 'whom', 'records', 'comprising', 'isoflavones']
