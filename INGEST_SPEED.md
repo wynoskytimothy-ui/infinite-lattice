@@ -25,17 +25,22 @@ stage becomes a native scan + integer sort.
 
 ## Measured (word-only, vs incremental `add()+finalize()` = serve-ready baseline)
 
-| corpus | baseline (add+finalize) | columnar | **numba** | numba speedup | identical? |
-|---|---|---|---|---|---|
-| scifact (5,183 docs, 724k tok) | 619 ms (1.2M tok/s) | 304 ms (2.0×) | **106 ms** | **5.9×** | ✓ PASS |
-| fiqa (57,638 docs, 4.24M tok) | 4,223 ms (1.0M tok/s) | 2,257 ms (1.9×) | **1,213 ms** | **3.5×** | ✓ PASS |
+| corpus | baseline | columnar | numba (lexsort) | numba RADIX serial | **RADIX 8-thread** | identical? |
+|---|---|---|---|---|---|---|
+| scifact (724k tok) | 640 ms | 304 ms (2.0×) | 113 ms (5.6×) | 68 ms (9.4×) | **36 ms (17.8×)** | ✓ PASS |
+| fiqa (4.24M tok) | 4,249 ms | 2,257 ms (1.9×) | 1,232 ms (3.4×) | 416 ms (10.2×) | **173 ms (24.5×)** | ✓ PASS |
 
-**The tokenize wall is gone.** The numba scan+hash runs at **27–29M tok/s** (vs ~1M for the Python regex — a
-~25× jump on the stage that was the floor). End-to-end ingest→serve-ready is **3.5–5.9× faster**, and the index
-is verified identical to the last posting (the hash-collision probability among ~70k terms in 2⁶⁴ is ~1e-10).
+**The tokenize wall is gone, then the sort wall too.** Three escalating levers, each verified bit-identical:
+1. **Columnar** removes the dict-of-dicts → 2×.
+2. **Numba scan+hash** takes tokenize+vocab native (27–29M tok/s vs ~1M regex, ~25×) → but the numpy lexsort
+   group-by becomes the new bottleneck (994 ms of fiqa's 1,232 ms).
+3. **Radix/hash group-by** kills the lexsort: per-doc dedup + open-addressing hash-vocab + counting-scatter,
+   all O(n), no comparison sort (994 ms → 62 ms). → 9–10× serial. Then **nogil threads** scale the scan
+   (`njit(nogil=True)` + `ThreadPoolExecutor`, no process-spawn cost) → **17.8–24.5×**, at **24.5M tok/s**.
 
-Stage breakdown (numba, fiqa): `prep_buffer` 59 ms | **`scan+hash` 160 ms (27M tok/s)** | `group_csr` 994 ms.
-The bottleneck is now the **numpy group-by sort** (the lexsort that builds CSR), not tokenization.
+Stage breakdown (radix 8-thread, fiqa): `prep` 57 ms | **`scan+dedup(mt)` 56 ms** | `vocab+counting` 61 ms —
+now balanced across the three stages (all ~native), so the index is verified identical to the last posting
+(hash-collision probability among ~70k terms in 2⁶⁴ ≈ 1e-10).
 
 ## Honest accounting
 
@@ -52,12 +57,15 @@ The bottleneck is now the **numpy group-by sort** (the lexsort that builds CSR),
 
 ## Projection to the "100M tokens" target
 
-- Tokenize+hash (the former wall): **27M tok/s → 100M tokens in ~3.7 s**, single core.
-- Full ingest→serve-ready: sort-bound at ~3.5M tok/s → 100M tokens in ~30 s today. The tokenizer no longer
-  limits it; a parallel/radix group-by sort is the remaining lever to approach the 1-second vision.
+- Full ingest→serve-ready (radix, 8-thread): **24.5M tok/s → 100M tokens in ~4.1 s**. The whole pipeline is now
+  native + parallel; no Python floor remains. More cores scale the scan further (it's per-doc independent), and
+  `prep`/`vocab+counting` are the next stages to thread to push toward the 1-second/100M vision.
+- This is on the word-only edge-champion index — exactly the one that's 198 B/doc and serve-ready CSR. So the
+  *same* artifact that's small + fast-to-query is now also fast-to-build.
 
 ## Files
 - `_o1_ingest_profile.py` — the tokenize/placement profile (the bottleneck).
 - `_o1_fast_ingest.py` — columnar build (2×, identical) + lightweight parallel tokenize.
-- `_o1_ingest_numba.py` — numba byte-scan tokenize+hash (3.5–5.9×, 27M tok/s, identical).
+- `_o1_ingest_numba.py` — numba byte-scan tokenize+hash (lexsort group-by; 27M tok/s tokenize).
+- `_o1_ingest_radix.py` — radix/hash group-by (no comparison sort) + nogil-threaded scan: **24.5× / 24.5M tok/s**.
 - `_fast_tok.py` — re-only lightweight tokenizer for the parallel workers.
