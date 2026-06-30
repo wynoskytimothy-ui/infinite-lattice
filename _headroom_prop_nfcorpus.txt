@@ -1,0 +1,8 @@
+PROP IN THE RERANKED STACK — nfcorpus: 323 q, depth 300
+========================================================================================
+       k    4-source   5-source(+prop)      gain
+     100      0.2724            0.2727   +0.0003
+     200      0.3342            0.3351   +0.0009
+     500      0.4556            0.4612   +0.0056
+  nDCG@10: 4-source 0.3321 | 5-source 0.3323 (+0.0001)
+  -> does the hop-2 propagation source raise the RERANKED recall (capture the glass-box's 60%)?
