@@ -104,29 +104,41 @@ class EdgeRAG:
             if scored: self.bridge[qt] = scored[:top_per]
         return self
 
-    def _bridge_score(self, query, cand):
-        cand_set = set(cand); bs = {d: 0.0 for d in cand_set}
+    def _bridge_scores_vec(self, query, cand_idx):
+        """Vectorized bridge score over candidate doc-INDICES. Each target term's segment is touched once
+        in numpy (mask + scatter-add); term_id resolved once per target, not per candidate. Returns a
+        length-|cand_idx| array aligned to cand_idx."""
         ip, sd = self.indptr, self.seg_doc
+        targets = {}                                       # term_id -> summed bridge weight
         for qt in set(words(query)):
             for dt, w in self.bridge.get(qt, ()):
                 tid = self._term_id(dt)
                 if tid is None: continue
-                a, e = int(ip[tid]), int(ip[tid + 1])
-                doc_set = {self.doc_ids[int(sd[i])] for i in range(a, e)}
-                for d in cand_set:
-                    if d in doc_set: bs[d] += w
-        return bs
+                targets[tid] = targets.get(tid, 0.0) + w
+        if not targets:
+            return np.zeros(len(cand_idx))
+        cand_mask = np.zeros(self.N, bool); cand_mask[cand_idx] = True
+        acc = np.zeros(self.N)
+        for tid, w in targets.items():
+            a, e = int(ip[tid]), int(ip[tid + 1])
+            seg = sd[a:e]
+            hit = seg[cand_mask[seg]]                       # candidate doc-indices that contain this term
+            acc[hit] += w
+        return acc[cand_idx]
 
     def search_bridged(self, query, k=10, lam=0.15):
         scores = self.score(query)
-        order = np.argsort(scores)[::-1]
-        cand = [self.doc_ids[i] for i in order[:100] if scores[i] > 0.0]
-        if not cand: return []
-        lex = {self.doc_ids[i]: float(scores[i]) for i in order[:100] if scores[i] > 0.0}
-        lmax = max(lex.values()) or 1.0
-        bs = self._bridge_score(query, cand); bmax = (max(bs.values()) if bs else 0.0) or 1.0
-        final = {d: lex[d] / lmax + lam * bs.get(d, 0.0) / bmax for d in cand}
-        return sorted(final, key=lambda d: final[d], reverse=True)[:k]
+        m = min(100, self.N)
+        top = np.argpartition(scores, -m)[-m:]
+        top = top[scores[top] > 0.0]
+        if top.size == 0: return []
+        cand_idx = top[np.argsort(scores[top])[::-1]]       # top-100 candidate indices, score>0
+        lex = scores[cand_idx]; lmax = lex.max() or 1.0
+        bs = self._bridge_scores_vec(query, cand_idx)
+        bmax = bs.max() if bs.size and bs.max() > 0 else 1.0
+        final = lex / lmax + lam * bs / bmax
+        fin = cand_idx[np.argsort(final)[::-1]]
+        return [self.doc_ids[int(i)] for i in fin[:k]]
 
     # ---------------- mmap persistence (RAM = working set) ----------------
     def save_mmap(self, path):
