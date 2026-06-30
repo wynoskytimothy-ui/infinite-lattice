@@ -1,0 +1,8 @@
+====================================================================================
+RERANK WITH EXPANDED QUERY — nfcorpus: 323 q
+====================================================================================
+  rerank query            recall@100   nDCG@10
+  raw                         0.2724    0.3321
+  expanded                    0.2856    0.2930
+  avg                         0.2894    0.3323
+  does giving the cross-encoder the bridge terms surface the deep hop-2 gold (the reranker bottleneck)?
