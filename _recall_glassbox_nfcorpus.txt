@@ -1,0 +1,18 @@
+====================================================================================
+GLASS-BOX RECALL — nfcorpus: 323 q | 9898 unreached gold (after 1-hop drift)
+====================================================================================
+  WHY each unreached gold is missed (the lever each implies):
+    literal (drowned)                 1224 (  12%)  -> rerank/pool-depth
+    hop-1 reachable                   2135 (  22%)  -> stronger 1-hop weight
+    hop-2 reachable                   5898 (  60%)  -> 2-hop propagation (the prop lever)
+    hop-3 reachable                    123 (   1%)  -> 3-hop / iterative expand
+    DISCONNECTED (no co-occ path)      518 (   5%)  -> NEURAL only (co-occurrence cannot reach)
+
+  glass-box examples (DISCONNECTED gold — its distinctive terms vs the query):
+    q='accidents...'  gold terms not in query: ['evolutionarily', 'concentrations', 'homoeostasis', 'deficiencies', 'individuals']
+    q='airport scanners...'  gold terms not in query: ['semiquantitative', 'translocations', 'hybridization', 'cryptoxanthin', 'questionnaire']
+    q='airport scanners...'  gold terms not in query: ['recommendations', 'implementation', 'administration', 'implications', 'conventional']
+    q='airport scanners...'  gold terms not in query: ['multiplicative', 'significantly', 'investigated', 'significant', 'vegetables']
+
+  READ: the % at hop-2/hop-3 = recall recoverable by DEEPER co-occurrence expansion (free); the
+  DISCONNECTED % = the hard ceiling for co-occurrence -> only the neural model reaches it.
