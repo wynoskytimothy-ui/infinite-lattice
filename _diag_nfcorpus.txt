@@ -1,0 +1,12 @@
+
+  nfcorpus: 3,633 docs, 323 q | recall-fail breakdown: DROWNED 8/323 (2%, median rank 292) | GAP 64/323 (20%)
+  lever       recall@100   nDCG@10   vs bm25
+  bm25            0.2379    0.3071   +0.0000
+  idf2            0.2359    0.3046   -0.0020
+  dfcap30         0.2382    0.3065   +0.0004
+  dfcap10         0.2406    0.3002   +0.0027
+  2way            0.2367    0.3024   -0.0012
+  3way            0.2381    0.3042   +0.0002
+  anchor          0.1566    0.2772   -0.0813
+  BEST: dfcap10 (recall 0.2406, +0.0027 vs bm25)
+JSON {"corpus": "nfcorpus", "n_docs": 3633, "n_q": 323, "hit": 251, "drowned": 8, "gap": 64, "drowned_frac": 0.025, "gap_frac": 0.198, "median_drown_rank": 292, "levers": {"bm25": {"recall": 0.2379, "ndcg": 0.3071}, "idf2": {"recall": 0.2359, "ndcg": 0.3046}, "dfcap30": {"recall": 0.2382, "ndcg": 0.3065}, "dfcap10": {"recall": 0.2406, "ndcg": 0.3002}, "2way": {"recall": 0.2367, "ndcg": 0.3024}, "3way": {"recall": 0.2381, "ndcg": 0.3042}, "anchor": {"recall": 0.1566, "ndcg": 0.2772}}, "best_lever": "dfcap10", "best_recall_gain": 0.0027}
