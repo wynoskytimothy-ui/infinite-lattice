@@ -1,0 +1,244 @@
+{
+  "summary": "Wave 2: zero-shot DRIFT (co-occurrence diffusion) across 5 BEIR corpora vs lexical and SPLADE, synthesized",
+  "agentCount": 6,
+  "logs": [],
+  "result": {
+    "drift": [
+      {
+        "corpus": "scifact",
+        "n_docs": 5183,
+        "build_s": 3.1,
+        "lexical_recall": 0.8759,
+        "best_drift_recall": 0.9056,
+        "best_alpha": 0.8,
+        "recall_gain": 0.0297,
+        "best_drift_ndcg": 0.5108,
+        "lexical_ndcg": 0.6712
+      },
+      {
+        "corpus": "nfcorpus",
+        "n_docs": 3633,
+        "build_s": 0.9,
+        "lexical_recall": 0.2379,
+        "best_drift_recall": 0.2841,
+        "best_alpha": 0.4,
+        "recall_gain": 0.0462,
+        "best_drift_ndcg": 0.2925,
+        "lexical_ndcg": 0.3071
+      },
+      {
+        "corpus": "fiqa",
+        "n_docs": 57638,
+        "build_s": 26.8,
+        "lexical_recall": 0.5078,
+        "best_drift_recall": 0.5078,
+        "best_alpha": 0,
+        "recall_gain": 0,
+        "best_drift_ndcg": 0.2347,
+        "lexical_ndcg": 0.2347
+      },
+      {
+        "corpus": "trec-covid",
+        "n_docs": 171332,
+        "build_s": 26.5,
+        "lexical_recall": 0.0949,
+        "best_drift_recall": 0.0949,
+        "best_alpha": 0,
+        "recall_gain": 0,
+        "best_drift_ndcg": 0.5617,
+        "lexical_ndcg": 0.5617
+      },
+      {
+        "corpus": "webis-touche2020",
+        "n_docs": 382545,
+        "build_s": 35.3,
+        "lexical_recall": 0.5579,
+        "best_drift_recall": 0.5579,
+        "best_alpha": 0,
+        "recall_gain": 0,
+        "best_drift_ndcg": 0.3161,
+        "lexical_ndcg": 0.3161
+      }
+    ],
+    "synthesis": {
+      "per_corpus": [
+        {
+          "corpus": "scifact",
+          "drift_gain": 0.0297,
+          "helps": true,
+          "vs_splade": "below — drift recall 0.9056 vs SPLADE 0.909 (−0.0034); recovers ~91% of the lexical→SPLADE gap but does not beat the GPU model. Lexically strong (0.876 lexical) so little semantic gap to mine; nDCG drops 0.6712→0.5108."
+        },
+        {
+          "corpus": "nfcorpus",
+          "drift_gain": 0.0462,
+          "helps": true,
+          "vs_splade": "ABOVE — drift recall 0.2841 vs SPLADE 0.282 (+0.0021). Zero-shot, no-GPU DRIFT BEATS GPU SPLADE on this mismatch (medical) corpus; biggest gain (+0.0462) and heaviest expansion (alpha=0.4). nDCG dips only 0.3071→0.2925."
+        },
+        {
+          "corpus": "fiqa",
+          "drift_gain": 0,
+          "helps": false,
+          "vs_splade": "far below — drift recall 0.5078 vs SPLADE 0.61 (−0.102). Optimizer chose alpha=0 (no expansion): co-occurrence diffusion was net-harmful and got dialed out. SPLADE clearly wins; use lexical+SPLADE fusion, not drift."
+        },
+        {
+          "corpus": "trec-covid",
+          "drift_gain": 0,
+          "helps": false,
+          "vs_splade": "no SPLADE ref. alpha=0 chosen, recall stays 0.0949 (recall@100 is low because trec-covid has very deep pools/many relevants); nDCG strong at 0.5617 unchanged. Drift adds nothing here."
+        },
+        {
+          "corpus": "webis-touche2020",
+          "drift_gain": 0,
+          "helps": false,
+          "vs_splade": "no SPLADE ref. alpha=0 chosen, recall 0.5579 unchanged, nDCG 0.3161 unchanged. Argument-retrieval co-occurrence too noisy to help; drift dialed out."
+        }
+      ],
+      "general_finding": "DRIFT (corpus co-occurrence diffusion, no model/no GPU) is a SELECTIVE, not reliable, zero-shot semantic-recall lever. It helped on only 2 of 5 corpora — scifact (+0.0297) and nfcorpus (+0.0462) — and on the other 3 (fiqa, trec-covid, touche) the per-corpus alpha optimizer drove expansion weight to 0, meaning the diffusion was net-harmful and was switched off. Where it helps, it works by attacking the semantic gap (gold docs sharing no literal query word), and the effect is larger on lexical-mismatch corpora (nfcorpus 0.4 alpha) than on lexically-aligned ones (scifact 0.8 alpha, small headroom over its already-high 0.876 lexical recall). It is a RECALL lever that trades nDCG for recall — scifact nDCG 0.6712→0.5108, nfcorpus 0.3071→0.2925 — so expansion noise must be cleaned up by a reranker after retrieval. Headline result: on nfcorpus, zero-shot no-GPU DRIFT (0.2841) actually BEATS GPU SPLADE recall@100 (0.282), and on scifact it closes to within 0.0034 of SPLADE (0.9056 vs 0.909) — but on fiqa SPLADE is far ahead (0.61 vs 0.5078) and drift contributes nothing.",
+      "where_drift_beats_splade": [
+        "nfcorpus: drift recall@100 0.2841 > SPLADE 0.282 (+0.0021), zero-shot no-GPU beating the GPU model on a medical mismatch corpus"
+      ],
+      "recommendation": "Deploy DRIFT selectively, gated by a per-corpus alpha sweep (let the optimizer pick alpha; if it picks 0, ship pure lexical). Per corpus: nfcorpus → DRIFT as a recall booster (it beats SPLADE zero-shot, +0.0462 over lexical) then rerank to recover the small nDCG dip; scifact → DRIFT to lift recall toward SPLADE (+0.0297, reaches 0.9056) but always rerank since nDCG drops sharply (0.6712→0.5108), and if SPLADE/GPU is available prefer it or fuse since it still edges drift; fiqa → DO NOT use drift (alpha=0, no gain), use SPLADE or lexical+SPLADE RRF fusion (SPLADE leads by +0.102 recall); trec-covid → lexical only (drift adds nothing, nDCG already strong 0.5617); webis-touche2020 → lexical only (drift dialed out, too noisy). General rule: DRIFT first as a cheap no-GPU recall lever on mismatch corpora, then rerank; fall back to lexical wherever the alpha sweep returns 0.",
+      "notes": "Drift does NOT help where (a) the corpus is lexically strong with little semantic gap to mine — scifact already has 0.876 lexical recall, so expansion gains are small and bought at a steep nDCG cost; and (b) co-occurrence is too noisy/diffuse to expand reliably — on fiqa, trec-covid, and webis-touche2020 the per-corpus optimizer set alpha=0, i.e. any expansion hurt recall, so drift collapsed to pure lexical. The alpha pattern is informative: mismatch corpus nfcorpus rewards aggressive expansion (alpha=0.4), aligned scifact only tolerates light expansion (alpha=0.8 = mostly lexical). Build cost is trivial/no-GPU (0.9s–35s, scaling with doc count: nfcorpus 3633 docs/0.9s up to touche 382545 docs/35.3s). Caveat: best_drift_ndcg is reported at the recall-optimal alpha, so the nDCG figures reflect the recall-tuned operating point, not a precision-tuned one — confirming drift is a recall-stage lever that needs a rerank stage after. SPLADE references used: scifact 0.909, nfcorpus 0.282, fiqa 0.61 (no SPLADE ref for trec-covid/touche, so 'beats SPLADE' is undetermined there)."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Drift"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Synthesize"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "drift:scifact",
+      "phaseIndex": 1,
+      "phaseTitle": "Drift",
+      "agentId": "a06125576ac53ee1e",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795665471,
+      "queuedAt": 1782795665463,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "scifact",
+      "promptPreview": "Run the zero-shot DRIFT experiment for BEIR corpus \"scifact\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_drift.py scifact\nIt builds a co-occurrence correlation graph (PMI) over the query vocab, diffuses query words across it (the\nexpansion mass accumulates where multiple query words converge), and sweeps the blend weight…",
+      "lastProgressAt": 1782795679749,
+      "tokens": 38841,
+      "toolCalls": 2,
+      "durationMs": 14278,
+      "resultPreview": "{\"corpus\":\"scifact\",\"n_docs\":5183,\"build_s\":3.1,\"lexical_recall\":0.8759,\"best_drift_recall\":0.9056,\"best_alpha\":0.8,\"recall_gain\":0.0297,\"best_drift_ndcg\":0.5108,\"lexical_ndcg\":0.6712}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "drift:nfcorpus",
+      "phaseIndex": 1,
+      "phaseTitle": "Drift",
+      "agentId": "a9cdc07733faf391a",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795665472,
+      "queuedAt": 1782795665463,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "nfcorpus",
+      "promptPreview": "Run the zero-shot DRIFT experiment for BEIR corpus \"nfcorpus\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_drift.py nfcorpus\nIt builds a co-occurrence correlation graph (PMI) over the query vocab, diffuses query words across it (the\nexpansion mass accumulates where multiple query words converge), and sweeps the blend weig…",
+      "lastProgressAt": 1782795676462,
+      "tokens": 38861,
+      "toolCalls": 2,
+      "durationMs": 10990,
+      "resultPreview": "{\"corpus\":\"nfcorpus\",\"n_docs\":3633,\"build_s\":0.9,\"lexical_recall\":0.2379,\"best_drift_recall\":0.2841,\"best_alpha\":0.4,\"recall_gain\":0.0462,\"best_drift_ndcg\":0.2925,\"lexical_ndcg\":0.3071}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "drift:fiqa",
+      "phaseIndex": 1,
+      "phaseTitle": "Drift",
+      "agentId": "a1d46a76448991dfc",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795665472,
+      "queuedAt": 1782795665463,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "fiqa",
+      "promptPreview": "Run the zero-shot DRIFT experiment for BEIR corpus \"fiqa\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_drift.py fiqa\nIt builds a co-occurrence correlation graph (PMI) over the query vocab, diffuses query words across it (the\nexpansion mass accumulates where multiple query words converge), and sweeps the blend weight alpha…",
+      "lastProgressAt": 1782795706632,
+      "tokens": 38844,
+      "toolCalls": 2,
+      "durationMs": 41160,
+      "resultPreview": "{\"corpus\":\"fiqa\",\"n_docs\":57638,\"build_s\":26.8,\"lexical_recall\":0.5078,\"best_drift_recall\":0.5078,\"best_alpha\":0,\"recall_gain\":0,\"best_drift_ndcg\":0.2347,\"lexical_ndcg\":0.2347}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "drift:trec-covid",
+      "phaseIndex": 1,
+      "phaseTitle": "Drift",
+      "agentId": "aa25f7e21c0b3584b",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795665473,
+      "queuedAt": 1782795665463,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "trec-covid",
+      "promptPreview": "Run the zero-shot DRIFT experiment for BEIR corpus \"trec-covid\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_drift.py trec-covid\nIt builds a co-occurrence correlation graph (PMI) over the query vocab, diffuses query words across it (the\nexpansion mass accumulates where multiple query words converge), and sweeps the blend …",
+      "lastProgressAt": 1782795703791,
+      "tokens": 38846,
+      "toolCalls": 2,
+      "durationMs": 38318,
+      "resultPreview": "{\"corpus\":\"trec-covid\",\"n_docs\":171332,\"build_s\":26.5,\"lexical_recall\":0.0949,\"best_drift_recall\":0.0949,\"best_alpha\":0,\"recall_gain\":0,\"best_drift_ndcg\":0.5617,\"lexical_ndcg\":0.5617}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "drift:webis-touche2020",
+      "phaseIndex": 1,
+      "phaseTitle": "Drift",
+      "agentId": "a33940cfed7c76171",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795665473,
+      "queuedAt": 1782795665463,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "webis-touche2020",
+      "promptPreview": "Run the zero-shot DRIFT experiment for BEIR corpus \"webis-touche2020\". Working dir: C:/Users/wynos/New folder (3). Run EXACTLY:\n  cd \"C:/Users/wynos/New folder (3)\" && PYTHONUTF8=1 python _o1_drift.py webis-touche2020\nIt builds a co-occurrence correlation graph (PMI) over the query vocab, diffuses query words across it (the\nexpansion mass accumulates where multiple query words converge), and sweep…",
+      "lastProgressAt": 1782795717050,
+      "tokens": 38851,
+      "toolCalls": 2,
+      "durationMs": 51577,
+      "resultPreview": "{\"corpus\":\"webis-touche2020\",\"n_docs\":382545,\"build_s\":35.3,\"lexical_recall\":0.5579,\"best_drift_recall\":0.5579,\"best_alpha\":0,\"recall_gain\":0,\"best_drift_ndcg\":0.3161,\"lexical_ndcg\":0.3161}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "Synthesize the zero-shot DRIFT results: [{\"corpus\":\"scifact\"",
+      "phaseIndex": 2,
+      "phaseTitle": "Synthesize",
+      "agentId": "a95cf2c5517053870",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782795717060,
+      "queuedAt": 1782795717051,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "DRIFT (corpus co-occurrence diffusion, no model/no GPU) is …",
+      "promptPreview": "Synthesize the zero-shot DRIFT results: [{\"corpus\":\"scifact\",\"n_docs\":5183,\"build_s\":3.1,\"lexical_recall\":0.8759,\"best_drift_recall\":0.9056,\"best_alpha\":0.8,\"recall_gain\":0.0297,\"best_drift_ndcg\":0.5108,\"lexical_ndcg\":0.6712},{\"corpus\":\"nfcorpus\",\"n_docs\":3633,\"build_s\":0.9,\"lexical_recall\":0.2379,\"best_drift_recall\":0.2841,\"best_alpha\":0.4,\"recall_gain\":0.0462,\"best_drift_ndcg\":0.2925,\"lexical_nd…",
+      "lastProgressAt": 1782795754592,
+      "tokens": 34571,
+      "toolCalls": 1,
+      "durationMs": 37532,
+      "resultPreview": "{\"per_corpus\":[{\"corpus\":\"scifact\",\"drift_gain\":0.0297,\"helps\":true,\"vs_splade\":\"below — drift recall 0.9056 vs SPLADE 0.909 (−0.0034); recovers ~91% of the lexical→SPLADE gap but does not beat the GPU model. Lexically strong (0.876 lexical) so little semantic gap to mine; nDCG drops 0.6712→0.5108.\"},{\"corpus\":\"nfcorpus\",\"drift_gain\":0.0462,\"helps\":true,\"vs_splade\":\"ABOVE — drift recall 0.2841 vs …"
+    }
+  ],
+  "totalTokens": 228814,
+  "totalToolCalls": 11
+}

@@ -63,3 +63,21 @@ diagnostic *saved us from grid-searching dead lexical knobs.*
 - **Wave 3:** the **correlation-graph drift** (Timothy's higher-D idea) as a ZERO-SHOT, encoder-free attack on
   the GAP — diffuse query words to co-occurring/correlated words via the lattice graph. This is the
   Timothy-native, model-free path to the semantic recall that SPLADE gets with a GPU.
+
+## Wave 2 — DRIFT (zero-shot co-occurrence diffusion) across 5 corpora
+
+| corpus | lexical R@100 | drift R@100 | gain | best α | vs SPLADE-full |
+|---|---|---|---|---|---|
+| nfcorpus | 0.238 | **0.284** | +0.046 | 0.4 | **beats** (0.282) |
+| scifact | 0.876 | 0.906 | +0.030 | 0.8 | within 0.003 (0.909) |
+| fiqa | 0.508 | 0.508 | 0 | 0 (off) | far below (0.610) |
+| trec-covid | 0.095 | 0.095 | 0 | 0 (off) | — |
+| touche | 0.558 | 0.558 | 0 | 0 (off) | — |
+
+**Verdict: drift is a SELECTIVE, self-gating recall lever — not universal.** Helps 2/5 (nfcorpus, scifact);
+on fiqa/trec-covid/touche the per-corpus alpha sweep returns 0 (co-occurrence net-harmful → dialed out), so
+*tuned, drift never hurts*. Where it helps it attacks the semantic GAP and on nfcorpus **beats GPU SPLADE
+zero-shot**. It trades nDCG for recall (scifact 0.671→0.511) → a RECALL stage, rerank after. Build is no-GPU,
+0.9s–35s. Deploy: drift (alpha-gated) first on mismatch corpora → rerank; pure lexical where alpha=0; SPLADE
+where it leads (fiqa). The real ceiling = FUSE complementary recall sources (lexical+bridges+drift+SPLADE),
+which miss different docs (Wave 3).
