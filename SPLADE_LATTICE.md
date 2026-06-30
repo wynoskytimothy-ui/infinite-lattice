@@ -84,6 +84,21 @@ The validated tier, packaged as a first-class, persistent module:
 Self-test (nfcorpus, reusing cache): Recall@100 lexical 0.234 → **distilled 0.279 (93% of SPLADE's gain)** →
 SPLADE-full 0.282, **0.18 ms/q, no query encoder**; save/load serves identically, 863 B/doc on disk.
 
+## GPU ingest path (the only place a GPU helps)
+
+`SpladeEncoder` is device-aware (fp16 on CUDA, on-device top-K to minimize transfer). Measured on an RTX 5080:
+
+| stage | CPU | **GPU (RTX 5080)** |
+|---|---|---|
+| encode docs (nfcorpus 3,633) | 1014 s (4 docs/s) | **4.0 s (898 docs/s, ~225×)** |
+| distill 587 words | — | 0.1 s (6,174 words/s) |
+| **serve** | CPU, encoder-free | **CPU, encoder-free (unchanged)** |
+
+The GPU-built index serves the *same* 93% recall recovery at 0.18 ms/q on CPU with numpy alone — the model is
+not loaded at serve. **MARCO projection: 8.8M docs ≈ 2.7 hrs one-time GPU encode, then CPU-only serve forever.**
+`_o1_gpu_ingest.py`. (898 docs/s is conservative — the per-row top-K extraction is CPU-bound; larger batches +
+GPU-side sparsification would push it higher.)
+
 ## Honest caveats
 - Measured on nfcorpus only (the SPLADE-favorable corpus); scifact/fiqa not yet run (CPU encode is slow).
 - The distilled table here covers the query vocabulary (one-time, offline); production distills the full/corpus

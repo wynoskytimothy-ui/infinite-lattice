@@ -21,29 +21,44 @@ V_WORDPIECE = 30522
 
 
 class SpladeEncoder:
-    """Only needed at ingest/distill (not serve). Lazy torch import."""
-    def __init__(self, name="prithivida/Splade_PP_en_v1"):
+    """Only needed at ingest/distill (NOT serve). GPU-accelerated when CUDA is present (fp16, on-device top-K
+    to minimize transfer); falls back to CPU. Lazy torch import."""
+    def __init__(self, name="prithivida/Splade_PP_en_v1", device=None):
         import torch
         from transformers import AutoModelForMaskedLM, AutoTokenizer
         os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
         self.torch = torch
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.tok = AutoTokenizer.from_pretrained(name)
-        self.m = AutoModelForMaskedLM.from_pretrained(name).eval()
-        torch.set_num_threads(os.cpu_count() or 4)
+        m = AutoModelForMaskedLM.from_pretrained(name).eval()
+        if self.device == "cuda":
+            m = m.half()                                  # fp16 on GPU
+        else:
+            torch.set_num_threads(os.cpu_count() or 4)
+        self.m = m.to(self.device)
 
-    def encode(self, texts, bs=16, topk=None):
-        t = self.torch
+    def encode(self, texts, bs=None, topk=None):
+        t = self.torch; dev = self.device
+        bs = bs or (128 if dev == "cuda" else 16)         # bigger batches on GPU
         terms, wts, off = [], [], [0]
         with t.no_grad():
             for i in range(0, len(texts), bs):
                 b = self.tok(texts[i:i + bs], padding=True, truncation=True, max_length=256, return_tensors="pt")
-                v = (t.log1p(t.relu(self.m(**b).logits)) * b["attention_mask"].unsqueeze(-1)).max(1).values
-                for row in v:
-                    nz = t.nonzero(row).squeeze(-1); w = row[nz]
-                    if topk and nz.numel() > topk:
-                        keep = t.topk(w, topk).indices; nz, w = nz[keep], w[keep]
-                    terms.append(nz.numpy().astype(np.int32)); wts.append(w.numpy().astype(np.float32))
-                    off.append(off[-1] + nz.numel())
+                b = {k: v.to(dev) for k, v in b.items()}
+                v = (t.log1p(t.relu(self.m(**b).logits)) * b["attention_mask"].unsqueeze(-1)).max(1).values  # [B,V]
+                if topk:                                   # on-GPU top-K -> move only top-K to CPU
+                    vals, idx = t.topk(v, min(topk, v.shape[1]), dim=1)
+                    vals = vals.float().cpu().numpy(); idx = idx.cpu().numpy()
+                    for r in range(idx.shape[0]):
+                        msk = vals[r] > 0
+                        terms.append(idx[r][msk].astype(np.int32)); wts.append(vals[r][msk].astype(np.float16))
+                        off.append(off[-1] + int(msk.sum()))
+                else:                                      # keep all nonzero (queries / per-word distill)
+                    vc = v.float().cpu().numpy()
+                    for row in vc:
+                        nz = np.nonzero(row)[0]
+                        terms.append(nz.astype(np.int32)); wts.append(row[nz].astype(np.float16))
+                        off.append(off[-1] + nz.size)
         return np.concatenate(terms) if terms else np.zeros(0, np.int32), \
             np.concatenate(wts).astype(np.float16) if wts else np.zeros(0, np.float16), np.asarray(off, np.int64)
 
