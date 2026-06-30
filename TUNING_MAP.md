@@ -150,3 +150,25 @@ bottleneck is reranker precision, not recall.
 **DEPLOY:** fuse the 4 sources → pool depth 300 → cross-encoder rerank → top-k to the LLM. Corpus-adaptive depth
 (aligned/high-lexical saturates by 200-300; semantic-bound pools to 300-500). The campaign is complete: every
 lever measured, aimed by the prior wave's diagnosis, glass-box throughout.
+
+## #2 stronger reranker + #3 multi-hop drift — both MODEST (diminishing returns)
+
+#2 RERANKER (fiqa, union pool fixed): L-6 recall@100 0.6005/nDCG 0.3135 -> L-12 0.6036/0.3202 (+0.003/+0.0067,
+small upgrade) -> bge-reranker-base 0.5837/0.2533 (WORSE — underperforms here). Verdict: L-12 is a marginal
+improvement; the reranker is NOT a big lever for fiqa's precision bottleneck (its relevance is intrinsically
+ambiguous). Use L-12 as the slightly-better default.
+
+#3 MULTI-HOP DRIFT (2-hop "drift toward", recall@300 = the ceiling contribution):
+| corpus | lexical@300 | drift 1-hop@300 | drift 2-hop@300 | 2-hop lift |
+|---|---|---|---|---|
+| nfcorpus | 0.317 | 0.374 | 0.389 | +0.014 |
+| scifact | 0.934 | 0.948 | 0.950 | +0.002 |
+| fiqa | 0.615 | 0.624 | 0.626 | +0.002 |
+
+2-hop DOES reach 2nd-order correlates and raises the ceiling everywhere (confirming Timothy's "drift toward"
+structurally) -- but the lift is SMALL (biggest nfcorpus +0.014) and it adds noise (nDCG drops more than 1-hop;
+on fiqa 2-hop slightly hurts recall@100). Best only on clean-co-occurrence corpora; 1-hop is the default.
+
+CAMPAIGN CONCLUSION: the big levers (drift + complementary fusion + deeper pool + rerank = the stack) are banked
+and generalized. The refinement levers (#2 reranker, #3 multi-hop) give marginal gains -> diminishing returns.
+The product is EdgeRAG.retrieve(tier='stack') with L-12 reranker + 1-hop drift; 2-hop optional for clean corpora.

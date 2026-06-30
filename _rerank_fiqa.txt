@@ -1,0 +1,8 @@
+================================================================================
+#2 STRONGER RERANKER — fiqa: 648 q, union pools fixed (depth 300)
+================================================================================
+  reranker                                recall@100   nDCG@10
+  ms-marco-MiniLM-L-6-v2                      0.6005    0.3135
+  ms-marco-MiniLM-L-12-v2                     0.6036    0.3202
+  bge-reranker-base                           0.5837    0.2533
+  same union pool, only the reranker changes -> isolates the reranker's effect on recall@100 + nDCG.

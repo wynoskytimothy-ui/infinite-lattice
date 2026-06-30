@@ -1,0 +1,9 @@
+====================================================================================
+WAVE 4 MULTI-HOP DRIFT — nfcorpus: 3,633 docs, 323 q
+====================================================================================
+  config            recall@100   nDCG@10  recall@300  (300=drift pool ceiling contribution)
+  lexical               0.2379    0.3071      0.3165
+  drift 1-hop           0.2841    0.2925      0.3744
+  drift 2-hop           0.2848    0.2788      0.3885
+
+  2-hop reaches 2nd-order correlates; if recall@300 rises over 1-hop, it raises the recoverable ceiling.
