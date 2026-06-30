@@ -105,3 +105,19 @@ the 0.352 union ceiling -> the REMAINING HEADROOM (0.067) is the next lever: a s
   SPLADE on nfcorpus, self-gating (alpha->0 where noisy).
 - Wave 3: sources are complementary (union 0.352); fuse+rerank matches SPLADE-full encoder-free; headroom = a
   better reranker / deeper pool. METHOD: diagnose -> aim the lever -> measure -> the next diagnosis aims the next.
+
+## Wave 3b — capture the union headroom (nfcorpus, depth-300 pools + rerank)
+
+| metric | recall | note |
+|---|---|---|
+| lexical recall@100 | 0.238 | baseline |
+| fused+rerank recall@100 | 0.272 | (top-100 rerank dilutes slightly vs depth-100's 0.285) |
+| fused+rerank recall@200 | 0.334 | |
+| fused+rerank recall@500 | **0.456** | ~2x lexical |
+| union ceiling@300 | **0.487** | deeper pools raised ceiling 0.352->0.487 |
+| reranked nDCG@10 | 0.332 | precision held |
+
+THE RECALL IS POOL-DEPTH-LIMITED, not gone: the gold sits just past rank-100. Deeper fused+reranked pooling
+recovers it — recall@500 0.456 vs lexical 0.238 (nearly 2x), nDCG held 0.332. For a RAG feeding an LLM a
+top-200..500 context, this DOUBLES recall. recall@100 strictly is reranker-bound (a stronger reranker is the
+lever there). The campaign's located headroom is captured at depth.
