@@ -1,0 +1,13 @@
+  loaded HotpotQA distractor-dev: 7405 questions
+  corpus: 66581 unique paras, 144929 terms (idf built 2s)
+
+MULTI-HOP TRAVERSAL on HotpotQA distractor (bridge questions, n=5918)
+
+   retriever                     support-fact R@2  2nd-hop para R@2
+   single-hop BM25                         0.5382            0.2072
+   + corridor (re-rank)                    0.4399            0.3799
+   CHAIN (anchor + bridge)                 0.6415            0.4642
+   + random-term control                   0.1941            0.1680
+
+   multi > single on 2nd-hop R@2, AND multi > control = corridor traversal reaches the
+   bridge passage single-hop misses, via the rare bridge-entity link -- the multi-hop win.
