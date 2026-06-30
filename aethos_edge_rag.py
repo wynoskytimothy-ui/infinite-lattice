@@ -140,6 +140,74 @@ class EdgeRAG:
         fin = cand_idx[np.argsort(final)[::-1]]
         return [self.doc_ids[int(i)] for i in fin[:k]]
 
+    # ---------------- trigger pools (champion lists): precise, pre-sorted, corpus-size-independent --------
+    def build_pools(self, M=256):
+        """Per term, the pool of docs it TRIGGERS most strongly: top-M by BM25 impact, PRE-SORTED by impact.
+        Query work becomes O(#query_terms * M) -- independent of corpus size -- and candidates arrive already
+        ranked, so pulling is precise and trivial to sort. (The lattice knows each term's triggered docs +
+        their impact; this just materializes + caps + orders them.)"""
+        self.M = M
+        ip, sd, st, den, k1p1 = self.indptr, self.seg_doc, self.seg_tf, self._denom, self._k1p1
+        pd, pi, ptr = [], [], [0]
+        for t in range(self.V):
+            a, e = int(ip[t]), int(ip[t + 1])
+            di = sd[a:e]; tf = st[a:e].astype(np.float64)
+            imp = (self._idf(e - a) * k1p1) * tf / (tf + den[di])      # BM25 contribution of this term per doc
+            if di.size > M:
+                keep = np.argpartition(imp, -M)[-M:]; di = di[keep]; imp = imp[keep]
+            order = np.argsort(imp)[::-1]                               # PRE-SORT by impact (desc)
+            pd.append(di[order]); pi.append(imp[order]); ptr.append(ptr[-1] + order.size)
+        self.pool_doc = np.concatenate(pd).astype(np.uint32)
+        self.pool_imp = np.concatenate(pi).astype(np.float64)
+        self.pool_ptr = np.asarray(ptr, np.int64)
+        return self
+
+    def sort_segments(self):
+        """Sort each term's CSR segment by doc-id (enables binary-search lookup for rarest-anchor scoring).
+        Vectorized: one argsort by (term, doc). Postings reorder within term; indptr unchanged; serve unaffected."""
+        tpp = np.repeat(np.arange(self.V), self.df)                    # term-id per posting
+        key = tpp.astype(np.int64) * (self.N + 1) + self.seg_doc.astype(np.int64)
+        o = np.argsort(key, kind="stable")
+        self.seg_doc = np.ascontiguousarray(self.seg_doc[o]); self.seg_tf = np.ascontiguousarray(self.seg_tf[o])
+        self._sorted = True
+        return self
+
+    def search_anchored(self, query, k=10):
+        """Rarest triggered word = smallest pool; score those candidates EXACTLY over all query terms (binary
+        search in sorted segments). Bounded by the rare term's df (corpus-size-independent); near-lossless."""
+        if not getattr(self, "_sorted", False): self.sort_segments()
+        ip, sd, st, den, k1p1 = self.indptr, self.seg_doc, self.seg_tf, self._denom, self._k1p1
+        terms = []
+        for w, qwt in Counter(words(query)).items():
+            tid = self._term_id(w)
+            if tid is not None and ip[tid + 1] > ip[tid]: terms.append((int(self.df[tid]), tid, qwt))
+        if not terms: return []
+        terms.sort()                                                   # by df asc -> rarest first = the anchor
+        atid = terms[0][1]; a, e = int(ip[atid]), int(ip[atid + 1])
+        cands = sd[a:e].astype(np.int64)                               # candidate doc-indices (sorted)
+        scores = np.zeros(cands.size); dc = den[cands]
+        for dfp, tid, qwt in terms:
+            sa, se = int(ip[tid]), int(ip[tid + 1])
+            seg = sd[sa:se]; idx = np.searchsorted(seg, cands); idx = np.minimum(idx, seg.size - 1)
+            hit = seg[idx] == cands
+            tf = np.where(hit, st[sa:se][idx].astype(np.float64), 0.0)
+            scores += np.where(hit, (qwt * self._idf(dfp) * k1p1) * tf / (tf + dc), 0.0)
+        top = np.argpartition(scores, -min(k, scores.size))[-min(k, scores.size):]
+        top = top[np.argsort(scores[top])[::-1]]
+        return [self.doc_ids[int(cands[i])] for i in top if scores[i] > 0]
+
+    def search_pooled(self, query, k=10):
+        """Pull from the triggered pools only (pre-sorted by impact), accumulate, top-k. Bounded by query*M."""
+        acc = {}
+        for w, qwt in Counter(words(query)).items():
+            tid = self._term_id(w)
+            if tid is None: continue
+            a, e = int(self.pool_ptr[tid]), int(self.pool_ptr[tid + 1])
+            docs = self.pool_doc[a:e]; imp = self.pool_imp[a:e]
+            for i in range(docs.size):
+                d = int(docs[i]); acc[d] = acc.get(d, 0.0) + qwt * imp[i]
+        return [self.doc_ids[d] for d in sorted(acc, key=acc.get, reverse=True)[:k]]
+
     # ---------------- mmap persistence (RAM = working set) ----------------
     def save_mmap(self, path):
         os.makedirs(path, exist_ok=True)
