@@ -48,9 +48,19 @@ a raw word looks up its learned correlations from the table — **no neural net 
 | SPLADE full | 0.336 | 0.282 | **YES** |
 | **distilled** | 0.321 | **0.275** | **NO** |
 
-**Distilled (max-pool) recovers 92% of SPLADE's recall gain (0.238 → 0.279 vs full 0.282) — with no query
-encoder.** The semantic graph is built at ingest, before any question; a word (or subword) triggers its saved
-correlations. Pure-lattice serve speed, most of SPLADE's recall, no GPU at query time.
+**Distilled (max-pool) recovers a CORPUS-DEPENDENT 44–93% of SPLADE's recall gain — with no query encoder, and
+ALWAYS improves recall over lexical.** The semantic graph is built at ingest, before any question; a word (or
+subword) triggers its saved correlations. Pure-lattice serve speed, no GPU at query time.
+
+| corpus | R@100 lexical | distilled (enc-free) | SPLADE-full | recovery |
+|---|---|---|---|---|
+| scifact | 0.876 | 0.890 | 0.909 | 44% |
+| nfcorpus | 0.234 | 0.279 | 0.282 | 93% |
+| fiqa | 0.508 | 0.566 | 0.610 | 57% |
+
+**Recovery is lowest where full-query context matters most** (scifact's long claim queries, 44%) and highest for
+short queries (nfcorpus, 93%) — confirming the context hypothesis. The encoder-free tier is a real recall boost
+everywhere; use full-SPLADE (encoder at serve) when you need the rest. (`_o1_distill_generalize.py`)
 
 **The combination method is the lever, not more context.** Switching per-word distillation from sum → **max-pool**
 (matching SPLADE's own pooling) jumped recovery **84% → 92%** (`_o1_distill_pairs.py`).
@@ -72,6 +82,18 @@ Everything rides the same lattice CSR + scatter-add serve:
 
 Pick the accuracy/cost point per deployment; the lattice is the universal sparse-serving engine. Timothy's
 distillation makes the *encoder-free* tier genuinely semantic — the key to keeping speed while gaining recall.
+
+### The dial, measured (`EdgeRAG.retrieve(tier=/fuse=)`, `_o1_dial.py`) — nDCG@10 / Recall@100, encoder-free
+
+| corpus | lexical | bridged | distilled | **fuse(bridged+distilled)** |
+|---|---|---|---|---|
+| scifact | 0.671/0.876 | **0.711**/0.876 | 0.681/0.890 | 0.690/**0.937** |
+| nfcorpus | 0.307/0.234 | 0.316/0.234 | 0.321/0.279 | **0.330/0.281** |
+| fiqa | 0.235/0.508 | 0.245/0.508 | 0.280/0.566 | **0.286/0.586** |
+
+**Encoder-free fusion (bridges + distilled-SPLADE) wins recall on all three** (scifact 0.876 → **0.937**) — they
+miss different docs, so fusing reaches more than either, no GPU at serve. Fusion also wins nDCG on nfcorpus/fiqa;
+scifact prefers bridges-alone for nDCG. The dial matters; weighted RRF fusion is the safe default.
 
 ## Productized: `aethos_splade_lattice.DistilledSpladeIndex`
 

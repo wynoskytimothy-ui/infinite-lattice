@@ -208,6 +208,36 @@ class EdgeRAG:
                 d = int(docs[i]); acc[d] = acc.get(d, 0.0) + qwt * imp[i]
         return [self.doc_ids[d] for d in sorted(acc, key=acc.get, reverse=True)[:k]]
 
+    # ---------------- the dial: one API across all tiers + weighted RRF fusion ----------------
+    def attach_splade(self, splade_index):
+        """Attach a DistilledSpladeIndex (encoder-free SPLADE tier) so retrieve() can dial to it."""
+        self._splade = splade_index; return self
+
+    def _tier(self, query, tier, n):
+        if tier == "lexical": return self.search(query, n)
+        if tier == "bridged": return self.search_bridged(query, n)
+        if tier == "wand":
+            if not getattr(self, "_sorted", False): self.sort_segments()
+            return self.search_anchored(query, n)
+        if tier == "distilled":
+            if not getattr(self, "_splade", None): raise ValueError("no SPLADE index attached (attach_splade)")
+            return self._splade.search(query, n)
+        raise ValueError(f"unknown tier '{tier}'")
+
+    def retrieve(self, query, k=10, tier="bridged", fuse=None, weights=None, K0=60):
+        """ONE API for the whole dial. tier in {lexical, bridged, distilled, wand}; or fuse=[tiers...] for
+        weighted reciprocal-rank fusion (weights={tier: w}). Encoder-free unless tier/fuse includes a SPLADE
+        path that needs an encoder at serve."""
+        if not fuse:
+            return self._tier(query, tier, k)
+        w = weights or {}
+        agg = {}
+        for t in fuse:
+            wt = w.get(t, 1.0)
+            for r, d in enumerate(self._tier(query, t, 100)):
+                agg[d] = agg.get(d, 0.0) + wt / (K0 + r)
+        return sorted(agg, key=agg.get, reverse=True)[:k]
+
     # ---------------- mmap persistence (RAM = working set) ----------------
     def save_mmap(self, path):
         os.makedirs(path, exist_ok=True)
