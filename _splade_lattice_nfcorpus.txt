@@ -1,0 +1,11 @@
+====================================================================================
+SPLADE ON THE LATTICE — nfcorpus: 3,633 docs, top-128 terms/doc
+====================================================================================
+  encode: 3633 docs in 1014s (4 docs/s, CPU; GPU ~50-100x)
+  index                    B/doc     serve   nDCG@10
+  lexical lattice           ~198     0.1ms    0.3065
+  SPLADE on lattice          763    0.11ms    0.3357
+
+  -> SAME lattice serve (scatter-add) + sparse postings; SPLADE weights -> nDCG 0.307 -> 0.336 (+0.029)
+  footprint 763 B/doc (top-128; prunable), serve 0.11ms CPU. Encoder is the
+  only addition (ingest one-time + query); lattice speed/footprint preserved.
