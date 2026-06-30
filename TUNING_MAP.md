@@ -81,3 +81,27 @@ zero-shot**. It trades nDCG for recall (scifact 0.671→0.511) → a RECALL stag
 0.9s–35s. Deploy: drift (alpha-gated) first on mismatch corpora → rerank; pure lexical where alpha=0; SPLADE
 where it leads (fiqa). The real ceiling = FUSE complementary recall sources (lexical+bridges+drift+SPLADE),
 which miss different docs (Wave 3).
+
+## Wave 3 — FUSE complementary recall sources + rerank (nfcorpus)
+
+| stage | recall@100 | nDCG@10 |
+|---|---|---|
+| best single (drift) | 0.284 | — |
+| FUSE equal-RRF | 0.278 (dilutes) | — |
+| FUSE weighted-RRF | 0.283 | — |
+| **union → cross-encoder rerank** | **0.285** | **0.332** |
+| union ceiling | **0.352** | — |
+| SPLADE-full (ref) | 0.282 | 0.336 |
+
+The four recall sources (lexical, bridges, drift, distilled-SPLADE) are COMPLEMENTARY — union ceiling 0.352 vs
+any single ~0.28 (+24% headroom). The full stack (fuse → rerank) MATCHES SPLADE-full (recall 0.285>0.282, nDCG
+0.332≈0.336) and is the best encoder-free nDCG, no SPLADE query encoder at serve. But it captures only 0.285 of
+the 0.352 union ceiling -> the REMAINING HEADROOM (0.067) is the next lever: a stronger reranker or deeper pool
+(recall@k>100). The campaign located it precisely.
+
+### Campaign synthesis (Waves 1-3)
+- Wave 1: deficit = recall (semantic GAP); lexical levers marginal (≤+0.007); anchor/idf² toxic; df-cap gentlest.
+- Wave 2: drift (zero-shot co-occurrence diffusion, Timothy's higher-D idea) = selective recall lever, BEATS
+  SPLADE on nfcorpus, self-gating (alpha->0 where noisy).
+- Wave 3: sources are complementary (union 0.352); fuse+rerank matches SPLADE-full encoder-free; headroom = a
+  better reranker / deeper pool. METHOD: diagnose -> aim the lever -> measure -> the next diagnosis aims the next.

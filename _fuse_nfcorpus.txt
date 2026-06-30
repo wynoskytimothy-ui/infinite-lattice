@@ -1,0 +1,15 @@
+==========================================================================================
+WAVE 3 FUSE — nfcorpus: 3,633 docs, 323 q | distilled=yes
+==========================================================================================
+  source / fusion     recall@100   nDCG@10
+  lexical                 0.2379
+  bridged                 0.2339
+  drift                   0.2841
+  distilled               0.2786
+  FUSE equal-RRF          0.2783   (dilutes)
+  FUSE weighted-RRF       0.2834   (weight by source strength)
+  union ceiling           0.3520   (max from the pools)
+  union + RERANK          0.2852    0.3322   <- the full stack
+
+  vs SPLADE-full recall@100 0.282: union+rerank 0.2852 (ABOVE)
+  complementary recall sources -> union -> cross-encoder rerank = best recall AND nDCG.
