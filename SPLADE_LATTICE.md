@@ -73,6 +73,17 @@ Everything rides the same lattice CSR + scatter-add serve:
 Pick the accuracy/cost point per deployment; the lattice is the universal sparse-serving engine. Timothy's
 distillation makes the *encoder-free* tier genuinely semantic — the key to keeping speed while gaining recall.
 
+## Productized: `aethos_splade_lattice.DistilledSpladeIndex`
+
+The validated tier, packaged as a first-class, persistent module:
+- `build_docs(corpus, encoder)` — SPLADE-encode docs once → CSR (needs GPU at ingest)
+- `distill(vocab, encoder)` — per-word expansion table once
+- `search(query)` — **encoder-free** (max-pool distilled expansion → scatter-add); numpy only, no torch
+- `save(path)` / `load(path, mmap=True)` — the model is **not needed to serve**
+
+Self-test (nfcorpus, reusing cache): Recall@100 lexical 0.234 → **distilled 0.279 (93% of SPLADE's gain)** →
+SPLADE-full 0.282, **0.18 ms/q, no query encoder**; save/load serves identically, 863 B/doc on disk.
+
 ## Honest caveats
 - Measured on nfcorpus only (the SPLADE-favorable corpus); scifact/fiqa not yet run (CPU encode is slow).
 - The distilled table here covers the query vocabulary (one-time, offline); production distills the full/corpus
