@@ -1,0 +1,9 @@
+========================================================================================
+TWO-SIDED EXPANSION — scifact: 5,183 docs (graph 5.3s, doc-expand 3.4s)
+========================================================================================
+  config                          recall@100   nDCG@10
+  A lexical (orig+plain)              0.8759    0.6712  +0.0000
+  B query-side (orig+exp Q)           0.8956    0.6028  +0.0197
+  C doc-side (expIdx+plain Q)         0.8949    0.6770  +0.0190
+  D TWO-SIDED (expIdx+exp Q)          0.9083    0.6051  +0.0324
+  index footprint grows 1.22x (doc-side expansion adds postings). graph + both sides = model-free SPLADE.
