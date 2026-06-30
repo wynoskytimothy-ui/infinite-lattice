@@ -20,6 +20,30 @@ at 3.8× smaller footprint and sub-millisecond latency — with zero neural mode
 On scifact it slightly *beats* full; across corpora the robust claim is *competitive at 3.8× smaller* (see
 Generalization below — "beats full" holds on 2 of 3 corpora; the footprint shrink holds on all 3).
 
+## The unified engine (`aethos_edge_rag.py`) — all three pieces, one class
+
+`EdgeRAG` wires the proven pieces into one coherent engine and **verifies it reproduces the edge champion
+accuracy exactly** (so none of the speed work cost accuracy):
+
+```
+INGEST   : radix/hash numba build, nogil-threaded (24.5M tok/s) -> serve-ready CSR
+SERVE    : mmap-able CSR (seg_doc/seg_tf/indptr); query token -> FNV hash -> term_id -> scatter-add BM25
+ACCURACY : counting-bridges learned from train qrels, rerank top-100 (neural-free)
+PERSIST  : save_mmap / load_mmap -> RAM = working set
+```
+
+End-to-end self-test (scifact, `python aethos_edge_rag.py`):
+
+| stage | result |
+|---|---|
+| ingest | 5,183 docs in **34 ms** (154,671 docs/s), 32,826 terms, 477,682 postings |
+| serve — lexical | nDCG **0.6712**, 0.09 ms/q — *exactly* edge champion C |
+| serve — + bridges | nDCG **0.7112**, 0.74 ms/q — *exactly* edge champion D |
+| mmap round-trip | nDCG **0.7112** (MATCH) — save→load→serve is identical |
+
+The same word-only artifact is now **fast to build (numba radix), small + low-RAM to serve (mmap CSR), and
+accurate (counting-bridges)** — small + fast + accurate, in one class, no GPU.
+
 ## Generalization (scifact / nfcorpus / fiqa — adversarially audited, zero leakage)
 
 Each run was independently audited by a separate agent: bridges learned ONLY from train qrels, eval ONLY on
