@@ -1,0 +1,298 @@
+{
+  "summary": "Deep search: pair unsolved RAG problems with UNUSED proven lattice aspects (min-plus continuum, invertible address, higher-D stacking, set-reconciliation, ECC/Merkle), assess honestly, rank",
+  "agentCount": 8,
+  "logs": [
+    "parallel[1] failed: agent({schema}): StructuredOutput retry cap (5) exceeded — 5 failed calls with no valid output"
+  ],
+  "result": {
+    "explore": [
+      {
+        "key": "RAG_LATTICE_MULTIHOP_CHAIN",
+        "verdict": "marginal",
+        "real_problem": true,
+        "lattice_fit": "YES for multi-hop retrieval specifically, but NOT for the general RAG problem EdgeRAG targets. The lattice's rare-entity-meet mechanism is a precision structural advantage for bridge entity traversal, NOT a semantic similarity engine. On HotpotQA (5,918 bridge questions), lattice chain reaches 46.42% 2nd-hop recall vs dense-chain 41.99% (+11%). On 2WikiMultihop, +72% over dense. However: (1) This is ONLY proven on multi-hop-specific benchmarks; (2) Commit d158f04 tested \"multi-hop drift\" (2-hop co-occurrence expansion) on BEIR corpora and found nfcorpus +0.014, scifact +0.002, fiqa +0.002 — the gain is SMALL and noisy (nDCG drops). The drift's 2-hop is a different mechanism (semantic co-occurrence diffusion) than the rare-entity meet-chain (structural bridge entity), so that test did NOT directly measure this opportunity. (3) The real lattice chain (meet_chain from _prove_multihop.py) is NOT integrated into EdgeRAG; it requires AppendOnlyLatticeIndex, not EdgeRAG's mmap-CSR format. (4) BEIR corpus diversity means multi-hop queries may be a small subset; the +11% gain is on a curated bridge-question-only test set. The gap: HotpotQA is artificially constrained to 10-doc candidate pools and bridge-biased questions; real retrieval doesn't pre-filter to multi-hop-friendly setups.",
+        "measurable_experiment": "HotpotQA distractor-dev: 5,918 bridge questions, 10 candidate paras each. Metric: 2nd-hop para recall@2 (the bridge document that single-hop misses). Baselines: single-hop lexical 20.72%, single-hop dense 38.68%, dense-chain (via similarity bridge) 41.99%. Lattice chain (via rare-entity meet): 46.42%. Cost: integration into EdgeRAG requires replacing mmap-CSR with AppendOnlyLatticeIndex (different ingest/serve stack). Success criteria: (a) achieve 46%+ on HotpotQA 2nd-hop without regressing single-hop results; (b) measure on BEIR corpus to confirm generalization (the real gap: nfcorpus/scifact/fiqa are NOT multi-hop-dense like HotpotQA); (c) show that multi-hop tier helps more than deeper pool (EdgeRAG stack already reaches depth 300, which may subsume multi-hop value).",
+        "risk": "INTEGRATION ARCHITECTURE: The meet_chain lives in _prove_multihop.py using AppendOnlyLatticeIndex. EdgeRAG uses a different ingest/serve path (radix-hash + mmap-CSR). Porting would require rewriting ingest or building a lattice-index adapter. GENERALIZATION: Multi-hop gains are measured on HotpotQA (10-doc restricted pools, query-biased to bridge questions). Real BEIR corpora are diverse; multi-hop queries are a subset. The prior multi-hop drift test (commit d158f04) on real BEIR showed +0.002-0.014 on recall@300, with nDCG drops. QUERY DISCRIMINATION: The lattice chain will re-rank ALL queries through a 2-hop path. Risk: on non-multi-hop queries (the majority of BEIR), re-ranking may HURT nDCG by promoting bridge entities over direct relevance. No adaptive routing exists; running it blindly on all queries could regress stack nDCG. SEMANTICS WALL: The rare-entity meet is a STRUCTURAL solution (precise co-occurrence), not semantic bridging. If the bridge entity is too rare (df=1, not reachable) or doesn't exist in the corpus (the query-bridge link is semantic, not lexical), the mechanism fails. The original diagnostic found \"semantic gap\" as the problem; this solves the \"rare-entity-bridge\" sub-problem but misses semantic gaps.",
+        "novelty": "MECHANISM: The rare-entity-meet-chain is novel vs dense retrieval (commit bf2951b showed it beats dense-similarity +56% on isolated bridge questions). VS PRIOR WORK: Dense traversal / graph-RAG is known; the lattice's contribution is a precise structural alternative to diffuse similarity bridging. NOT novel in isolation — the benefit is specific to the rare-entity-cooccurrence problem. VS CURRENT EDGERAG: The stack (lexical+drift+distilled+rerank) is semantic-focused (similarity + co-occurrence diffusion + neural). Adding a structural 2-hop tier would be orthogonal. UNPROVEN: Whether the combination (stack + multi-hop tier) beats stack alone on real BEIR. The commit message says #3 multi-hop drift was \"marginal\" on BEIR — but that was 2-hop *drift*, not rare-entity *meet*. The question is whether rare-entity meet (untested on BEIR) fares better.",
+        "est_effort": "PORTING: 20–40 hrs. Extract meet_chain() logic, adapt to EdgeRAG's term-id namespace, integrate into retrieve() as tier='multihop' or as a re-ranker over tier='stack' results. TESTING: 10–20 hrs. (a) Reproduce HotpotQA 46.42%, confirm no regression on EdgeRAG single-hop benchmarks; (b) test on scifact, nfcorpus, fiqa, trec-covid (full BEIR suite) to measure if +11% HotpotQA gain holds or regresses; (c) ablate vs deeper pool (stack depth 300 → depth 500, which may subsume multi-hop value). VALIDATION: 5 hrs. Measure nDCG@10 + recall@100 on all BEIR corpora, compare stack vs stack+multihop. TOTAL: ~35–65 hrs (1–2 week sprint for a single engineer). LOW EFFORT, BUT OUTCOME UNCERTAIN — the risk is that BEIR measurement shows +0-0.005, repeating the drift's \"marginal\" lesson."
+      },
+      {
+        "key": "multi_aspect_faceted_retrieval_lattice",
+        "verdict": "dead",
+        "real_problem": true,
+        "lattice_fit": "The lexical lattice is fundamentally a vocabulary-addressing engine (primes for deterministic term hashing). Multi-faceted retrieval requires independent metadata dimensions (time, author, category) with separate filtering logic. The lattice's orthogonal axes solve term co-occurrence addressing, NOT attribute filtering. Adding metadata as lattice dimensions would either: (1) require abandoning the single-vocabulary model, or (2) embed metadata as special tokens, losing the independence the proposal claims. The lattice's structural strength (append-only, deterministic addressing) is orthogonal to faceted search and doesn't address the real requirement: efficient range queries + categorical filtering on metadata fields.",
+        "measurable_experiment": "Construct a faceted retrieval benchmark from a corpus with structured metadata (arXiv papers: author, date, category, text). Create queries requiring intersection of content + multiple attribute filters (e.g., \"papers on transformers by researchers at OpenAI published 2020–2023\"). Baseline: BM25 on text + external metadata index (e.g., LSM range-tree for dates + hash index for authors). Metric: recall@10 on queries where gold documents match all facets. Success criterion: lattice+metadata beats BM25+external index. Risk: external indexing (standard production approach) will likely match or beat the lattice because faceted search is not a semantic-gap problem—it's a filtering + ranking problem.",
+        "risk": "Fundamental: the lattice's moat (deterministic term addressing, counting-bridges) doesn't transfer to metadata dimensions. The semantic-gap insights (co-occurrence expansion, bridges) are useless for author/date filtering. Performance risk: standard production-grade metadata indexing (LSM trees, hash indices) is already near-optimal for faceted filtering; the lattice adds complexity without a clear advantage. Validation risk: BEIR-style benchmarks don't measure faceted retrieval, so any claimed win would be on a bespoke dataset of unclear generality.",
+        "novelty": "Low. Faceted/parametric retrieval is decades-old (Lucene, Elasticsearch, database indices). The lattice would be a novel encoding, but not a novel capability. Existing systems solve this with orthogonal techniques (inverted index for text, LSM/B-tree for ranges, hash for categories). The lattice offers no new insight into how to combine them—it only adds another retrieval engine to the stack without a demonstrated edge on the filtering part.",
+        "est_effort": "High. Would require: (1) instrumenting EdgeRAG to handle metadata fields as separate indices, (2) designing a composable query model (AND text + author + date range), (3) measuring the mmap/serving cost of multi-index lookups, (4) constructing a faceted-retrieval benchmark with ground truth, (5) implementing a hybrid scoring model (fuse text ranking + filter satisfaction). 2–4 weeks minimum to validate whether it's actually faster/smaller than a standard hybrid baseline. Likely outcome: confirms the lattice adds complexity without advantage."
+      },
+      {
+        "key": "distributed_sync_minisketch_meet",
+        "verdict": "marginal",
+        "real_problem": true,
+        "lattice_fit": "Meet is d=1 Minisketch special case. At d>=2 (real posting diffs), needs PinSketch. Lattice's structural strength (exact addressing) orthogonal to sync. Fit score 2/10.",
+        "measurable_experiment": "Split BEIR corpus into two shards, add 5% term diffs. Measure bytes-shipped: meet-sum vs PinSketch-d=5 vs naive diff+gzip. Success: meet saves 50%+ AND real diffs stay d=1. Expected: diffs d=2-10, meet fails.",
+        "risk": "Problem orthogonal to EdgeRAG. At d>=2 meet fails, forces PinSketch. Dead code. Marginal bandwidth gains don't ROI vs semantic levers.",
+        "novelty": "Zero. Minisketch 2019+ already general-purpose.",
+        "est_effort": "4-6 weeks. High risk dead landing."
+      },
+      {
+        "key": "lattice-diversity-via-address-distance",
+        "verdict": "marginal",
+        "real_problem": true,
+        "lattice_fit": "The lattice encodes documents as 3D coordinates (z, ζ) derived from anchor-chain prime products. The \"address-space distance\" would be Euclidean distance in this 3D space. However, this is fundamentally a STRUCTURAL/ADDRESSING metric, not a semantic one. The coordinates reflect prime factorization structure (which primes divide a document's term-product representation), not topical similarity. Docs with semantically identical content can have vastly different coordinates if one uses synonym terms (different primes). The fit is thus WEAK for ranking/diversity: the lattice's address-space distance does NOT correlate with semantic redundancy—it measures whether two docs factor differently in prime-space.",
+        "measurable_experiment": "Dataset: MS MARCO dev (3,000 queries, 8.8M passages). Baseline: top-100 BM25 ranked candidates. Metric: Coverage (how many unique topics/facts the top-10 covers) + answer-presence (does diversity help land the gold in top-10?). Experiment: (a) rerank top-100 by combined score = BM25 + α·lattice_address_distance(doc_i, already_selected) (greedy MMR-style, embedding-free). (b) compare MRR@10 + coverage@10 (e.g., via a secondary LLM judge of fact-distinctness) to: (i) BM25 alone, (ii) distinct_ratio method from marco_distinct.py (which already lifts +0.26% MRR), (iii) a proper dense-embedding MMR baseline (e.g., via cached sentence-BERT). Hypothesis: lattice address-distance MMR will underperform both the simple distinct_ratio (which won on measured data) and dense-embedding MMR because address-space distance is orthogonal to semantic redundancy.",
+        "risk": "**Critical mis-alignment:** The lattice's core strength (exact addressing, structural/algebraic operations) is orthogonal to the semantic gap that causes redundancy. Two docs about \"apple phone\" vs \"iPhone device\" can both match query \"smartphone\" with high BM25 scores, but they'll have *different* prime addresses (different rare terms) so lattice-distance will rate them far apart, even though they answer the query identically—no diversity win. Conversely, docs that *are* semantically redundant (synonyms, paraphrases) will likely cluster in prime-space simply because they share term co-occurrence patterns, so address-distance won't spread them apart. **The lattice lacks the semantic visibility to solve semantic redundancy.** Second risk: MARCO_FINDINGS.md shows distinct_ratio (simple surface heuristic) already captures the gain (+0.26% MRR) and is self-bounding (p>0.25 bleeds into \"punish short docs\"). Lattice-address-distance has no such data-driven boundary—it's a pure geometric metric disconnected from relevance signals, so it risks demoting true answers when they cluster structurally.",
+        "novelty": "Novelty claim is weak. Diversity in top-k is a 20-year-old problem (Carbonell &amp; Goldstein 1998, MMR / Maximal Marginal Relevance). All existing solutions use either: (1) embedding-space distance (dense vectors, LSH), (2) surface heuristics (term overlap, distinct-ratio from marco_distinct.py, ILP re-ranking), or (3) learned models. Using the lattice's algebraic address-space as a diversity metric would be orthogonal to all of these BUT it's orthogonal to *semantic* diversity, which is the actual problem. The novelty is \"use prime-lattice structural distance for diversity\"—interesting geometrically, but solving the wrong problem (structural != semantic). If this *were* pitched as \"cheap, embedding-free structural diversity to complement dense-embedding MMR,\" it's non-core (the real lift comes from dense embeddings). The lattice's *proven* multi-hop reach (CLAIMS_PROVEN: +47 bridge docs via meet-closure) is a genuine STRUCTURAL strength that semantics don't touch; diversity via address-distance competes with semantics, where the lattice is weaker.",
+        "est_effort": "**Implementation:** ~1 week (code the greedy lattice-address MMR reranker, integrate into serve pipeline, cache distances or compute on-the-fly). **Measurement:** ~3 weeks (run MARCO dev eval, collect coverage metrics, A/B vs distinct_ratio + dense-embedding MMR, statistical significance). **Total: ~4 weeks**. But effort is not the gate—the fit is."
+      },
+      {
+        "key": "lattice_orbit_tampering_rag",
+        "verdict": "dead",
+        "real_problem": true,
+        "lattice_fit": "The 32-orbit is a distance-32 repetition code on conserved sums (zeta), proven to detect and recover corrupted SCALARS via majority vote. But RAG corruption is structural: poisoned postings, tampered term-doc pairs, compromised relevance judgments. The orbit encodes ONE NUMBER across 32 chambers; it cannot natively protect multi-dimensional posting lists or catch sophisticated index tampering. Mapping retrieval structures onto scalar zeta-sums requires a separate encoding layer that defeats the lattice's append-only O(1) add speed.",
+        "measurable_experiment": "Dataset: BEIR (scifact 5K docs). Baseline: EdgeRAG undefended + random document corruption (randomly flip term-ids in top-20 postings for 5-10% of terms). Metric: nDCG@10 before/after corruption, then compare (A) lexical-only vs (B) lexical+32-orbit checksum recovery. Risk: the orbit can only recover one corrupted scalar per index partition; it won't catch sophisticated poisoning (reranking bridges, document insertion). Expected result: orbit detects gross index bit-flips but doesn't outperform a simple document hash + periodic verification (existing solutions).",
+        "risk": "The lattice's structural strength (append-only, no-reindex, deterministic prime-addressing) is achieved by deferring all verification to query time. Bolting on 32-orbit checksums requires pre-computing and storing symmetry orbits for every posting list—contradicting the engine's design philosophy. Worse: an attacker targeting a RAG system doesn't corrupt random scalars; they poison terms / reweight bridges / add decoy docs. The orbit is blind to these. False negatives are near-certain. Meanwhile, hash-trees and cryptographic signatures solve this already. Pursuing this trades the lattice's unique moat (fast append) for a weak integrity layer that's outcompeted by simpler methods.",
+        "novelty": "Low. The 32-orbit for error correction is not new (classic repetition codes). Applying it to index corruption is a straightforward packing (zeta-sum per posting segment), but it's weaker than Merkle trees and contradicts the lattice's O(1) philosophy. The prior work in stream monitoring (aethos_monitor.py) already demonstrated orbit-based fault detection on scalars; extending it to retrieval is incremental and doesn't unlock a new capability class.",
+        "est_effort": "Medium-high (4–6 weeks). Implementing: (1) partition the index into orbit-guardable chunks (each posting's zeta), (2) store checksum per partition, (3) detect/reconstruct on query. But this is engineering; the science is settled: the orbit can't solve the real problem (sophisticated tampering). The effort would likely yield a \"works on toy corruption\" result that's not production-worthy."
+      },
+      {
+        "key": "rag_kg_completion_lattice_meet",
+        "verdict": "dead",
+        "real_problem": false,
+        "lattice_fit": "The lattice's invertible meet (recover 3rd of {a,p,q} from 2 others) is a genuine structural/addressing strength. But KG completion's bottleneck is LEARNED RELATION SEMANTICS (distinguishing author/part-of/mentions relations), not entity co-occurrence. The meet solves addressing; KG needs embeddings. Pairing them is category mismatch — like using a perfect hash table to solve a semantic similarity problem.",
+        "measurable_experiment": "Convert FB15k triples to text documents: (subj, rel, obj) → docs. Baseline: dense retriever (all-MiniLM-L6-v2) on query \"(subj, rel, ?)\" retrieves object docs. Metric: Hits@10 and MRR on held-out test triples. Measure: (A) dense-only baseline, (B) dense + lattice meet expansion (entity co-occurrence bridging via postings), (C) lattice-only. Hypothesis: meet chains recover 10–15% of dense's misses. Risk: hypothesis likely FALSE; relation semantics (captured by dense model) dominate entity sparsity. Expect <5% improvement if any.",
+        "risk": "1) Relation semantics (is-a, author, mentions) require learned embeddings; lattice meet is undirected structure only. 2) Standard KG benchmarks (FB15k/WN18) test embedding/representation learning, not retrieval—dense/sparse retrievers are also poorly suited, making this not EdgeRAG-specific. 3) Scifact multi-hop demonstration (_prove_multihop.py: 45/60 bridge recovery) is orthogonal—it's about document-level entity chaining, not relation-typed completion. 4) Opportunity is likely domain-specific (sparse text KGs), not general. 5) Effort to disprove: 1–2 days (run experiment on FB15k text); if negative, move on. If positive, likely <5% lift (noise, not signal).",
+        "novelty": "Lattice contribution would be structural entity recovery via meet-chaining (no learned edges). Existing solutions: TransE/DistMult/ComplEx (embedding-based relations, 0.40–0.50 MRR), LLM-based completion (semantic, 0.65–0.75 MRR), dense RAG + reranker (not targeting KG). Lattice novelty: zero-stored-edge multi-hop (already proven on scifact). Gap to close: relation semantics—lattice does not address this, so novelty is incremental at best if anything survives the experiment.",
+        "est_effort": "Fast path (validate/kill): 1–2 days to convert FB15k to text, run dense baseline, add meet-expansion retrieval, measure Hits@10 and MRR. If positive (>5% improvement): 2–3 weeks to optimize heuristics, compare against learned relation models, publish. If negative: 1 day to document and archive. Total downside: 2–3 days. Upside (if hypothesis holds): 3–4 weeks. Expected outcome: negative (relation semantics dominate), so recommend: kill immediately unless strong external motivation."
+      }
+    ],
+    "synthesis": {
+      "ranking": [
+        {
+          "key": "RAG_LATTICE_MULTIHOP_CHAIN",
+          "verdict": "marginal-but-best",
+          "one_line": "Genuine structural capability dense/sparse retrievers handle poorly (rare-entity bridge traversal, zero stored edges), proven on HotpotQA/2WikiMultihop; the ONLY candidate where the lattice does something semantics can't, but BEIR generalization + a query router are unproven and the prior 2-hop drift test already dropped nDCG."
+        },
+        {
+          "key": "distributed_sync_minisketch_meet",
+          "verdict": "marginal",
+          "one_line": "Real lattice fit (meet IS d=1 Minisketch) and orthogonal to semantics, but the problem (index sync) is orthogonal to EdgeRAG, meet fails at d>=2 forcing PinSketch, zero novelty, 4-6wk high-risk dead landing."
+        },
+        {
+          "key": "lattice-diversity-via-address-distance",
+          "verdict": "marginal-dead",
+          "one_line": "Address-space distance is structural (prime factorization), redundancy is semantic - orthogonal to the actual problem; simpler distinct_ratio already captured the +0.26% MRR with a self-bounding knob the lattice lacks."
+        },
+        {
+          "key": "lattice_orbit_tampering_rag",
+          "verdict": "dead",
+          "one_line": "32-orbit protects ONE scalar via repetition code; RAG tampering is multi-dimensional (poisoned postings, decoy docs) which the orbit is blind to; contradicts append-only O(1) design; Merkle/signatures already win."
+        },
+        {
+          "key": "multi_aspect_faceted_retrieval_lattice",
+          "verdict": "dead",
+          "one_line": "Lattice is a vocabulary-addressing engine; faceted search is metadata filtering (range/categorical), already near-optimal via LSM/B-tree/hash; lattice adds complexity with no edge, no novelty, 2-4wk to confirm a non-win."
+        },
+        {
+          "key": "rag_kg_completion_lattice_meet",
+          "verdict": "dead",
+          "one_line": "Category mismatch - KG completion's bottleneck is LEARNED RELATION SEMANTICS (author/part-of/mentions), meet only gives undirected co-occurrence; benchmarks test embeddings not retrieval; kill in 1-2 days unless external motivation."
+        }
+      ],
+      "top_pick": "RAG_LATTICE_MULTIHOP_CHAIN",
+      "top_pick_why": "It is the only opportunity that scores on all four axes AND satisfies the grounding's decisive filter: it uses the lattice for a STRUCTURAL/MULTI-HOP strength that dense/sparse retrievers genuinely handle poorly, not a re-skin of semantics. (1) Real underserved problem: bridge questions where the answer doc B shares no query word - single-hop (lexical AND dense) structurally cannot reach it, and graph-RAG needs a stored/learned edge graph. (2) Genuine lattice fit: meet_chain (verified in _prove_multihop.py) traverses query->A->rare-entity-X->B as two meets with ZERO stored edges, reading rarity straight from live df - a precise structural bridge, exactly where the campaign says the lattice is strong (addressing/structure) and NOT where it's weak (raw semantic similarity). (3) Measurable: HotpotQA distractor-dev gives a clean held-out 2nd-hop recall@2 metric with published single-hop baselines; hotpot_multihop.py already implements the traversal. (4) Novel vs current EdgeRAG: the stack (lexical+drift+distilled-SPLADE+rerank) is entirely similarity/co-occurrence/neural - a structural rare-entity-meet tier is orthogonal to every existing gear. Every other candidate is either orthogonal to EdgeRAG (sync), solving the wrong problem (diversity, faceted, KG-relations), or outcompeted by trivial standard methods (orbit vs Merkle). This is the only one where 'the lattice can't be replaced by a dense vector' is actually true. I rank it marginal-but-best, not 'strong': the integration is real (AppendOnlyLatticeIndex != EdgeRAG mmap-CSR) and BEIR generalization is the open gate.",
+      "proposed_experiment": "FIRST EXPERIMENT (kill-or-confirm, ~1-2 days, no new infra, runs on hotpot_multihop.py which already exists). DATASET: HotpotQA distractor-dev (the file already downloads it via hf_hub), 5,918 bridge questions, 10 candidate paragraphs each. BASELINES (the file already builds three): single-hop lexical BM25, a control bridge via RANDOM (non-rare) shared terms (isolates that the win is from rare-entity specificity, not just any co-occurrence), and - add this - single-hop dense via a cached sentence-BERT on the 10 paras (the synthesis cites 38.68% dense; reproduce it as the honest bar). METRIC: 2nd-hop gold-paragraph recall@2 (the bridge doc single-hop misses) AND supporting-fact recall@2, reported per-question with every miss logged (per the 'claims trace to captured runs' rule - capture stdout to _hotpot_multihop_out.txt, because the headline 46.42/41.99/38.68/20.72 numbers are currently NOT on disk anywhere, only in prose). SUCCESS = three gates, ALL required: (a) meet/corridor traversal beats single-hop lexical AND single-hop dense on 2nd-hop recall by a margin that survives the random-bridge control (reproducing ~46% vs ~42% dense-chain); (b) it does NOT regress 1st-hop (supporting-fact) recall - confirming a tier can be added without hurting easy queries; (c) the control (random-term bridge) does NOT also win - proving the mechanism is structural rare-entity meet, not generic expansion. ONLY IF all three pass: SECOND experiment (the real gate, ~1 wk) - port meet_chain as an OPTIONAL re-rank tier over EdgeRAG's stack@300 results (adapt to its term-id namespace), gate it behind a cheap query router (fire only when the top hop-1 doc carries a df<=2 rare entity AND the pool's nDCG signal is weak), and measure nDCG@10 + recall@100 on scifact/nfcorpus/fiqa/trec-covid. Success there = +recall on >=2 corpora with NO nDCG regression on the others (the bar the drift mechanism failed). If BEIR shows +0-0.005 with nDCG drops, it repeats the drift lesson and we stop at 'HotpotQA-only structural win, not a BEIR lever.'",
+      "honest_caveats": "Where the campaign's lessons bite: (1) STRUCTURE-NOT-SEMANTICS wall - the meet-chain solves the rare-entity-LEXICAL-bridge sub-problem, but the diagnosed BEIR recall deficit is the SEMANTIC gap (gold shares no query word and no rare lexical bridge either). If the query-bridge link is semantic rather than a shared rare token, the mechanism cannot fire; it does not touch the actual BEIR bottleneck, which is why drift/SPLADE supply the semantics. (2) The 46.42%/41.99% headline numbers are NOT captured on disk - I checked every .txt in the repo; they exist only in the synthesis prose, so they are UNSUPPORTED until hotpot_multihop.py is re-run and stdout saved. Treat them as a hypothesis, not a result. (3) The prior multi-hop test on real BEIR (Wave 4, _drift2_nfcorpus.txt, verified) raised recall@300 0.3744->0.3885 but DROPPED nDCG@10 0.2925->0.2788 - the exact 'raises ceiling, hurts ranking' failure. That was the DRIFT mechanism (co-occurrence diffusion), NOT the rare-entity meet-chain, so it doesn't directly refute this opportunity - but it is a loud prior that 2-hop-on-BEIR has already underdelivered once, and the meet-chain shares the 're-rank promotes bridge entities over direct relevance' regression risk. (4) HotpotQA is a STACKED DECK: 10-doc pre-filtered pools, bridge-biased questions. Real retrieval never pre-filters to multi-hop-friendly setups, and multi-hop queries are a small subset of BEIR - so even a strong HotpotQA win may not move aggregate BEIR metrics. (5) INTERSECTION-IS-DEAD lesson: meet is an overlap/AND operation; the campaign found AND-style approaches dead 3x because they discard signal. The escape is that this meet is used for EXPANSION (OR the bridge-postings into the pool, expanding recall) not for filtering - but it must be implemented as expansion, and the blind-re-rank variant (re-scoring ALL queries through a 2-hop path, no router) would re-introduce the intersection failure by demoting direct hits. No adaptive router exists today (verified - EdgeRAG has no multihop tier in _o1_edge_rag.py), so the router is mandatory, not optional. (6) INTEGRATION: meet_chain lives on AppendOnlyLatticeIndex (aethos_append_index); EdgeRAG serves mmap-CSR - confirmed distinct stacks; porting is real 20-40hr work, and the honest expected outcome on BEIR is the drift's 'marginal' lesson repeating. Recommend gating ALL EdgeRAG-integration effort behind the cheap HotpotQA kill-test passing all three of its gates first."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Explore"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Synthesize"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "explore:multihop-minplus",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "ace3697f89e539127",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1782828558937,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "RAG_LATTICE_MULTIHOP_CHAIN",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828785701,
+      "tokens": 69779,
+      "toolCalls": 33,
+      "durationMs": 226764,
+      "resultPreview": "{\"key\":\"RAG_LATTICE_MULTIHOP_CHAIN\",\"verdict\":\"marginal\",\"real_problem\":true,\"lattice_fit\":\"YES for multi-hop retrieval specifically, but NOT for the general RAG problem EdgeRAG targets. The lattice's rare-entity-meet mechanism is a precision structural advantage for bridge entity traversal, NOT a semantic similarity engine. On HotpotQA (5,918 bridge questions), lattice chain reaches 46.42% 2nd-ho…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "explore:provenance-address",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "a832c7fc74efe765e",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "error",
+      "startedAt": 1782828558938,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "RAG_Provenance_via_Invertible_Lattice",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828805283,
+      "error": "agent({schema}): StructuredOutput retry cap (5) exceeded — 5 failed calls with no valid output",
+      "tokens": 65757,
+      "toolCalls": 32,
+      "durationMs": 246345
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "explore:multiview-stack",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "a4c29a9ff49a1128e",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1782828558938,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "multi_aspect_faceted_retrieval_lattice",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828723607,
+      "tokens": 61221,
+      "toolCalls": 21,
+      "durationMs": 164669,
+      "resultPreview": "{\"key\":\"multi_aspect_faceted_retrieval_lattice\",\"verdict\":\"dead\",\"real_problem\":true,\"lattice_fit\":\"The lexical lattice is fundamentally a vocabulary-addressing engine (primes for deterministic term hashing). Multi-faceted retrieval requires independent metadata dimensions (time, author, category) with separate filtering logic. The lattice's orthogonal axes solve term co-occurrence addressing, NOT…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "explore:sync-minisketch",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "a8561dec4b173e082",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1782828558938,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "distributed_sync_minisketch_meet",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828723375,
+      "tokens": 58525,
+      "toolCalls": 21,
+      "durationMs": 164437,
+      "resultPreview": "{\"key\":\"distributed_sync_minisketch_meet\",\"verdict\":\"marginal\",\"real_problem\":true,\"lattice_fit\":\"Meet is d=1 Minisketch special case. At d>=2 (real posting diffs), needs PinSketch. Lattice's structural strength (exact addressing) orthogonal to sync. Fit score 2/10.\",\"measurable_experiment\":\"Split BEIR corpus into two shards, add 5% term diffs. Measure bytes-shipped: meet-sum vs PinSketch-d=5 vs n…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "explore:diversity-continuum",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "aee8c4072899933a2",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1782828558938,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "lattice-diversity-via-address-distance",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828675296,
+      "tokens": 60572,
+      "toolCalls": 22,
+      "durationMs": 116358,
+      "resultPreview": "{\"key\":\"lattice-diversity-via-address-distance\",\"verdict\":\"marginal\",\"real_problem\":true,\"lattice_fit\":\"The lattice encodes documents as 3D coordinates (z, ζ) derived from anchor-chain prime products. The \\\"address-space distance\\\" would be Euclidean distance in this 3D space. However, this is fundamentally a STRUCTURAL/ADDRESSING metric, not a semantic one. The coordinates reflect prime factoriza…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "explore:integrity-ecc",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "a7fb0502bf977ccb6",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1782828558939,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "lattice_orbit_tampering_rag",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828638029,
+      "tokens": 51644,
+      "toolCalls": 19,
+      "durationMs": 79090,
+      "resultPreview": "{\"key\":\"lattice_orbit_tampering_rag\",\"verdict\":\"dead\",\"real_problem\":true,\"lattice_fit\":\"The 32-orbit is a distance-32 repetition code on conserved sums (zeta), proven to detect and recover corrupted SCALARS via majority vote. But RAG corruption is structural: poisoned postings, tampered term-doc pairs, compromised relevance judgments. The orbit encodes ONE NUMBER across 32 chambers; it cannot nat…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "explore:relational-completion",
+      "phaseIndex": 1,
+      "phaseTitle": "Explore",
+      "agentId": "ad4ea03888ad0d951",
+      "agentType": "Explore",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1782828638031,
+      "queuedAt": 1782828558928,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "rag_kg_completion_lattice_meet",
+      "promptPreview": "Assess ONE RAG opportunity, grounded and SKEPTICAL. Working dir: C:/Users/wynos/New folder (3).\nGrounding (be SKEPTICAL, default to 'marginal/dead' unless the fit is real and MEASURABLE):\n- The RAG engine (EdgeRAG, this repo) already has: lexical lattice, counting-bridges, zero-shot DRIFT (co-occurrence\n  expansion, beat SPLADE on nfcorpus), distilled-SPLADE, a fused+reranked STACK that generalize…",
+      "lastProgressAt": 1782828807932,
+      "tokens": 56796,
+      "toolCalls": 23,
+      "durationMs": 169901,
+      "resultPreview": "{\"key\":\"rag_kg_completion_lattice_meet\",\"verdict\":\"dead\",\"real_problem\":false,\"lattice_fit\":\"The lattice's invertible meet (recover 3rd of {a,p,q} from 2 others) is a genuine structural/addressing strength. But KG completion's bottleneck is LEARNED RELATION SEMANTICS (distinguishing author/part-of/mentions relations), not entity co-occurrence. The meet solves addressing; KG needs embeddings. Pairi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "Synthesize this deep search for RAG opportunities using UNUS",
+      "phaseIndex": 2,
+      "phaseTitle": "Synthesize",
+      "agentId": "a5313fd168780276a",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1782828807942,
+      "queuedAt": 1782828807933,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "RAG_LATTICE_MULTIHOP_CHAIN",
+      "promptPreview": "Synthesize this deep search for RAG opportunities using UNUSED lattice aspects: [{\"key\":\"RAG_LATTICE_MULTIHOP_CHAIN\",\"verdict\":\"marginal\",\"real_problem\":true,\"lattice_fit\":\"YES for multi-hop retrieval specifically, but NOT for the general RAG problem EdgeRAG targets. The lattice's rare-entity-meet mechanism is a precision structural advantage for bridge entity traversal, NOT a semantic similarity …",
+      "lastProgressAt": 1782828999886,
+      "tokens": 69309,
+      "toolCalls": 14,
+      "durationMs": 191944,
+      "resultPreview": "{\"ranking\":[{\"key\":\"RAG_LATTICE_MULTIHOP_CHAIN\",\"verdict\":\"marginal-but-best\",\"one_line\":\"Genuine structural capability dense/sparse retrievers handle poorly (rare-entity bridge traversal, zero stored edges), proven on HotpotQA/2WikiMultihop; the ONLY candidate where the lattice does something semantics can't, but BEIR generalization + a query router are unproven and the prior 2-hop drift test alr…"
+    }
+  ],
+  "totalTokens": 493603,
+  "totalToolCalls": 185
+}
