@@ -48,20 +48,25 @@ a raw word looks up its learned correlations from the table — **no neural net 
 | SPLADE full | 0.336 | 0.282 | **YES** |
 | **distilled** | 0.321 | **0.275** | **NO** |
 
-**Distilled recovers 84% of SPLADE's recall gain (0.238 → 0.275 vs full 0.282) and ~50% of the nDCG gain — with
-no query encoder.** The semantic graph is built at ingest, before any question; a word (or subword) triggers its
-saved correlations. Pure-lattice serve speed, most of SPLADE's recall, no GPU at query time.
+**Distilled (max-pool) recovers 92% of SPLADE's recall gain (0.238 → 0.279 vs full 0.282) — with no query
+encoder.** The semantic graph is built at ingest, before any question; a word (or subword) triggers its saved
+correlations. Pure-lattice serve speed, most of SPLADE's recall, no GPU at query time.
 
-**The honest 16% gap** is cross-term context: SPLADE reading the whole query together knows slightly more than
-each word in isolation. Levers to close it (not yet run): distill common word-PAIRS (recovers context),
-corpus co-occurrence tables, larger per-word expansion, weighted fusion with lexical.
+**The combination method is the lever, not more context.** Switching per-word distillation from sum → **max-pool**
+(matching SPLADE's own pooling) jumped recovery **84% → 92%** (`_o1_distill_pairs.py`).
+
+**Word-pair distillation was tested and REFUTED** (the cross-term-context hypothesis): encoding co-occurring
+word-pairs "w1 w2" jointly and composing query vectors from them *hurts* — pairs-only recall recovery is **−84%**
+(worse than lexical) and word+pair (88%) is below word-alone (92%). A 2-word fragment isn't full-query context,
+and max-pooling many pair expansions adds more noise than signal. Honest conclusion: **~92% is the encoder-free
+ceiling** for this approach; the last 8% is genuine full-query context that needs the actual encoder.
 
 ## The payoff — one substrate, a dial of accuracy/cost
 
 Everything rides the same lattice CSR + scatter-add serve:
 - **lexical** (no encoder, fastest) → BM25-class
 - **+ counting-bridges** (feedback, no GPU) → +0.04
-- **distilled SPLADE** (encoder-free serve, distilled once at ingest) → **84% of SPLADE's recall, lattice speed**
+- **distilled SPLADE** (encoder-free serve, max-pool, distilled once at ingest) → **92% of SPLADE's recall, lattice speed**
 - **SPLADE weights** (encoder at serve) → full SPLADE-class
 - **+ WAND pools** → flat serve at any scale
 

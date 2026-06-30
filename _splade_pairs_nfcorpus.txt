@@ -1,0 +1,14 @@
+============================================================================================
+WORD-PAIR DISTILLATION — nfcorpus: 3,633 docs (encoder-free; closing the context gap)
+============================================================================================
+  distilled 587 words + 990 pairs (pairs encoded/cached in 0s)
+
+  mode                     nDCG@10  Recall@100  encoder@serve?
+  lexical                   0.3071      0.2379              no
+  splade_full               0.3361      0.2821             YES
+  distilled_word            0.3210      0.2786              NO
+  distilled_pair            0.2019      0.2007              NO
+  distilled_wp              0.3202      0.2769              NO
+  recall recovery distilled_word  :    92% of SPLADE's gain (encoder-free)
+  recall recovery distilled_pair  :   -84% of SPLADE's gain (encoder-free)
+  recall recovery distilled_wp    :    88% of SPLADE's gain (encoder-free)
