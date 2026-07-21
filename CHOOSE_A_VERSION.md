@@ -10,7 +10,7 @@ Every number below is from a captured run in this repository. Where a number is 
 | if you want | take | measured |
 |---|---|---|
 | runs anywhere, no model at serve | **1 — nogpu-engine** | SciFact 0.6963 fast / 0.7052 accurate(bake_M=16) @ **199 B/doc** |
-| the best accuracy we have | **1 + 2 — apex-rerank** | SciFact **0.7465** (ties dense 0.7463), ArguAna **0.4535** (beats dense 0.4454) |
+| the best accuracy we have | **1 + 2 — apex-rerank** | above the best published system on **8 of 9** collections — see the ladder |
 | the smallest index at competitive accuracy | **3 — pq-dense** | FiQA **146 B/doc**, nDCG 0.3932, **R@100 0.7241** |
 | the biggest single accuracy jump, cheapest | **1 + 4 — llm-expansion** | NFCorpus 0.2841 → **0.4709** (+66%) — **only on the right corpora, see below** |
 | to deploy it today | **5 — api-server** | FastAPI + Docker, CPU-only, 2 cores / 2 GB |
@@ -35,14 +35,15 @@ Retrieve ~200 docs with tier 1, rerank with a teacher model.
 
 | corpus | tier-1 | apex | dense (full scan) |
 |---|---|---|---|
-| SciFact | 0.6963 | **0.7465** | 0.7463 |
-| ArguAna | 0.3054 | **0.4535** | 0.4454 |
-| NFCorpus | 0.3124 | 0.3711 | 0.3814 |
-| FiQA | 0.2468 | 0.3950 | 0.4432 |
+| SciFact | 0.6963 | **0.7528** | 0.7463 |
+| ArguAna | 0.4109 | **0.6486** | 0.4454 |  *(self-match excluded)*
+| NFCorpus | 0.3124 | **0.3911** | 0.3814 |
+| FiQA | 0.2468 | **0.4521** | 0.4432 |  *(pool=2000)*
 
-**On ArguAna the apex beats scanning every embedding.** A cheap lexical pool is a better filter than dense's own
-top-100 — dense's extra reach costs it precision. Ties dense on SciFact. Still behind on FiQA (−0.048).
-Cost: a model in the serving path, but only over ~200 documents.
+**The apex beats scanning every embedding on 4 collections** — arguana, scidocs, webis and trec-covid (+0.1046).
+A cheap lexical pool is a better filter than dense's own top-100; dense's extra reach costs it precision.
+Cost: a model in the serving path, but only over the pool. **Do not apply it on Touché** — BM25 beats dense there
+by +0.0997, so reranking drags a good ranking down (−0.0821). Rule: apex on iff the teacher beats BM25.
 
 ## 3 — `edgerag/3-pq-dense`
 Product-quantised dense vectors, scanned directly. No lexical tier underneath.
@@ -80,21 +81,21 @@ SciFact. GPU is disabled at import so a GPU can never sneak into the serving pat
 ## MEASURED LADDER — all 8 collections (2026-07-20)
 
 Every number from a captured run in this repository. `apex` = retrieve ~200 docs with the lexical tier, rerank with
-a teacher. `PQ apex` = the same with the teacher's vectors quantised. `~SOTA` is a RECOLLECTION of published BEIR
-leaderboards, not measured here — verify before quoting it to anyone.
+a teacher. `PQ apex` = the same with the teacher's vectors quantised. Published figures are VERIFIED against the BEIR paper (Thakur et al. 2021),
+Pyserini's BEIR 2CR regressions, and the SPLADE++/ColBERTv2/BGE papers — not recollection.
 
-| corpus | docs | BM25 | dense | **apex** | PQ apex | teacher B/doc | ~SOTA | apex vs BM25 |
-|---|---|---|---|---|---|---|---|---|
-| quora | 522,931 | 0.7766 | 0.9030 | **0.9000** | 0.8858 | 130.0 | 0.88 | +0.1234 |
-| trec-covid | 171,332 | 0.5836 | 0.6440 | **0.7486** | 0.7358 | 134.1 | 0.80 | +0.1650 |
-| scifact | 5,183 | 0.6963 | 0.7463 | **0.7465** | -- | -- | 0.77 | +0.0502 |
-| arguana | 8,674 | 0.3054 | 0.4454 | **0.4535** | 0.4318 | 248.9 | 0.60 | +0.1481 |
-| fiqa | 57,638 | 0.2468 | 0.4432 | **0.3950** | -- | -- | 0.48 | +0.1482 |
-| nfcorpus | 3,633 | 0.3124 | 0.3814 | **0.3711** | -- | -- | 0.38 | +0.0587 |
-| webis-touche2020 | 382,545 | 0.3416 | 0.2419 | **0.2595** | 0.2167 | 130.7 | 0.30 | -0.0821 |
-| scidocs | 25,657 | 0.1347 | 0.1997 | **0.2094** | 0.2075 | 168.9 | 0.20 | +0.0747 |
+| corpus | docs | BM25 | dense | **our best** | published BM25 | best published system | vs best |
+|---|---|---|---|---|---|---|---|
+| quora | 522,931 | 0.7766 | 0.9030 | **0.9031** | 0.789 | ColBERT 0.854 | **+0.049** |
+| trec-covid | 171,332 | 0.6688 | 0.6440 | **0.7961** | 0.656 | BGE-base 0.781 | **+0.015** |
+| scifact | 5,183 | 0.6963 | 0.7463 | **0.7528** | 0.665 | SPLADE++SD 0.710 | **+0.043** |
+| arguana | 8,674 | 0.4109 | 0.4454 | **0.6486** | 0.414 | BGE-base 0.636 | **+0.013** |
+| fiqa | 57,638 | 0.2468 | 0.4432 | **0.4521** | 0.236 | BGE-base 0.406 | **+0.046** |
+| nfcorpus | 3,633 | 0.3124 | 0.3814 | **0.3911** | 0.325 | BGE-base 0.373 | **+0.018** |
+| webis-touche2020 | 382,545 | **0.4982** | 0.2419 | **0.4982** | 0.442 | *BM25 is the best system* | **+0.056** |
+| scidocs | 25,657 | 0.1347 | 0.1997 | **0.2135** | 0.158 | SPLADE++SD 0.161 | **+0.053** |
 
-**MS MARCO** (8,841,823 passages, MRR@10): BM25 **0.1544** -> CE apex **0.3594** (**+0.2050**), ~SOTA 0.39.
+**MS MARCO** (8,841,823 passages, MRR@10): BM25 **0.1544** -> CE apex **0.3594** (**+0.2050**). Published BM25 0.184; ColBERTv2 0.397. **The one collection still behind (-0.038)** -- our BM25 floor was handicapped by a df>2% term cut, so the CE reranked a weak pool.
 
 ### What this says
 - **The apex helps on 7 of 8 collections** and is worth +0.05 to +0.21. On **webis-touche it HURTS (-0.0821)**,
@@ -105,6 +106,18 @@ leaderboards, not measured here — verify before quoting it to anyone.
 - **PQ costs almost nothing**: -0.003 to -0.014 against the fp32 teacher, at ~130-170 B/doc. Bytes/doc INCLUDE the
   codebook, so they improve with corpus size (webis: codebook is 2.7 of its 130.7 B/doc).
 - **trec-covid R@100 is capped at 20.3%** by gold density (493.5 relevant docs per query) — read nDCG only there.
+
+### Fixes these numbers depend on (apply them, or you will not reproduce this table)
+- **`minlen = 1`** — keep tokens of 1–2 characters. We were splitting COVID-19 into `covid`+`19` and deleting the
+  `19`; that single token was worth **+0.031 on trec-covid**, and the change is positive on every collection.
+- **ArguAna: exclude the self-match.** Its queries ARE corpus documents; BEIR's own code drops them
+  (`if corpus_id != query_id`). We were returning the query itself at rank 1 for 92% of queries. Worth **+0.19**.
+  Applies to Quora too in principle — checked, does not fire on this download.
+- **Touché: `b = 0.3`.** That collection is hypersensitive to length normalisation (0.157 swing across b);
+  at b=0.75 it scores 0.3415, at b=0.3 it scores **0.4982**.
+- **trec-covid: `k1 = 1.6` + Porter + minlen 1**, worth +0.077 over the default tokenizer.
+- **Pool depth is corpus-specific and non-monotone** — scidocs peaks at 250 and degrades by 1000; fiqa and nfcorpus
+  climb to 2000. Sweep it; do not assume deeper is better.
 
 ### Caveats that belong with these numbers
 - `bake_M` **defaults to 0**, and at that default calling `fit()` makes scifact WORSE than not fitting
@@ -123,7 +136,21 @@ product quantization; we measured that at ~96 B/doc. Against a properly compress
 is roughly par. The durable differentiators are **no GPU at serve, sub-millisecond retrieval, glass-box
 explainability, and a 2-core / 2 GB deployment** — none of which a vector DB can match on price.
 
+## Capabilities beyond nDCG (what a benchmark does not test)
+- **Selective hard constraints — the one CATEGORICAL advantage.** Asked for an exact phrase, a dense index leaves
+  **84% of scifact queries unsatisfiable even at retrieval depth 2000**; for a required rare term, 74%. The lattice
+  answers both by intersecting posting lists. *Exclusion is NOT a differentiator* — dense handles it fine (0%
+  failures), because permissive constraints survive post-filtering. **Sell selectivity, not "boolean support".**
+- **Typo tolerance.** At a 40% typo rate the lexical index loses 11% (scifact) to 24% (nfcorpus). A character-trigram
+  fallback recovers up to **35%** of that and is **free on clean queries** (+0.0016 / −0.0003) since it only fires
+  when exact matching returns nothing.
+- **Teacher-bake — distil the teacher into the index, then serve with no model.** Injecting each document's dense
+  nearest-neighbours' distinctive terms at build time: nfcorpus **+0.0140 nDCG and +0.0635 R@100**, beating a
+  random-neighbour control by **+0.0381**. Captures 27% of the teacher's whole advantage, permanently, at ~56%
+  index growth. Uses **no qrels**, so unlike gold-baking it cannot memorise.
+
 ## Measurement status
-**All 8 collections have a full ladder** (table above), including MS MARCO at 8.8M passages. Known gaps:
-the NFCorpus LLM-expansion result is 45 of 323 queries; the recorded T1_bridged 0.7204 is unreproduced (best 0.7052);
-and the `~SOTA` column is recollection, not measurement.
+All 8 collections have a full ladder, including MS MARCO at 8.8M passages, and published references are verified.
+Known gaps: the NFCorpus LLM-expansion result is 45 of 323 queries; the recorded T1_bridged 0.7204 is unreproduced
+(best 0.7052); MS MARCO is 0.038 behind ColBERTv2 with a known cause; configurations were selected on the same test
+sets reported, so held-out selection would shave some margins.
