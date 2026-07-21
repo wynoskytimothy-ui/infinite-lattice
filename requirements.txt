@@ -1,0 +1,18 @@
+# ── AETHOS RAG API — minimal, CPU-only, no-GPU-at-serve ──────────────────────────────
+# Core serving stack (this is all you need for /ingest /search /explain /stats on the
+# precomputed-embeddings path). Pure-Python + numpy ADC search; nothing here pulls a GPU.
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29
+numpy>=1.24
+pydantic>=2.4
+
+# ── Glass-box lexical tier (named, traceable bridges in /explain — the AETHOS moat) ──
+# Enables aethos_rag_pipeline's no-GPU lattice. Drop this line for a dense-only image;
+# the service degrades gracefully to a dense-only explanation if numba is absent.
+numba>=0.58
+
+# ── OPTIONAL: lightweight CPU query encoder (only if you send TEXT queries without a ──
+# precomputed vector). Set AETHOS_ENCODER=<model> to activate. torch is pinned CPU-only.
+# Uncomment to bake into the image; otherwise use the precomputed-embeddings path.
+# torch>=2.0 ; platform_machine != "unsupported"
+# sentence-transformers>=2.2
