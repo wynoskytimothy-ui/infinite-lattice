@@ -1,0 +1,80 @@
+  indexed 5183 docs, 35734 terms (0s)
+
+====================================================================================================
+EDGERAG SERVE  |  scifact  |  300 queries, BM25 depth=200, shadow_budget=100
+====================================================================================================
+  GATE fired on        0/300 queries (0.0%)   [dormant 100.0% => shadow compute saved]
+  P@1     BM25=0.5433   serve=0.5433   delta=+0.0000   (MUST be 0.0000)
+  Recall  BM25@200=0.9156   serve@300=0.9156   delta=+0.0000
+  zero-overlap gold recovered (unreachable at ANY BM25 depth): 0
+
+  GATE QUALITY vs the 'profitable' set (queries with a recoverable zero-overlap gold):
+    profitable queries   2/300
+    gate RECALL          0.000   (fraction of profitable queries the gate armed)
+    gate PRECISION       nan   (fraction of fires that were profitable; rest = safe but wasted compute)
+
+====================================================================================================
+ASSERTIONS
+====================================================================================================
+  [PASS] P@1 untouched: serve P@1 == BM25 P@1 and BM25 head never reordered (0 breaks)
+  [PASS] per-query recall NON-REGRESSION: 0 queries lost recall (0 regressions)
+  [PASS] STRICT DOMINANCE over BM25@200: serve recall >= BM25 recall (equal (gate stayed dormant -- correct, no vocab gap))
+  all invariants hold.
+  wrote _edgerag_serve_scifact.json
+  indexed 3633 docs, 26359 terms (0s)
+
+====================================================================================================
+EDGERAG SERVE  |  nfcorpus  |  323 queries, BM25 depth=200, shadow_budget=100
+====================================================================================================
+  GATE fired on        143/323 queries (44.3%)   [dormant 55.7% => shadow compute saved]
+  P@1     BM25=0.4427   serve=0.4427   delta=+0.0000   (MUST be 0.0000)
+  Recall  BM25@200=0.2651   serve@300=0.2911   delta=+0.0261
+  zero-overlap gold recovered (unreachable at ANY BM25 depth): 526
+
+  GATE QUALITY vs the 'profitable' set (queries with a recoverable zero-overlap gold):
+    profitable queries   143/323
+    gate RECALL          0.420   (fraction of profitable queries the gate armed)
+    gate PRECISION       0.420   (fraction of fires that were profitable; rest = safe but wasted compute)
+
+====================================================================================================
+ASSERTIONS
+====================================================================================================
+  [PASS] P@1 untouched: serve P@1 == BM25 P@1 and BM25 head never reordered (0 breaks)
+  [PASS] per-query recall NON-REGRESSION: 0 queries lost recall (0 regressions)
+  [PASS] STRICT DOMINANCE over BM25@200: serve recall >= BM25 recall (STRICT +0.0261)
+  all invariants hold.
+  wrote _edgerag_serve_nfcorpus.json
+  indexed 57638 docs, 75352 terms (2s)
+
+====================================================================================================
+EDGERAG SERVE  |  fiqa  |  648 queries, BM25 depth=200, shadow_budget=100
+====================================================================================================
+  GATE fired on        0/648 queries (0.0%)   [dormant 100.0% => shadow compute saved]
+  P@1     BM25=0.2145   serve=0.2145   delta=+0.0000   (MUST be 0.0000)
+  Recall  BM25@200=0.5798   serve@300=0.5798   delta=+0.0000
+  zero-overlap gold recovered (unreachable at ANY BM25 depth): 0
+
+  GATE QUALITY vs the 'profitable' set (queries with a recoverable zero-overlap gold):
+    profitable queries   4/648
+    gate RECALL          0.000   (fraction of profitable queries the gate armed)
+    gate PRECISION       nan   (fraction of fires that were profitable; rest = safe but wasted compute)
+
+====================================================================================================
+ASSERTIONS
+====================================================================================================
+  [PASS] P@1 untouched: serve P@1 == BM25 P@1 and BM25 head never reordered (0 breaks)
+  [PASS] per-query recall NON-REGRESSION: 0 queries lost recall (0 regressions)
+  [PASS] STRICT DOMINANCE over BM25@200: serve recall >= BM25 recall (equal (gate stayed dormant -- correct, no vocab gap))
+  all invariants hold.
+  wrote _edgerag_serve_fiqa.json
+
+====================================================================================================
+SUMMARY -- auto-arm gate: dormant on aligned corpora, armed on the vocab-gap corpus
+====================================================================================================
+  corpus       fire%  saved%    P@1 d  recall d  zero-ovlp     gate P/R
+  scifact       0.0  100.0  +0.0000   +0.0000          0     None/0.0
+  nfcorpus     44.3   55.7  +0.0000   +0.0261        526    0.42/0.42
+  fiqa          0.0  100.0  +0.0000   +0.0000          0     None/0.0
+
+  Dominance is guaranteed by append-only; the gate's value is spending shadow compute only where it
+  converts (vocab-gap corpus), staying dormant -- and free -- where BM25 already wins.

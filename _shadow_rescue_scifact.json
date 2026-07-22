@@ -1,0 +1,33 @@
+{
+  "corpus": "scifact",
+  "n": 300,
+  "pool": 100,
+  "shadow_budget": 100,
+  "baseline": {
+    "p@1": 0.5433,
+    "recall@100": 0.8892,
+    "recall@200_bm25": 0.9156
+  },
+  "triggers": {
+    "ORACLE (gold-aware, ceiling)": {
+      "fired": 37,
+      "wasted_fires": 0,
+      "p@1": 0.5433,
+      "recall@200": 0.921,
+      "zero_overlap_recovered": 2,
+      "zero_overlap_missing": 7,
+      "drowned_recovered": 10,
+      "drowned_missing": 30
+    },
+    "DEPLOYABLE (thin pool | low BM25 conf)": {
+      "fired": 74,
+      "wasted_fires": 50,
+      "p@1": 0.5433,
+      "recall@200": 0.9109,
+      "zero_overlap_recovered": 2,
+      "zero_overlap_missing": 7,
+      "drowned_recovered": 5,
+      "drowned_missing": 30
+    }
+  }
+}

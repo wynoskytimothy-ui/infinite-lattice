@@ -1,0 +1,101 @@
+
+====================================================================================================
+PHASE 5 -- CONSTRUCTED CORPUS
+====================================================================================================
+  corpus: 332 docs
+  QUERY (gate)  : 'coffee tea soda juice beverage intake consumption habit risk'
+                  content terms = ['coffee', 'tea', 'soda', 'juice', 'beverage', 'intake', 'consumption', 'habit', 'risk']
+  gold(gate)    : 'GOLD_coffee_risk'   -- distinguished by the rare anchor
+  gold(shadow)  : 'GOLD_caffeine_cardiovascular'  -- uses only TWINS of 'coffee heart risk' (zero literal overlap)
+
+  df / idf of the gate query's content terms (specific = rare = high idf):
+      coffee       df=  94  idf=1.26
+      tea          df= 176  idf=0.63
+      juice        df= 178  idf=0.62
+      soda         df= 179  idf=0.62
+      beverage     df= 181  idf=0.61
+      intake       df= 181  idf=0.61
+      consumption  df= 204  idf=0.49
+      habit        df= 210  idf=0.46
+      risk         df= 215  idf=0.44
+
+  baked twins (learned from co-occurrence, NOT planted -- pollution shown honestly):
+      twins(coffee   ) = ['guide', 'culture', 'espresso', 'barista', 'mug', 'beans', 'grinder', 'cappuccino', 'latte', 'foam', 'brew', 'roast']
+      twins(heart    ) = ['cardiology', 'cardiovascular', 'reviewed', 'note', 'findings', 'cardiac', 'myocardial', 'coronary', 'arrhythmia', 'ventricular']
+      twins(risk     ) = ['survey', 'habit', 'consumption', 'intake', 'beverage', 'soda', 'juice', 'tea', 'enterprise', 'assessment', 'operational', 'liability']
+      twins(cardiac  ) = ['cardiology', 'cardiovascular', 'arrhythmia', 'reviewed', 'note', 'findings', 'heart', 'coronary', 'ventricular', 'myocardial']
+
+====================================================================================================
+BASELINE  |  fair BM25 (k1=1.5, b=0.75) on the gate query -- does anchor-less noise beat the gold?
+====================================================================================================
+     1. sprawl_118                   7.831
+     2. sprawl_85                    7.815
+     3. sprawl_157                   7.800
+     4. sprawl_128                   7.798
+     5. sprawl_63                    7.795
+     6. sprawl_110                   7.791
+     7. sprawl_75                    7.791
+     8. sprawl_8                     7.783
+
+  --> BM25 rank of gold 'GOLD_coffee_risk': 182   top-1 = 'sprawl_118'
+  --> BM25 FAILS as designed (anchor-less noise on top)
+
+====================================================================================================
+ABLATION LADDER  |  BM25 -> +idf-gravity(drop TF) -> +hard-gate -> +shadow   (gold rank at each rung)
+====================================================================================================
+    rung                                gold rank   top-1
+    BM25 (TF*idf)                             182   sprawl_118
+    +idf-gravity (drop TF, no gate)           182   sprawl_0
+    +hard-gate on anchor (no shadow)            1   GOLD_coffee_risk  *** GOLD @ TOP-1 ***
+    +shadow (twins in tether+score)             1   GOLD_coffee_risk  *** GOLD @ TOP-1 ***
+
+  anchor gate detail:
+    partial order (specific->general): coffee < tea < juice < soda < beverage < intake < consumption < habit < risk
+    idf gravity: coffee=1.26, tea=0.63, juice=0.62, soda=0.62, beverage=0.61, intake=0.61, consumption=0.49, habit=0.46, risk=0.44
+    ANCHOR (heaviest gravity, specific) = 'coffee'  idf=1.26
+    tether = ['coffee']   mode=hard
+    branch-kills: 214 of 308 candidates (no gravity tether to 'coffee'); by type: {'bridge': 3, 'sprawl': 180, 'spam': 1, 'riskgen': 30}
+
+  HONEST ATTRIBUTION (read straight off the ladder):
+    drop-TF idf-gravity moved gold 182 -> 182   (NO lift -- the noise matches MORE query terms, so summed idf still favours it)
+    the hard GATE then moved gold 182 -> 1   (a strict, NON-redundant lift -- this is the gate earning its keep)
+
+====================================================================================================
+SHADOW QUERY  |  QUERY='coffee heart risk', gold uses ONLY twins -> BM25 scores it 0
+====================================================================================================
+    BM25('coffee heart risk') rank of 'GOLD_caffeine_cardiovascular': None (shares no literal query term -> BM25 cannot reach it)
+    partial order (specific->general): heart < coffee < risk
+    idf gravity: heart=2.95, coffee=1.26, risk=0.44
+    ANCHOR (heaviest gravity, specific) = 'heart'  idf=2.95
+    SHADOW twins of 'heart' (baked correlate graph): ['arrhythmia', 'cardiac', 'cardiology', 'cardiovascular', 'coronary', 'findings', 'myocardial', 'note', 'reviewed', 'ventricular']
+    tether = ['arrhythmia', 'cardiac', 'cardiology', 'cardiovascular', 'coronary', 'findings', 'heart', 'myocardial', 'note', 'reviewed', 'ventricular']   mode=hard
+    SHADOW rank of 'GOLD_caffeine_cardiovascular': 7  (REACHED via twin expansion)
+    control shadow-OFF: rank of 'GOLD_caffeine_cardiovascular' = None (literal-only -> unreachable, as it must be)
+
+====================================================================================================
+CONTROLS  |  must break a vacuous version
+====================================================================================================
+  [wrong-direction anchor] gate cast from most-GENERAL term 'risk': killed=93, top-1='spam_seo'
+        -> gold NOT locked -- specificity direction is load-bearing  OK 
+
+====================================================================================================
+CONSTRUCTED-CORPUS VERDICT (honest)
+====================================================================================================
+    [PASS] BM25 baseline fails (anchor-less noise on top)
+    [PASS] full mechanism locks gate-gold to top-1
+    [PASS] shadow reaches the zero-overlap gold (BM25=0)
+    [PASS] control shadow-off: zero-overlap gold unreachable
+    [PASS] control wrong-anchor: gold not locked
+
+  ATTRIBUTION (what actually did the work, straight off the ladder):
+    - drop-TF idf-gravity: does NOT lift the gold here -- the noise matches MORE query terms than the gold.
+    - the hard GATE: strict lift 182 -> 1 (its real, non-redundant regime).
+    - the SHADOW: the only rung that reaches a zero-literal-overlap gold (rank 7).
+
+  THE HONEST LAW (both regimes measured across builds):
+    * all-common query (this corpus): the hard gate STRICTLY beats BM25 and idf-gravity (gold 182 -> 1),
+      because no query term is rare enough for idf to rescue the gold on its own.
+    * rare-anchor query (earlier build): the gate is REDUNDANT -- idf alone already ranks the gold first.
+    So the gate's value is REAL but NARROW: it fires only when the discriminating term is common enough
+    that idf under-weights it. The SHADOW (twin reach) is the orthogonal, always-relevant lever -- it is
+    the one thing BM25 provably cannot do. Real-corpus generalization is the arbiter: run `real <corpus>`.

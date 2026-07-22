@@ -1,0 +1,21 @@
+{
+  "corpus": "nfcorpus",
+  "n": 323,
+  "depth": 200,
+  "shadow_budget": 100,
+  "fire_rate": 0.4427,
+  "compute_saved": 0.5573,
+  "p@1_bm25": 0.4427,
+  "p@1_serve": 0.4427,
+  "p@1_delta": 0.0,
+  "recall@200_bm25": 0.2651,
+  "recall@300_serve": 0.2911,
+  "recall_delta": 0.0261,
+  "zero_overlap_recovered": 526,
+  "profitable": 143,
+  "gate_recall": 0.42,
+  "gate_precision": 0.42,
+  "strict_dominance": true,
+  "p1_untouched": true,
+  "no_regression": true
+}

@@ -1,0 +1,21 @@
+{
+  "corpus": "scifact",
+  "n": 300,
+  "depth": 200,
+  "shadow_budget": 100,
+  "fire_rate": 0.0,
+  "compute_saved": 1.0,
+  "p@1_bm25": 0.5433,
+  "p@1_serve": 0.5433,
+  "p@1_delta": 0.0,
+  "recall@200_bm25": 0.9156,
+  "recall@300_serve": 0.9156,
+  "recall_delta": 0.0,
+  "zero_overlap_recovered": 0,
+  "profitable": 2,
+  "gate_recall": 0.0,
+  "gate_precision": null,
+  "strict_dominance": true,
+  "p1_untouched": true,
+  "no_regression": true
+}

@@ -1,0 +1,33 @@
+{
+  "corpus": "fiqa",
+  "n": 648,
+  "pool": 100,
+  "shadow_budget": 100,
+  "baseline": {
+    "p@1": 0.2145,
+    "recall@100": 0.5089,
+    "recall@200_bm25": 0.5798
+  },
+  "triggers": {
+    "ORACLE (gold-aware, ceiling)": {
+      "fired": 436,
+      "wasted_fires": 0,
+      "p@1": 0.2145,
+      "recall@200": 0.5345,
+      "zero_overlap_recovered": 4,
+      "zero_overlap_missing": 187,
+      "drowned_recovered": 40,
+      "drowned_missing": 729
+    },
+    "DEPLOYABLE (thin pool | low BM25 conf)": {
+      "fired": 161,
+      "wasted_fires": 40,
+      "p@1": 0.2145,
+      "recall@200": 0.5212,
+      "zero_overlap_recovered": 2,
+      "zero_overlap_missing": 187,
+      "drowned_recovered": 16,
+      "drowned_missing": 729
+    }
+  }
+}
