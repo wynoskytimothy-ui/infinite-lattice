@@ -1,0 +1,294 @@
+{
+  "depth": 200,
+  "budget": 100,
+  "onboard_n": 20,
+  "corpora": [
+    {
+      "corpus": "scifact",
+      "test_n": 300,
+      "train_pool": 809,
+      "held_out": true,
+      "test_gap": 0.0206,
+      "test_expand_decision": false,
+      "slices": [
+        {
+          "n": 20,
+          "gap": 0.037,
+          "expand_on": false,
+          "matches_test": true
+        },
+        {
+          "n": 50,
+          "gap": 0.082,
+          "expand_on": false,
+          "matches_test": true
+        },
+        {
+          "n": 809,
+          "gap": 0.032,
+          "expand_on": false,
+          "matches_test": true
+        }
+      ],
+      "onboard_governors": {
+        "apex_on": false,
+        "expand_on": false,
+        "vocab_gap": 0.037,
+        "expand_margin": -0.213,
+        "expand_confident": true,
+        "apex_gain_est": null,
+        "source": "train:20"
+      },
+      "onboard_decision_matches_test": true,
+      "small_slices_match_test": true,
+      "train_fire_rate": 0.0,
+      "test_fire_rate": 0.0,
+      "test": {
+        "p1_bm25": 0.5433,
+        "p1_serve": 0.5433,
+        "p1_delta": 0.0,
+        "recall@200_bm25": 0.9156,
+        "recall@300_serve": 0.9156,
+        "recall_delta": 0.0,
+        "zero_overlap": 0
+      },
+      "invariants": {
+        "p1_untouched": true,
+        "non_regression": true,
+        "strict_dominance": true,
+        "p1_breaks": 0,
+        "regressions": 0
+      }
+    },
+    {
+      "corpus": "nfcorpus",
+      "test_n": 323,
+      "train_pool": 2590,
+      "held_out": true,
+      "test_gap": 0.7423,
+      "test_expand_decision": true,
+      "slices": [
+        {
+          "n": 20,
+          "gap": 0.708,
+          "expand_on": true,
+          "matches_test": true
+        },
+        {
+          "n": 50,
+          "gap": 0.726,
+          "expand_on": true,
+          "matches_test": true
+        },
+        {
+          "n": 2590,
+          "gap": 0.719,
+          "expand_on": true,
+          "matches_test": true
+        }
+      ],
+      "onboard_governors": {
+        "apex_on": false,
+        "expand_on": true,
+        "vocab_gap": 0.7084,
+        "expand_margin": 0.4584,
+        "expand_confident": true,
+        "apex_gain_est": null,
+        "source": "train:20"
+      },
+      "onboard_decision_matches_test": true,
+      "small_slices_match_test": true,
+      "train_fire_rate": 0.65,
+      "test_fire_rate": 0.4427,
+      "test": {
+        "p1_bm25": 0.4427,
+        "p1_serve": 0.4427,
+        "p1_delta": 0.0,
+        "recall@200_bm25": 0.2651,
+        "recall@300_serve": 0.2914,
+        "recall_delta": 0.0263,
+        "zero_overlap": 529
+      },
+      "invariants": {
+        "p1_untouched": true,
+        "non_regression": true,
+        "strict_dominance": true,
+        "p1_breaks": 0,
+        "regressions": 0
+      }
+    },
+    {
+      "corpus": "fiqa",
+      "test_n": 648,
+      "train_pool": 5500,
+      "held_out": true,
+      "test_gap": 0.1102,
+      "test_expand_decision": false,
+      "slices": [
+        {
+          "n": 20,
+          "gap": 0.174,
+          "expand_on": false,
+          "matches_test": true
+        },
+        {
+          "n": 50,
+          "gap": 0.111,
+          "expand_on": false,
+          "matches_test": true
+        },
+        {
+          "n": 5500,
+          "gap": 0.12,
+          "expand_on": false,
+          "matches_test": true
+        }
+      ],
+      "onboard_governors": {
+        "apex_on": false,
+        "expand_on": false,
+        "vocab_gap": 0.1739,
+        "expand_margin": -0.0761,
+        "expand_confident": false,
+        "apex_gain_est": null,
+        "source": "train:20"
+      },
+      "onboard_decision_matches_test": true,
+      "small_slices_match_test": true,
+      "train_fire_rate": 0.0,
+      "test_fire_rate": 0.0,
+      "test": {
+        "p1_bm25": 0.2145,
+        "p1_serve": 0.2145,
+        "p1_delta": 0.0,
+        "recall@200_bm25": 0.5798,
+        "recall@300_serve": 0.5798,
+        "recall_delta": 0.0,
+        "zero_overlap": 0
+      },
+      "invariants": {
+        "p1_untouched": true,
+        "non_regression": true,
+        "strict_dominance": true,
+        "p1_breaks": 0,
+        "regressions": 0
+      }
+    },
+    {
+      "corpus": "arguana",
+      "test_n": 1406,
+      "train_pool": 0,
+      "held_out": false,
+      "test_gap": 0.0,
+      "test_expand_decision": false,
+      "slices": [],
+      "onboard_governors": {
+        "apex_on": false,
+        "expand_on": false,
+        "vocab_gap": 0.0,
+        "expand_margin": -0.25,
+        "expand_confident": true,
+        "apex_gain_est": null,
+        "source": "test-fallback"
+      },
+      "onboard_decision_matches_test": null,
+      "small_slices_match_test": false,
+      "train_fire_rate": NaN,
+      "test_fire_rate": 0.0,
+      "test": {
+        "p1_bm25": 0.0007,
+        "p1_serve": 0.0007,
+        "p1_delta": 0.0,
+        "recall@200_bm25": 0.9459,
+        "recall@300_serve": 0.9459,
+        "recall_delta": 0.0,
+        "zero_overlap": 0
+      },
+      "invariants": {
+        "p1_untouched": true,
+        "non_regression": true,
+        "strict_dominance": true,
+        "p1_breaks": 0,
+        "regressions": 0
+      }
+    },
+    {
+      "corpus": "scidocs",
+      "test_n": 1000,
+      "train_pool": 0,
+      "held_out": false,
+      "test_gap": 0.253,
+      "test_expand_decision": true,
+      "slices": [],
+      "onboard_governors": {
+        "apex_on": false,
+        "expand_on": false,
+        "vocab_gap": 0.253,
+        "expand_margin": 0.003,
+        "expand_confident": false,
+        "apex_gain_est": null,
+        "source": "test-fallback"
+      },
+      "onboard_decision_matches_test": null,
+      "small_slices_match_test": false,
+      "train_fire_rate": NaN,
+      "test_fire_rate": 0.0,
+      "test": {
+        "p1_bm25": 0.184,
+        "p1_serve": 0.184,
+        "p1_delta": 0.0,
+        "recall@200_bm25": 0.4123,
+        "recall@300_serve": 0.4123,
+        "recall_delta": 0.0,
+        "zero_overlap": 0
+      },
+      "invariants": {
+        "p1_untouched": true,
+        "non_regression": true,
+        "strict_dominance": true,
+        "p1_breaks": 0,
+        "regressions": 0
+      }
+    },
+    {
+      "corpus": "trec-covid",
+      "test_n": 50,
+      "train_pool": 0,
+      "held_out": false,
+      "test_gap": 0.0738,
+      "test_expand_decision": false,
+      "slices": [],
+      "onboard_governors": {
+        "apex_on": false,
+        "expand_on": false,
+        "vocab_gap": 0.0738,
+        "expand_margin": -0.1762,
+        "expand_confident": true,
+        "apex_gain_est": null,
+        "source": "test-fallback"
+      },
+      "onboard_decision_matches_test": null,
+      "small_slices_match_test": false,
+      "train_fire_rate": NaN,
+      "test_fire_rate": 0.0,
+      "test": {
+        "p1_bm25": 0.66,
+        "p1_serve": 0.66,
+        "p1_delta": 0.0,
+        "recall@200_bm25": 0.1606,
+        "recall@300_serve": 0.1606,
+        "recall_delta": 0.0,
+        "zero_overlap": 0
+      },
+      "invariants": {
+        "p1_untouched": true,
+        "non_regression": true,
+        "strict_dominance": true,
+        "p1_breaks": 0,
+        "regressions": 0
+      }
+    }
+  ],
+  "onboard_governors_correct": true,
+  "invariants_all_pass": true
+}

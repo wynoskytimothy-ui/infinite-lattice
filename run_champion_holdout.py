@@ -74,9 +74,14 @@ def run_corpus(name: str) -> dict:
         slice_rows.append({"n": len(sub), "gap": round(gov.vocab_gap, 3), "expand_on": gov.expand_on,
                            "matches_test": gov.expand_on == test_decision})
 
-    # the governors we would actually SHIP: estimated from the N=20 onboarding slice
+    # the governors we would actually SHIP: estimated from the N=20 onboarding slice.
+    # HELD-OUT only if the corpus actually has a train split of at least ONBOARD_N labelled queries;
+    # otherwise we fall back to the test set to set the governor (NOT held-out -- flagged honestly).
+    held_out = len(train_qids) >= ONBOARD_N
     onboard = {q: train_qrels_all[q] for q in train_qids[:ONBOARD_N]}
-    gov = ch.estimate_governors(queries, onboard) if onboard else Governors(vocab_gap=test_gap, source="test-fallback")
+    gov = ch.estimate_governors(queries, onboard) if held_out else Governors(
+        vocab_gap=test_gap, expand_margin=test_gap - 0.25, expand_confident=abs(test_gap - 0.25) >= 0.10,
+        source="test-fallback")
     ch.gov = gov
 
     # ---- shadow governor stability: fire-rate TRAIN vs TEST ----
@@ -145,10 +150,10 @@ def run_corpus(name: str) -> dict:
           f"[{'PASS' if ok_dom else 'FAIL'}] strict dominance  (p1_breaks={p1_breaks}, regressions={regressions})")
 
     all_match = all(r["matches_test"] for r in slice_rows if r["n"] <= 50) if slice_rows else False
-    return {"corpus": name, "test_n": n, "train_pool": len(train_qids),
+    return {"corpus": name, "test_n": n, "train_pool": len(train_qids), "held_out": held_out,
             "test_gap": round(test_gap, 4), "test_expand_decision": test_decision,
             "slices": slice_rows, "onboard_governors": gov.as_dict(),
-            "onboard_decision_matches_test": (gov.expand_on == test_decision),
+            "onboard_decision_matches_test": (gov.expand_on == test_decision) if held_out else None,
             "small_slices_match_test": all_match,
             "train_fire_rate": round(train_fire, 4), "test_fire_rate": round(test_fire, 4),
             "test": {"p1_bm25": round(b_p1, 4), "p1_serve": round(s_p1, 4), "p1_delta": round(s_p1 - b_p1, 4),
@@ -159,21 +164,29 @@ def run_corpus(name: str) -> dict:
 
 
 def main() -> int:
-    names = [sys.argv[1]] if len(sys.argv) > 1 else ["scifact", "nfcorpus", "fiqa"]
+    names = sys.argv[1:] if len(sys.argv) > 1 else ["scifact", "nfcorpus", "fiqa"]
     rows = [run_corpus(c) for c in names]
     ok = all(r["invariants"]["p1_untouched"] and r["invariants"]["non_regression"]
              and r["invariants"]["strict_dominance"] for r in rows)
-    onboard_ok = all(r["onboard_decision_matches_test"] for r in rows)
+    held = [r for r in rows if r["held_out"]]
+    onboard_ok = all(r["onboard_decision_matches_test"] for r in held) if held else True
     _line("SUMMARY")
-    print(f"  {'corpus':10s} {'test gap':>9} {'N=20 right?':>12} {'confident?':>11} {'test recall d':>14} {'invariants':>12}")
+    print(f"  {'corpus':10s} {'test gap':>9} {'governor':>16} {'N=20 right?':>12} {'test recall d':>14} {'invariants':>12}")
     for r in rows:
         inv = r["invariants"]; allok = inv["p1_untouched"] and inv["non_regression"] and inv["strict_dominance"]
         conf = r["onboard_governors"].get("expand_confident", True)
-        print(f"  {r['corpus']:10s} {r['test_gap']:>9.3f} {str(r['onboard_decision_matches_test']):>12} "
-              f"{('yes' if conf else 'NEAR-BND'):>11} {r['test']['recall_delta']:>+14.4f} {('PASS' if allok else 'FAIL'):>12}")
-    print(f"\n  Held-out verdict: N={ONBOARD_N} onboarding slice sets the expand governor correctly on "
-          f"{'ALL' if onboard_ok else 'NOT all'} corpora; composed serve invariants "
-          f"{'HOLD on every held-out test set' if ok else 'FAILED somewhere'}.")
+        if r["held_out"]:
+            gtxt = "held-out" + ("" if conf else "*near-bnd")
+            ntxt = str(r["onboard_decision_matches_test"])
+        else:
+            gtxt = "test-fallback"; ntxt = "n/a (no train)"
+        print(f"  {r['corpus']:10s} {r['test_gap']:>9.3f} {gtxt:>16} {ntxt:>12} "
+              f"{r['test']['recall_delta']:>+14.4f} {('PASS' if allok else 'FAIL'):>12}")
+    print(f"\n  Held-out verdict: of {len(rows)} corpora, {len(held)} have train splits -> N={ONBOARD_N} onboarding "
+          f"slice sets the expand governor correctly on {'ALL' if onboard_ok else 'NOT all'} of them "
+          f"({', '.join(r['corpus'] for r in held) or 'none'}).")
+    print(f"  Composed-serve invariants (P@1 untouched + recall non-regression + strict dominance) "
+          f"{'HOLD on EVERY corpus (held-out and test-only)' if ok else 'FAILED somewhere'}.")
     here = os.path.dirname(os.path.abspath(__file__))
     json.dump({"depth": DEPTH, "budget": BUDGET, "onboard_n": ONBOARD_N, "corpora": rows,
                "onboard_governors_correct": onboard_ok, "invariants_all_pass": ok},
