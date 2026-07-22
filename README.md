@@ -1,5 +1,7 @@
 # AETHOS — π lattice & 3D complex plane
 
+> **Full map:** [WHERE_THINGS_LIVE.md](WHERE_THINGS_LIVE.md) — every face, branch, and path.
+
 Two constructions — **not** the same object. See **[`ONTOLOGY.md`](ONTOLOGY.md)**.
 
 | Construction | What it is | Code |

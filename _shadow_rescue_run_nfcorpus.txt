@@ -1,0 +1,43 @@
+  indexed 3633 docs, 26359 terms (0s)
+
+====================================================================================================
+EDGERAG SHADOW RESCUE  |  nfcorpus  |  323 queries, pool=100, shadow_budget=100
+====================================================================================================
+  BASELINE  BM25 (k1=1.5, b=0.75):
+    P@1              = 0.4427
+    Recall@100       = 0.2364
+    Recall@200  (BM25 given the SAME extra depth) = 0.2651
+    deployable low-confidence threshold (25th pct of BM25 top-score) = 9.720
+
+  ORACLE (gold-aware, ceiling)
+    fired on            304/323 queries (94.1%)
+    P@1                 = 0.4427   (delta vs BM25 = +0.0000  <-- MUST be 0.0000: append-only)
+    Recall (returned pool) = 0.3130
+       vs BM25@100 baseline           = +0.0766   <-- the 'strictly increases recall' claim (append-only guarantees >= 0)
+       vs deeper BM25@200 (same budget) = +0.0479   <-- honesty check: did shadow beat just going deeper?
+    zero-overlap gold   recovered 715/9141   (gold BM25 scores 0 -> UNREACHABLE at ANY BM25 depth: the shadow's unique win)
+    drowned gold        recovered 288/1297   (had overlap, ranked > 100; deeper BM25 can also get these)
+
+  DEPLOYABLE (thin pool | low BM25 conf)
+    fired on            150/323 queries (46.4%)   [8 needless fires on already-successful queries]
+    P@1                 = 0.4427   (delta vs BM25 = +0.0000  <-- MUST be 0.0000: append-only)
+    Recall (returned pool) = 0.2676
+       vs BM25@100 baseline           = +0.0311   <-- the 'strictly increases recall' claim (append-only guarantees >= 0)
+       vs deeper BM25@200 (same budget) = +0.0025   <-- honesty check: did shadow beat just going deeper?
+    zero-overlap gold   recovered 496/9141   (gold BM25 scores 0 -> UNREACHABLE at ANY BM25 depth: the shadow's unique win)
+    drowned gold        recovered 70/1297   (had overlap, ranked > 100; deeper BM25 can also get these)
+
+====================================================================================================
+VERDICT
+====================================================================================================
+  P@1 is provably untouched (delta 0.0000) -- the rescue is APPEND-ONLY, it never reorders BM25's head.
+  Against the real BM25@100 baseline the rescue STRICTLY INCREASES recall (delta >= 0 by construction).
+  HONEST DECOMPOSITION of that gain: most of it is DROWNED gold (overlap, rank > pool) that a deeper
+  BM25@200 would also recover -- so vs deeper-BM25 the net can be ~0. The shadow's UNIQUE,
+  can't-do-with-BM25 contribution is the ZERO-OVERLAP slice (BM25 score 0). That slice is small on
+  well-aligned corpora but it is the only recall no BM25 depth can reach. DEPLOYMENT NOTE: keep BM25's
+  FULL depth AND append shadow (don't cap BM25 at 100) so the deployable trigger never trails BM25@200.
+  ORACLE = ceiling (labels pick failures); DEPLOYABLE = a real gold-agnostic trigger; the gap = the
+  cost of not knowing which queries failed.
+
+  wrote _shadow_rescue_nfcorpus.json

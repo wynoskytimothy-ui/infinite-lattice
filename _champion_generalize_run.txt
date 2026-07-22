@@ -1,0 +1,116 @@
+  indexed 5183 docs, 35734 terms (0s)
+
+====================================================================================================
+CHAMPION HELD-OUT  |  scifact  |  test n=300, train pool=809, onboard N=20
+====================================================================================================
+  GOVERNOR ESTIMATION (expand = vocab_gap > 0.25):  test-set truth gap=0.021 -> expand_on=False
+     train N  gap est  expand_on  matches test?
+          20    0.037      False           True
+          50    0.082      False           True
+         809    0.032      False           True
+  SHIPPED governors (from N=20 onboarding slice): {'apex_on': False, 'expand_on': False, 'vocab_gap': 0.037, 'expand_margin': -0.213, 'expand_confident': True, 'apex_gain_est': None, 'source': 'train:20'}
+  SHADOW governor stability: fire-rate train=0.000  test=0.000
+
+  COMPOSED SERVE ON HELD-OUT TEST (no teacher -> apex hook off; floor+shadow):
+    P@1  BM25=0.5433  serve=0.5433  delta=+0.0000
+    Recall  BM25@200=0.9156  serve@300=0.9156  delta=+0.0000   zero-overlap bridged=0
+    fire-rate on test=0.000
+  INVARIANTS: [PASS] P@1 untouched  [PASS] recall non-regression  [PASS] strict dominance  (p1_breaks=0, regressions=0)
+  indexed 3633 docs, 26359 terms (0s)
+
+====================================================================================================
+CHAMPION HELD-OUT  |  nfcorpus  |  test n=323, train pool=2590, onboard N=20
+====================================================================================================
+  GOVERNOR ESTIMATION (expand = vocab_gap > 0.25):  test-set truth gap=0.742 -> expand_on=True
+     train N  gap est  expand_on  matches test?
+          20    0.708       True           True
+          50    0.726       True           True
+        2590    0.719       True           True
+  SHIPPED governors (from N=20 onboarding slice): {'apex_on': False, 'expand_on': True, 'vocab_gap': 0.7084, 'expand_margin': 0.4584, 'expand_confident': True, 'apex_gain_est': None, 'source': 'train:20'}
+  SHADOW governor stability: fire-rate train=0.650  test=0.443
+
+  COMPOSED SERVE ON HELD-OUT TEST (no teacher -> apex hook off; floor+shadow):
+    P@1  BM25=0.4427  serve=0.4427  delta=+0.0000
+    Recall  BM25@200=0.2651  serve@300=0.2914  delta=+0.0263   zero-overlap bridged=529
+    fire-rate on test=0.443
+  INVARIANTS: [PASS] P@1 untouched  [PASS] recall non-regression  [PASS] strict dominance  (p1_breaks=0, regressions=0)
+  indexed 57638 docs, 75352 terms (3s)
+
+====================================================================================================
+CHAMPION HELD-OUT  |  fiqa  |  test n=648, train pool=5500, onboard N=20
+====================================================================================================
+  GOVERNOR ESTIMATION (expand = vocab_gap > 0.25):  test-set truth gap=0.110 -> expand_on=False
+     train N  gap est  expand_on  matches test?
+          20    0.174      False           True
+          50    0.111      False           True
+        5500    0.120      False           True
+  SHIPPED governors (from N=20 onboarding slice): {'apex_on': False, 'expand_on': False, 'vocab_gap': 0.1739, 'expand_margin': -0.0761, 'expand_confident': False, 'apex_gain_est': None, 'source': 'train:20'}
+  [NEAR-BOUNDARY] gap 0.174 is within 0.10 of the 0.25 threshold -- a 20-query estimate is NOT decisive here (~2.6% of random 20-slices flip); collect more labels before trusting expand.
+  SHADOW governor stability: fire-rate train=0.000  test=0.000
+
+  COMPOSED SERVE ON HELD-OUT TEST (no teacher -> apex hook off; floor+shadow):
+    P@1  BM25=0.2145  serve=0.2145  delta=+0.0000
+    Recall  BM25@200=0.5798  serve@300=0.5798  delta=+0.0000   zero-overlap bridged=0
+    fire-rate on test=0.000
+  INVARIANTS: [PASS] P@1 untouched  [PASS] recall non-regression  [PASS] strict dominance  (p1_breaks=0, regressions=0)
+  indexed 8674 docs, 34322 terms (0s)
+
+====================================================================================================
+CHAMPION HELD-OUT  |  arguana  |  test n=1406, train pool=0, onboard N=20
+====================================================================================================
+  GOVERNOR ESTIMATION (expand = vocab_gap > 0.25):  test-set truth gap=0.000 -> expand_on=False
+     train N  gap est  expand_on  matches test?
+  SHIPPED governors (from N=20 onboarding slice): {'apex_on': False, 'expand_on': False, 'vocab_gap': 0.0, 'expand_margin': -0.25, 'expand_confident': True, 'apex_gain_est': None, 'source': 'test-fallback'}
+  SHADOW governor stability: fire-rate train=nan  test=0.000
+
+  COMPOSED SERVE ON HELD-OUT TEST (no teacher -> apex hook off; floor+shadow):
+    P@1  BM25=0.0007  serve=0.0007  delta=+0.0000
+    Recall  BM25@200=0.9459  serve@300=0.9459  delta=+0.0000   zero-overlap bridged=0
+    fire-rate on test=0.000
+  INVARIANTS: [PASS] P@1 untouched  [PASS] recall non-regression  [PASS] strict dominance  (p1_breaks=0, regressions=0)
+  indexed 25657 docs, 76970 terms (2s)
+
+====================================================================================================
+CHAMPION HELD-OUT  |  scidocs  |  test n=1000, train pool=0, onboard N=20
+====================================================================================================
+  GOVERNOR ESTIMATION (expand = vocab_gap > 0.25):  test-set truth gap=0.253 -> expand_on=True
+     train N  gap est  expand_on  matches test?
+  SHIPPED governors (from N=20 onboarding slice): {'apex_on': False, 'expand_on': False, 'vocab_gap': 0.253, 'expand_margin': 0.003, 'expand_confident': False, 'apex_gain_est': None, 'source': 'test-fallback'}
+  [NEAR-BOUNDARY] gap 0.253 is within 0.10 of the 0.25 threshold -- a 20-query estimate is NOT decisive here (~2.6% of random 20-slices flip); collect more labels before trusting expand.
+  SHADOW governor stability: fire-rate train=nan  test=0.000
+
+  COMPOSED SERVE ON HELD-OUT TEST (no teacher -> apex hook off; floor+shadow):
+    P@1  BM25=0.1840  serve=0.1840  delta=+0.0000
+    Recall  BM25@200=0.4123  serve@300=0.4123  delta=+0.0000   zero-overlap bridged=0
+    fire-rate on test=0.000
+  INVARIANTS: [PASS] P@1 untouched  [PASS] recall non-regression  [PASS] strict dominance  (p1_breaks=0, regressions=0)
+  indexed 171332 docs, 207034 terms (10s)
+
+====================================================================================================
+CHAMPION HELD-OUT  |  trec-covid  |  test n=50, train pool=0, onboard N=20
+====================================================================================================
+  GOVERNOR ESTIMATION (expand = vocab_gap > 0.25):  test-set truth gap=0.074 -> expand_on=False
+     train N  gap est  expand_on  matches test?
+  SHIPPED governors (from N=20 onboarding slice): {'apex_on': False, 'expand_on': False, 'vocab_gap': 0.0738, 'expand_margin': -0.1762, 'expand_confident': True, 'apex_gain_est': None, 'source': 'test-fallback'}
+  SHADOW governor stability: fire-rate train=nan  test=0.000
+
+  COMPOSED SERVE ON HELD-OUT TEST (no teacher -> apex hook off; floor+shadow):
+    P@1  BM25=0.6600  serve=0.6600  delta=+0.0000
+    Recall  BM25@200=0.1606  serve@300=0.1606  delta=+0.0000   zero-overlap bridged=0
+    fire-rate on test=0.000
+  INVARIANTS: [PASS] P@1 untouched  [PASS] recall non-regression  [PASS] strict dominance  (p1_breaks=0, regressions=0)
+
+====================================================================================================
+SUMMARY
+====================================================================================================
+  corpus      test gap         governor  N=20 right?  test recall d   invariants
+  scifact        0.021         held-out         True        +0.0000         PASS
+  nfcorpus       0.742         held-out         True        +0.0263         PASS
+  fiqa           0.110 held-out*near-bnd         True        +0.0000         PASS
+  arguana        0.000    test-fallback n/a (no train)        +0.0000         PASS
+  scidocs        0.253    test-fallback n/a (no train)        +0.0000         PASS
+  trec-covid     0.074    test-fallback n/a (no train)        +0.0000         PASS
+
+  Held-out verdict: of 6 corpora, 3 have train splits -> N=20 onboarding slice sets the expand governor correctly on ALL of them (scifact, nfcorpus, fiqa).
+  Composed-serve invariants (P@1 untouched + recall non-regression + strict dominance) HOLD on EVERY corpus (held-out and test-only).
+  wrote _champion_holdout.json
