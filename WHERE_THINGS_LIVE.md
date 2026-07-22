@@ -1,9 +1,30 @@
 # Where things live
 
-> **Latest push** — branch `aethos13/shadow-rescue` · commit `766fe0e` (champion) · 2026-07-21
+> **Latest push** — branch `aethos13/shadow-rescue` · commit `e704005` (generalization) · 2026-07-21
 > Repo: https://github.com/wynoskytimothy-ui/infinite-lattice
 > Branch tree: https://github.com/wynoskytimothy-ui/infinite-lattice/tree/aethos13/shadow-rescue
 > **Update this file on every push. Never leave session work only in chat.**
+
+## This push — best-version generalization across BEIR (`e704005`)
+
+`run_champion_holdout.py` (now multi-corpus, honest held-out vs test-fallback labeling) run across 6 corpora
+(`_champion_generalize.json` / `.run.txt`). Excluded quora/webis as too heavy (logged, not pretended-complete).
+
+| corpus | vocab gap | governor | expand | shadow fire % | recall Δ | invariants |
+|---|---|---|---|---|---|---|
+| scifact | 0.021 | held-out | off | 0.0 | +0.0000 | PASS |
+| **nfcorpus** | 0.742 | held-out | on | 44.3 | **+0.0263** (529 ZO) | PASS |
+| fiqa | 0.174 | held-out ⚠near-bnd | off | 0.0 | +0.0000 | PASS |
+| arguana | 0.000 | test-fallback | off | 0.0 | +0.0000 | PASS |
+| scidocs | 0.253 | test-fallback ⚠near-bnd | on | 0.0 | +0.0000 | PASS |
+| trec-covid | 0.074 | test-fallback | off | 0.0 | +0.0000 | PASS |
+
+**Verdict:** invariants (P@1 untouched + non-regression + strict dominance) hold on **all 6** by construction;
+held-out governor sets expand correctly on **all 3** with train splits; the shadow recall benefit is
+**concentrated** — fires only on pool-starved nfcorpus, dormant/safe on the other 5; near-boundary flagging
+generalizes (fiqa **and** scidocs flagged). Shadow gate (pool-exhaustion) and expand governor (vocab-gap)
+are **decoupled** — scidocs has a vocab gap but full pools. Apex/expand tiers remain validated **hooks**
+awaiting a GPU-once teacher pass.
 
 ## This push — the composed "best version" (`766fe0e`)
 
